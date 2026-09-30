@@ -152,12 +152,16 @@ function Stat({ label, value }: { label: string; value: string }) {
 /** เปิด visit ใหม่ — รองรับตั้งแต่ลูกค้าคนเดียวจนถึงกลุ่มใหญ่ */
 function SeatDialog({ table, onClose }: { table: CafeTable; onClose: () => void }) {
   const { data } = useSnapshot()
+  // ว่างไว้ก่อน แล้วค่อยใช้เรตแรกที่ร้านตั้งไว้ — รหัสเรตต่างกันในแต่ละฐานข้อมูล
+  // จึง hardcode ไม่ได้
   const [guests, setGuests] = useState<{ name: string; ratePlanId: string }[]>([
-    { name: '', ratePlanId: 'rp-std' },
+    { name: '', ratePlanId: '' },
   ])
   const [busy, setBusy] = useState(false)
 
   if (!data) return null
+
+  const defaultPlanId = data.ratePlans[0]?.id ?? ''
 
   async function submit() {
     setBusy(true)
@@ -166,7 +170,7 @@ function SeatDialog({ table, onClose }: { table: CafeTable; onClose: () => void 
         tableIds: [table.id],
         guests: guests.map((g, i) => ({
           name: g.name.trim() || `ผู้เล่น ${i + 1}`,
-          ratePlanId: g.ratePlanId,
+          ratePlanId: g.ratePlanId || defaultPlanId,
         })),
       })
       onClose()
@@ -195,7 +199,7 @@ function SeatDialog({ table, onClose }: { table: CafeTable; onClose: () => void 
                 className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-600"
               />
               <select
-                value={guest.ratePlanId}
+                value={guest.ratePlanId || defaultPlanId}
                 onChange={(e) =>
                   setGuests((prev) =>
                     prev.map((g, j) => (j === i ? { ...g, ratePlanId: e.target.value } : g)),
@@ -221,7 +225,7 @@ function SeatDialog({ table, onClose }: { table: CafeTable; onClose: () => void 
         <Button
           className="mt-2 w-full"
           variant="subtle"
-          onClick={() => setGuests((p) => [...p, { name: '', ratePlanId: 'rp-std' }])}
+          onClick={() => setGuests((p) => [...p, { name: '', ratePlanId: defaultPlanId }])}
           disabled={guests.length >= table.seatMax}
         >
           + เพิ่มคน (สูงสุด {table.seatMax})

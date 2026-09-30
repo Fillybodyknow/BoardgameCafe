@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import App from './App'
 import { mockAdapter } from './data'
+import { seed } from './data/mock/seed'
 
 /**
  * Smoke test — จับ crash ตอน render ที่ TypeScript มองไม่เห็น
@@ -58,6 +59,27 @@ describe('แอปเปิดได้', () => {
     expect(await screen.findByText('Codenames')).toBeTruthy()
     // Terraforming Mars ถูกยืมอยู่ทุกกล่อง (copies 1 / onLoan 1) จึงถูกกรองออกโดยค่าเริ่มต้น
     expect(screen.queryByText('Terraforming Mars')).toBeNull()
+  })
+
+  // เคยพังจริง: หน้าจอ hardcode 'rp-std' ไว้ ซึ่งมีแค่ในข้อมูลจำลอง
+  // พอต่อฐานข้อมูลจริงที่ใช้ UUID จึงได้ 22P02 ตอนกดเปิดโต๊ะ
+  //
+  // ต้องทดสอบผ่านการกดปุ่มจริง ไม่ใช่อ่านค่าจาก <select> เพราะเบราว์เซอร์
+  // คืน option แรกให้เองเมื่อ value ไม่ตรงกับ option ไหนเลย — บั๊กจึงถูกกลบ
+  it('เปิดโต๊ะแล้วส่งรหัสเรตราคาที่มีอยู่จริง', async () => {
+    render(<App />)
+    fireEvent.click(await screen.findByText('A3'))
+    fireEvent.click(await screen.findByRole('button', { name: 'เปิดโต๊ะ' }))
+
+    await waitFor(async () => {
+      const snap = await mockAdapter.getSnapshot()
+      const known = new Set(snap.ratePlans.map((p) => p.id))
+      const created = snap.passes.filter((p) => !seed().passes.some((s) => s.id === p.id))
+      expect(created.length).toBeGreaterThan(0)
+      for (const pass of created) {
+        expect(known.has(pass.ratePlanId)).toBe(true)
+      }
+    })
   })
 
   it('หน้าการจองเตือนเมื่อลูกค้าเลยเวลานัด', async () => {

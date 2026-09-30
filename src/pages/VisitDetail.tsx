@@ -334,7 +334,9 @@ function Dialog({ title, hint, children }: { title: string; hint?: string; child
 function AddPassDialog({ visitId, onClose }: { visitId: string; onClose: () => void }) {
   const { data } = useSnapshot()
   const [name, setName] = useState('')
-  const [ratePlanId, setRatePlanId] = useState('rp-std')
+  // เช่นเดียวกับ SeatDialog — รหัสเรตมาจากฐานข้อมูล hardcode ไม่ได้
+  const [ratePlanId, setRatePlanId] = useState('')
+  const defaultPlanId = data?.ratePlans[0]?.id ?? ''
 
   return (
     <Dialog title="เพิ่มคนเข้ากลุ่ม" hint="นาฬิกาของคนนี้เริ่มนับตอนนี้ ไม่กระทบคนที่มาก่อน">
@@ -347,7 +349,7 @@ function AddPassDialog({ visitId, onClose }: { visitId: string; onClose: () => v
           className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-600"
         />
         <select
-          value={ratePlanId}
+          value={ratePlanId || defaultPlanId}
           onChange={(e) => setRatePlanId(e.target.value)}
           className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-600"
         >
@@ -364,7 +366,10 @@ function AddPassDialog({ visitId, onClose }: { visitId: string; onClose: () => v
           className="flex-1"
           variant="primary"
           onClick={async () => {
-            await db.addPass(visitId, { name: name.trim() || 'ผู้เล่นใหม่', ratePlanId })
+            await db.addPass(visitId, {
+              name: name.trim() || 'ผู้เล่นใหม่',
+              ratePlanId: ratePlanId || defaultPlanId,
+            })
             onClose()
           }}
         >

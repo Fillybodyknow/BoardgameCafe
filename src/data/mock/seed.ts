@@ -9,13 +9,16 @@ export function businessDateOf(d: Date): string {
   return shifted.toISOString().slice(0, 10)
 }
 
+// รหัสเรตราคาใช้ UUID ชุดเดียวกับ supabase/seed.sql โดยตั้งใจ
+// ถ้าข้อมูลจำลองใช้รหัสคนละรูปแบบกับของจริง บั๊กอย่างการ hardcode รหัส
+// จะผ่านโหมดเดโมไปได้แล้วไปพังตอนต่อฐานข้อมูลจริง
 export function seed(): Snapshot {
   return {
     ratePlans: [
-      { id: 'rp-std', name: 'ทั่วไป', pricePerHour: 60, roundToMinutes: 30, minimumMinutes: 60, dayPassCap: 199 },
-      { id: 'rp-member', name: 'สมาชิก', pricePerHour: 48, roundToMinutes: 30, minimumMinutes: 60, dayPassCap: 159 },
-      { id: 'rp-student', name: 'นักเรียน/นักศึกษา', pricePerHour: 40, roundToMinutes: 30, minimumMinutes: 60, dayPassCap: 129 },
-      { id: 'rp-visitor', name: 'แวะทักทาย (ไม่คิดเงิน)', pricePerHour: 0, roundToMinutes: 30, minimumMinutes: 0, dayPassCap: 0 },
+      { id: '11111111-0000-4000-8000-000000000001', name: 'ทั่วไป', pricePerHour: 60, roundToMinutes: 30, minimumMinutes: 60, dayPassCap: 199 },
+      { id: '11111111-0000-4000-8000-000000000002', name: 'สมาชิก', pricePerHour: 48, roundToMinutes: 30, minimumMinutes: 60, dayPassCap: 159 },
+      { id: '11111111-0000-4000-8000-000000000003', name: 'นักเรียน/นักศึกษา', pricePerHour: 40, roundToMinutes: 30, minimumMinutes: 60, dayPassCap: 129 },
+      { id: '11111111-0000-4000-8000-000000000004', name: 'แวะทักทาย (ไม่คิดเงิน)', pricePerHour: 0, roundToMinutes: 30, minimumMinutes: 0, dayPassCap: 0 },
     ],
 
     tables: [
@@ -46,15 +49,15 @@ export function seed(): Snapshot {
 
     passes: [
       // กลุ่มที่เข้าไม่พร้อมกัน + มีคนกลับไปแล้ว + มีคนออกไปข้างนอก
-      { id: 'p-1', visitId: 'v-1', displayName: 'ต้น', ratePlanId: 'rp-member', status: 'active', checkedInAt: ago(135), checkedOutAt: null, pausedMinutes: 0, pausedAt: null },
-      { id: 'p-2', visitId: 'v-1', displayName: 'เมย์', ratePlanId: 'rp-std', status: 'active', checkedInAt: ago(135), checkedOutAt: null, pausedMinutes: 12, pausedAt: null },
-      { id: 'p-3', visitId: 'v-1', displayName: 'บอส', ratePlanId: 'rp-std', status: 'checked_out', checkedInAt: ago(135), checkedOutAt: ago(25), pausedMinutes: 0, pausedAt: null },
-      { id: 'p-4', visitId: 'v-1', displayName: 'ปาล์ม (มาสาย)', ratePlanId: 'rp-student', status: 'paused', checkedInAt: ago(64), checkedOutAt: null, pausedMinutes: 0, pausedAt: ago(9) },
+      { id: 'p-1', visitId: 'v-1', displayName: 'ต้น', ratePlanId: '11111111-0000-4000-8000-000000000002', status: 'active', checkedInAt: ago(135), checkedOutAt: null, pausedMinutes: 0, pausedAt: null },
+      { id: 'p-2', visitId: 'v-1', displayName: 'เมย์', ratePlanId: '11111111-0000-4000-8000-000000000001', status: 'active', checkedInAt: ago(135), checkedOutAt: null, pausedMinutes: 12, pausedAt: null },
+      { id: 'p-3', visitId: 'v-1', displayName: 'บอส', ratePlanId: '11111111-0000-4000-8000-000000000001', status: 'checked_out', checkedInAt: ago(135), checkedOutAt: ago(25), pausedMinutes: 0, pausedAt: null },
+      { id: 'p-4', visitId: 'v-1', displayName: 'ปาล์ม (มาสาย)', ratePlanId: '11111111-0000-4000-8000-000000000003', status: 'paused', checkedInAt: ago(64), checkedOutAt: null, pausedMinutes: 0, pausedAt: ago(9) },
 
-      { id: 'p-5', visitId: 'v-2', displayName: 'ฟ้า', ratePlanId: 'rp-std', status: 'active', checkedInAt: ago(52), checkedOutAt: null, pausedMinutes: 0, pausedAt: null },
-      { id: 'p-6', visitId: 'v-2', displayName: 'กัน', ratePlanId: 'rp-std', status: 'active', checkedInAt: ago(52), checkedOutAt: null, pausedMinutes: 0, pausedAt: null },
+      { id: 'p-5', visitId: 'v-2', displayName: 'ฟ้า', ratePlanId: '11111111-0000-4000-8000-000000000001', status: 'active', checkedInAt: ago(52), checkedOutAt: null, pausedMinutes: 0, pausedAt: null },
+      { id: 'p-6', visitId: 'v-2', displayName: 'กัน', ratePlanId: '11111111-0000-4000-8000-000000000001', status: 'active', checkedInAt: ago(52), checkedOutAt: null, pausedMinutes: 0, pausedAt: null },
 
-      { id: 'p-7', visitId: 'v-3', displayName: 'นัท (มาคนเดียว)', ratePlanId: 'rp-member', status: 'active', checkedInAt: ago(18), checkedOutAt: null, pausedMinutes: 0, pausedAt: null },
+      { id: 'p-7', visitId: 'v-3', displayName: 'นัท (มาคนเดียว)', ratePlanId: '11111111-0000-4000-8000-000000000002', status: 'active', checkedInAt: ago(18), checkedOutAt: null, pausedMinutes: 0, pausedAt: null },
     ],
 
     menu: [
