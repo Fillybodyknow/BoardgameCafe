@@ -3,7 +3,7 @@ import { useSnapshot } from '../hooks/useData'
 import { db, menuImageUrl } from '../data'
 import { formatBaht } from '../domain/pricing'
 import type { GuestPass, MenuItem } from '../domain/types'
-import { Button } from '../components/ui'
+import { Button, INPUT, Modal, Segmented } from '../components/ui'
 
 const CATEGORY_LABEL: Record<MenuItem['category'], string> = {
   drink: 'เครื่องดื่ม',
@@ -70,110 +70,24 @@ export default function OrderDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center sm:p-4">
-      <div className="flex max-h-[92vh] w-full max-w-lg flex-col rounded-t-2xl border border-slate-800 bg-slate-900 sm:rounded-2xl">
-        <div className="border-b border-slate-800 p-5">
-          <h3 className="text-lg font-bold">รับออเดอร์</h3>
-
-          <div className="mt-3 flex gap-1">
-            <Button
-              variant={splitMode === 'owner' ? 'subtle' : 'ghost'}
-              onClick={() => setSplitMode('owner')}
-            >
-              ลงชื่อคนสั่ง
-            </Button>
-            <Button
-              variant={splitMode === 'shared' ? 'subtle' : 'ghost'}
-              onClick={() => setSplitMode('shared')}
-            >
-              แชร์ทั้งโต๊ะ
-            </Button>
-          </div>
-
-          {splitMode === 'owner' && (
-            <select
-              value={ownerId}
-              onChange={(e) => setOwnerId(e.target.value)}
-              className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-600"
-            >
-              {activePasses.map((pass) => (
-                <option key={pass.id} value={pass.id}>
-                  {pass.displayName}
-                </option>
-              ))}
-            </select>
-          )}
-          {splitMode === 'shared' && (
-            <p className="mt-2 text-xs text-slate-500">
-              ตอนแยกบิลจะหารเท่ากันในกลุ่ม {activePasses.length} คน
-            </p>
-          )}
-        </div>
-
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
-          {groups.map(([category, items]) => (
-            <div key={category}>
-              <h4 className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                {CATEGORY_LABEL[category]}
-              </h4>
-              <div className="space-y-1">
-                {items.map((item) => {
-                  const qty = cart[item.id] ?? 0
-                  return (
-                    <div
-                      key={item.id}
-                      className={`flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 ${
-                        item.available ? '' : 'opacity-40'
-                      }`}
-                    >
-                      <div className="flex min-w-0 items-center gap-2">
-                        {menuImageUrl(item.imagePath) && (
-                          <img
-                            src={menuImageUrl(item.imagePath)!}
-                            alt=""
-                            loading="lazy"
-                            className="h-10 w-10 shrink-0 rounded-lg object-cover"
-                          />
-                        )}
-                        <div className="min-w-0">
-                        <div className="truncate text-sm">
-                          {item.name}
-                          {!item.available && <span className="ml-2 text-xs text-rose-400">ของหมด</span>}
-                        </div>
-                        <div className="tabular text-xs text-slate-500">฿{formatBaht(item.price)}</div>
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1">
-                        <Button
-                          disabled={qty === 0}
-                          onClick={() => setCart((c) => ({ ...c, [item.id]: Math.max(0, qty - 1) }))}
-                        >
-                          −
-                        </Button>
-                        <span className="tabular w-6 text-center text-sm">{qty || ''}</span>
-                        <Button
-                          disabled={!item.available}
-                          onClick={() => setCart((c) => ({ ...c, [item.id]: qty + 1 }))}
-                        >
-                          +
-                        </Button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="border-t border-slate-800 p-5">
-          {error && <p className="mb-2 text-sm text-rose-400">{error}</p>}
-          <div className="mb-3 flex justify-between text-sm">
-            <span className="text-slate-400">{count} รายการ</span>
-            <span className="tabular font-bold">฿{formatBaht(total)}</span>
+    <Modal
+      title="รับออเดอร์"
+      size="lg"
+      onClose={onClose}
+      dismissible={!busy}
+      footer={
+        <>
+          {error && <p className="mb-2 animate-shake text-sm text-crimson">{error}</p>}
+          <div className="mb-3 flex items-baseline justify-between text-sm">
+            <span className="text-ink-faint">{count} รายการ</span>
+            <span key={total} className="tabular animate-bump text-lg font-bold text-gold-deep">
+              ฿{formatBaht(total)}
+            </span>
           </div>
           <div className="flex gap-2">
-            <Button className="flex-1" onClick={onClose}>ยกเลิก</Button>
+            <Button className="flex-1" onClick={onClose}>
+              ยกเลิก
+            </Button>
             <Button
               className="flex-1"
               variant="primary"
@@ -183,8 +97,125 @@ export default function OrderDialog({
               ส่งเข้าครัว
             </Button>
           </div>
-        </div>
+        </>
+      }
+    >
+      <div className="panel mb-5 rounded-lg bg-parchment-deep/50 p-3">
+        <Segmented
+          className="w-full"
+          value={splitMode}
+          onChange={setSplitMode}
+          options={[
+            { value: 'owner', label: 'ลงชื่อคนสั่ง' },
+            { value: 'shared', label: 'แชร์ทั้งโต๊ะ' },
+          ]}
+        />
+        {splitMode === 'owner' && (
+          <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className={`${INPUT} mt-2`}>
+            {activePasses.map((pass) => (
+              <option key={pass.id} value={pass.id}>
+                {pass.displayName}
+              </option>
+            ))}
+          </select>
+        )}
+        {splitMode === 'shared' && (
+          <p className="mt-2 text-xs text-ink-faint">
+            ตอนแยกบิลจะหารเท่ากันในกลุ่ม {activePasses.length} คน
+          </p>
+        )}
       </div>
+
+      <div className="space-y-5">
+        {groups.map(([category, items]) => (
+          <div key={category}>
+            <h4 className="flourish mb-2 text-xs font-semibold">{CATEGORY_LABEL[category]}</h4>
+            <div className="divide-y divide-line/70">
+              {items.map((item) => {
+                const qty = cart[item.id] ?? 0
+                const img = menuImageUrl(item.imagePath)
+                return (
+                  <div
+                    key={item.id}
+                    className={`flex items-center justify-between gap-2 py-2 ${item.available ? '' : 'opacity-40'}`}
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      {img ? (
+                        <img src={img} alt="" loading="lazy" className="h-11 w-11 shrink-0 rounded-lg object-cover" />
+                      ) : (
+                        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-parchment-deep text-ink-faint">
+                          🍽
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium">
+                          {item.name}
+                          {!item.available && <span className="ml-2 text-xs text-crimson">ของหมด</span>}
+                        </div>
+                        <div className="tabular text-xs text-gold-deep">฿{formatBaht(item.price)}</div>
+                      </div>
+                    </div>
+                    <Stepper
+                      qty={qty}
+                      disabled={!item.available}
+                      onChange={(n) => setCart((c) => ({ ...c, [item.id]: n }))}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Modal>
+  )
+}
+
+/** ปุ่มเพิ่ม/ลดจำนวน — ใช้ทั้งฝั่งพนักงานและลูกค้า */
+export function Stepper({
+  qty,
+  disabled,
+  onChange,
+  onAdd,
+}: {
+  qty: number
+  disabled?: boolean
+  onChange: (n: number) => void
+  /** เรียกตอนกด + พร้อมตำแหน่งปุ่ม — ใช้ทำเหรียญลอย */
+  onAdd?: (el: HTMLElement) => void
+}) {
+  return (
+    <div
+      className={`flex shrink-0 items-center rounded-full border transition ${
+        qty > 0 ? 'border-gold bg-gold/10' : 'border-line-strong bg-vellum'
+      }`}
+    >
+      {qty > 0 && (
+        <>
+          <button
+            type="button"
+            aria-label="ลด"
+            onClick={() => onChange(Math.max(0, qty - 1))}
+            className="grid h-8 w-8 place-items-center rounded-full text-lg text-ink-soft transition hover:bg-gold/20"
+          >
+            −
+          </button>
+          <span key={qty} className="tabular w-5 animate-bump text-center text-sm font-bold">
+            {qty}
+          </span>
+        </>
+      )}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={(e) => {
+          onAdd?.(e.currentTarget)
+          onChange(qty + 1)
+        }}
+        className="grid h-8 w-8 place-items-center rounded-full text-lg text-gold-deep transition hover:bg-gold/20 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        +
+      </button>
     </div>
   )
 }

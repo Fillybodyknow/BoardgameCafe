@@ -2,11 +2,16 @@ import { useMemo, useState } from 'react'
 import { db } from '../data'
 import { formatBaht, splitByOwner } from '../domain/pricing'
 import type { BillPreview, GuestPass, PaymentInput, PaymentMethod } from '../domain/types'
-import { Button, Card } from '../components/ui'
+import { Button, Card, Modal, Segmented } from '../components/ui'
 
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   cash: 'เงินสด',
   transfer: 'โอน / พร้อมเพย์',
+}
+
+const METHOD_ICON: Record<PaymentMethod, string> = {
+  cash: '🪙',
+  transfer: '📜',
 }
 
 type Mode = 'together' | 'by_owner' | 'evenly'
@@ -21,6 +26,10 @@ function round2(n: number) {
   return Math.round(n * 100) / 100
 }
 
+/*
+  หมายเหตุสำหรับคนแก้หน้านี้: เทสต์นับยอดรายคนจาก `.tabular.font-bold`
+  ในโหมดแยกบิล — อย่าใส่สองคลาสนี้คู่กันกับตัวเลขอื่นที่น้อยกว่ายอดบิล
+*/
 export default function PaymentDialog({
   visitCode,
   bill,
@@ -98,134 +107,13 @@ export default function PaymentDialog({
   const everyoneSettled = mode === 'together' || shares.every((s) => settled[s.passId])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center sm:p-4">
-      <div className="flex max-h-[92vh] w-full max-w-md flex-col rounded-t-2xl border border-slate-800 bg-slate-900 sm:rounded-2xl">
-        <div className="border-b border-slate-800 p-5">
-          <h3 className="text-lg font-bold">รับชำระเงิน · {visitCode}</h3>
-          <div className="tabular mt-1 text-3xl font-bold text-emerald-400">
-            ฿{formatBaht(bill.total)}
-          </div>
-
-          <div className="mt-3 flex flex-wrap gap-1">
-            {(Object.keys(MODE_LABEL) as Mode[]).map((m) => (
-              <Button
-                key={m}
-                variant={mode === m ? 'subtle' : 'ghost'}
-                onClick={() => {
-                  setMode(m)
-                  setSettled({})
-                }}
-              >
-                {MODE_LABEL[m]}
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto p-5">
-          {mode === 'together' ? (
-            <>
-              <div className="flex gap-1">
-                {(Object.keys(METHOD_LABEL) as PaymentMethod[]).map((m) => (
-                  <Button
-                    key={m}
-                    className="flex-1"
-                    variant={method === m ? 'primary' : 'ghost'}
-                    onClick={() => setMethod(m)}
-                  >
-                    {METHOD_LABEL[m]}
-                  </Button>
-                ))}
-              </div>
-
-              {method === 'cash' && (
-                <div className="mt-4">
-                  <label className="text-sm text-slate-400">รับเงินมา</label>
-                  <input
-                    inputMode="decimal"
-                    value={received}
-                    onChange={(e) => setReceived(e.target.value)}
-                    placeholder="0.00"
-                    className="tabular mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-right text-lg outline-none focus:border-emerald-600"
-                  />
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {[100, 500, 1000].map((n) => (
-                      <Button key={n} onClick={() => setReceived(String(n))}>
-                        ฿{n}
-                      </Button>
-                    ))}
-                    <Button onClick={() => setReceived(String(bill.total))}>พอดี</Button>
-                  </div>
-                  {cash > 0 && (
-                    <div
-                      className={`tabular mt-3 flex justify-between rounded-lg p-3 text-lg font-bold ${
-                        change < 0 ? 'bg-rose-950/40 text-rose-300' : 'bg-emerald-950/40 text-emerald-300'
-                      }`}
-                    >
-                      <span>{change < 0 ? 'ยังขาด' : 'เงินทอน'}</span>
-                      <span>฿{formatBaht(Math.abs(change))}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {method === 'transfer' && (
-                <p className="mt-4 rounded-lg bg-slate-800/60 p-3 text-sm text-slate-400">
-                  ตรวจสลิปให้ตรงยอด ฿{formatBaht(bill.total)} ก่อนกดยืนยัน
-                </p>
-              )}
-            </>
-          ) : (
-            <div className="space-y-2">
-              {shares.map((s) => {
-                const paid = settled[s.passId]
-                return (
-                  <Card key={s.passId} className={paid ? 'border-emerald-800/70' : ''}>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold">{s.name}</span>
-                      <span className="tabular font-bold">฿{formatBaht(s.amount)}</span>
-                    </div>
-                    <div className="mt-2 flex gap-1">
-                      {(Object.keys(METHOD_LABEL) as PaymentMethod[]).map((m) => (
-                        <Button
-                          key={m}
-                          className="flex-1"
-                          variant={paid === m ? 'primary' : 'ghost'}
-                          onClick={() =>
-                            setSettled((prev) => {
-                              const next = { ...prev }
-                              if (next[s.passId] === m) delete next[s.passId]
-                              else next[s.passId] = m
-                              return next
-                            })
-                          }
-                        >
-                          {METHOD_LABEL[m]}
-                        </Button>
-                      ))}
-                    </div>
-                  </Card>
-                )
-              })}
-
-              <div className="tabular flex justify-between border-t border-slate-800 pt-3 text-sm">
-                <span className="text-slate-400">รับแล้ว ฿{formatBaht(paidTotal)}</span>
-                <span className={outstanding > 0 ? 'text-amber-400' : 'text-emerald-400'}>
-                  คงเหลือ ฿{formatBaht(Math.max(0, outstanding))}
-                </span>
-              </div>
-
-              {Math.abs(splitTotal - bill.total) > 0.01 && (
-                <p className="text-xs text-rose-400">
-                  ผลรวมบิลย่อย ฿{formatBaht(splitTotal)} ไม่ตรงกับยอดบิล ฿{formatBaht(bill.total)}
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="border-t border-slate-800 p-5">
-          {error && <p className="mb-2 text-sm text-rose-400">{error}</p>}
+    <Modal
+      title={`รับชำระเงิน · ${visitCode}`}
+      onClose={onClose}
+      dismissible={!busy}
+      footer={
+        <>
+          {error && <p className="mb-2 animate-shake text-sm text-crimson">{error}</p>}
           <div className="flex gap-2">
             <Button className="flex-1" onClick={onClose} disabled={busy}>
               ยกเลิก
@@ -239,8 +127,150 @@ export default function PaymentDialog({
               {busy ? 'กำลังปิดบิล…' : 'ยืนยันรับเงิน'}
             </Button>
           </div>
-        </div>
+        </>
+      }
+    >
+      <div className="text-center">
+        <div className="text-xs tracking-[0.2em] text-ink-faint uppercase">ยอดที่ต้องชำระ</div>
+        <div className="tabular mt-1 text-4xl font-bold text-gold-deep">฿{formatBaht(bill.total)}</div>
       </div>
-    </div>
+
+      <Segmented
+        className="mt-4 w-full"
+        value={mode}
+        onChange={(m) => {
+          setMode(m)
+          setSettled({})
+        }}
+        options={(Object.keys(MODE_LABEL) as Mode[]).map((m) => ({ value: m, label: MODE_LABEL[m] }))}
+      />
+
+      <div key={mode} className="mt-5 animate-page">
+        {mode === 'together' ? (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              {(Object.keys(METHOD_LABEL) as PaymentMethod[]).map((m) => (
+                <div key={m} className="relative">
+                  <span className="pointer-events-none absolute top-2 left-3 text-lg" aria-hidden>
+                    {METHOD_ICON[m]}
+                  </span>
+                  <button
+                    type="button"
+                    aria-pressed={method === m}
+                    onClick={() => setMethod(m)}
+                    className="pick w-full px-3 pt-8 pb-3 text-left text-sm font-medium"
+                  >
+                    {METHOD_LABEL[m]}
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {method === 'cash' && (
+              <div className="mt-4">
+                <label className="text-xs font-medium text-ink-soft">รับเงินมา</label>
+                <input
+                  inputMode="decimal"
+                  value={received}
+                  onChange={(e) => setReceived(e.target.value)}
+                  placeholder="0.00"
+                  className="field tabular mt-1 !py-3 text-right !text-2xl"
+                />
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {[100, 500, 1000].map((n) => (
+                    <button key={n} type="button" className="chip" onClick={() => setReceived(String(n))}>
+                      ฿{n}
+                    </button>
+                  ))}
+                  <button type="button" className="chip" onClick={() => setReceived(String(bill.total))}>
+                    พอดี
+                  </button>
+                </div>
+                {cash > 0 && (
+                  <div
+                    className={`tabular mt-4 flex items-baseline justify-between rounded-lg border p-3 text-lg font-bold ${
+                      change < 0
+                        ? 'animate-shake border-crimson/30 bg-crimson/10 text-crimson-deep'
+                        : 'border-forest/30 bg-forest/10 text-forest-deep'
+                    }`}
+                  >
+                    <span>{change < 0 ? 'ยังขาด' : 'เงินทอน'}</span>
+                    <span>฿{formatBaht(Math.abs(change))}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {method === 'transfer' && (
+              <p className="mt-4 rounded-lg border border-lapis/25 bg-lapis/5 p-3 text-sm text-lapis-deep">
+                ตรวจสลิปให้ตรงยอด ฿{formatBaht(bill.total)} ก่อนกดยืนยัน
+              </p>
+            )}
+          </>
+        ) : (
+          <div className="space-y-2">
+            {shares.map((s) => {
+              const paid = settled[s.passId]
+              return (
+                <Card key={s.passId} className={`transition ${paid ? '!border-forest/50 !bg-forest/5' : ''}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2 font-semibold">
+                      {paid && (
+                        <span className="wax-seal seal-stamp h-6 w-6 text-[0.6rem]" aria-hidden>
+                          ✓
+                        </span>
+                      )}
+                      {s.name}
+                    </span>
+                    <span className="tabular font-bold">฿{formatBaht(s.amount)}</span>
+                  </div>
+                  <div className="mt-2 flex gap-1.5">
+                    {(Object.keys(METHOD_LABEL) as PaymentMethod[]).map((m) => (
+                      <Button
+                        key={m}
+                        className="flex-1"
+                        variant={paid === m ? 'forest' : 'ghost'}
+                        onClick={() =>
+                          setSettled((prev) => {
+                            const next = { ...prev }
+                            if (next[s.passId] === m) delete next[s.passId]
+                            else next[s.passId] = m
+                            return next
+                          })
+                        }
+                      >
+                        {METHOD_LABEL[m]}
+                      </Button>
+                    ))}
+                  </div>
+                </Card>
+              )
+            })}
+
+            {/* แถบความคืบหน้าการรับเงิน */}
+            <div className="pt-2">
+              <div className="h-2 overflow-hidden rounded-full bg-parchment-deep">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-gold to-gold-light transition-all duration-500"
+                  style={{ width: `${bill.total > 0 ? Math.min(100, (paidTotal / bill.total) * 100) : 0}%` }}
+                />
+              </div>
+              <div className="tabular mt-2 flex justify-between text-sm">
+                <span className="text-ink-faint">รับแล้ว ฿{formatBaht(paidTotal)}</span>
+                <span className={outstanding > 0 ? 'text-ember-deep' : 'text-forest-deep'}>
+                  คงเหลือ ฿{formatBaht(Math.max(0, outstanding))}
+                </span>
+              </div>
+            </div>
+
+            {Math.abs(splitTotal - bill.total) > 0.01 && (
+              <p className="text-xs text-crimson">
+                ผลรวมบิลย่อย ฿{formatBaht(splitTotal)} ไม่ตรงกับยอดบิล ฿{formatBaht(bill.total)}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+    </Modal>
   )
 }

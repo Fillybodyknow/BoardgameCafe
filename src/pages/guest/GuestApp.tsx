@@ -1,27 +1,42 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { guestDb, menuImageUrl } from '../../data'
 import { formatBaht } from '../../domain/pricing'
 import type { GuestOrder, MenuItem, OrderStatus } from '../../domain/types'
-import { Badge, Button, Card, Empty } from '../../components/ui'
+import { Badge, Button, Card, Empty, INPUT } from '../../components/ui'
 import type { Tone } from '../../components/ui'
+import { Stepper } from '../OrderDialog'
 
 const CATEGORY_LABEL: Record<MenuItem['category'], string> = {
   drink: 'เครื่องดื่ม', snack: 'ของกินเล่น', food: 'อาหารจานหลัก', dessert: 'ของหวาน',
 }
-
-const STATUS: Record<OrderStatus, { label: string; tone: Tone }> = {
-  placed: { label: 'ส่งเข้าครัวแล้ว', tone: 'sky' },
-  accepted: { label: 'ครัวรับแล้ว', tone: 'sky' },
-  preparing: { label: 'กำลังทำ', tone: 'amber' },
-  ready: { label: 'พร้อมเสิร์ฟ', tone: 'violet' },
-  served: { label: 'เสิร์ฟแล้ว', tone: 'emerald' },
-  rejected: { label: 'ของหมด', tone: 'rose' },
-  cancelled: { label: 'ยกเลิก', tone: 'slate' },
+const CATEGORY_ICON: Record<MenuItem['category'], string> = {
+  drink: '🍺', snack: '🥨', food: '🍖', dessert: '🍯',
 }
 
+const STATUS: Record<OrderStatus, { label: string; tone: Tone }> = {
+  placed: { label: 'ส่งเข้าครัวแล้ว', tone: 'lapis' },
+  accepted: { label: 'ครัวรับแล้ว', tone: 'lapis' },
+  preparing: { label: 'กำลังทำ', tone: 'ember' },
+  ready: { label: 'พร้อมเสิร์ฟ', tone: 'royal' },
+  served: { label: 'เสิร์ฟแล้ว', tone: 'forest' },
+  rejected: { label: 'ของหมด', tone: 'crimson' },
+  cancelled: { label: 'ยกเลิก', tone: 'neutral' },
+}
+
+/** ขั้นของออเดอร์ที่ลูกค้าเห็นเป็นเส้นทาง */
+const TRACK: { status: OrderStatus; label: string }[] = [
+  { status: 'placed', label: 'สั่ง' },
+  { status: 'accepted', label: 'รับ' },
+  { status: 'preparing', label: 'ทำ' },
+  { status: 'ready', label: 'พร้อม' },
+  { status: 'served', label: 'เสิร์ฟ' },
+]
+
 type Tab = 'menu' | 'orders' | 'bill'
+
+type Coin = { id: number; x: number; y: number; dx: number; dy: number }
 
 /**
  * หน้าจอของลูกค้าที่สแกน QR ที่โต๊ะ
@@ -39,6 +54,8 @@ export default function GuestApp() {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [justSent, setJustSent] = useState(false)
+  const [coins, setCoins] = useState<Coin[]>([])
+  const bagRef = useRef<HTMLDivElement>(null)
 
   const session = useQuery({
     queryKey: ['guest', token, 'session'],
@@ -70,14 +87,20 @@ export default function GuestApp() {
   }, [session.data])
 
   if (session.isPending) {
-    return <Centered>กำลังเปิดเมนู…</Centered>
+    return (
+      <Centered>
+        <div className="dice-rolling text-4xl">🎲</div>
+        <p className="mt-4 text-ink-soft italic">กำลังเปิดเมนู…</p>
+      </Centered>
+    )
   }
 
   if (session.isError) {
     return (
       <Centered>
-        <p className="text-lg font-semibold">QR นี้ใช้ไม่ได้</p>
-        <p className="mt-2 text-sm text-slate-400">ลองสแกนใหม่ หรือแจ้งพนักงานครับ</p>
+        <div className="wax-seal h-20 w-20 rotate-12 text-3xl opacity-80">✕</div>
+        <p className="mt-5 text-lg font-semibold">QR นี้ใช้ไม่ได้</p>
+        <p className="mt-2 text-sm text-ink-soft">ลองสแกนใหม่ หรือแจ้งพนักงานครับ</p>
       </Centered>
     )
   }
@@ -93,14 +116,28 @@ export default function GuestApp() {
   if (!s.visitId) {
     return (
       <Centered>
-        <p className="text-4xl font-bold">{s.tableCode}</p>
-        <p className="mt-1 text-sm text-slate-500">{s.zone}</p>
-        <p className="mt-6 text-lg">ยังไม่ได้เปิดโต๊ะ</p>
-        <p className="mt-2 text-sm text-slate-400">
+        <div className="shield h-28 w-24 bg-wine text-3xl text-gold-light shadow-xl">{s.tableCode}</div>
+        <p className="mt-3 text-sm text-ink-faint">{s.zone}</p>
+        <div className="divider my-6 w-48 text-xs" aria-hidden>
+          ◆
+        </div>
+        <p className="font-display text-lg font-bold">ยังไม่ได้เปิดโต๊ะ</p>
+        <p className="mt-2 max-w-xs text-sm text-ink-soft">
           แจ้งพนักงานเพื่อเปิดโต๊ะก่อนนะครับ แล้วสแกนใหม่อีกครั้ง
         </p>
       </Centered>
     )
+  }
+
+  /** เหรียญทองลอยจากปุ่ม + ไปลงถุงเงินด้านล่าง */
+  function flyCoin(el: HTMLElement) {
+    const from = el.getBoundingClientRect()
+    const bag = bagRef.current?.getBoundingClientRect()
+    const x = from.left + from.width / 2
+    const y = from.top + from.height / 2
+    const tx = bag ? bag.left + bag.width / 2 : window.innerWidth / 2
+    const ty = bag ? bag.top + bag.height / 2 : window.innerHeight - 48
+    setCoins((c) => [...c, { id: Date.now() + Math.random(), x, y, dx: tx - x, dy: ty - y }])
   }
 
   async function send() {
@@ -127,158 +164,186 @@ export default function GuestApp() {
     }
   }
 
+  const liveOrders = (orders.data ?? []).filter((o) =>
+    ['placed', 'accepted', 'preparing', 'ready'].includes(o.status),
+  ).length
+
   return (
     <div className="mx-auto flex min-h-screen max-w-lg flex-col">
-      <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur">
-        <div className="flex items-baseline justify-between">
-          <span className="text-xl font-bold">โต๊ะ {s.tableCode}</span>
-          <span className="text-xs text-slate-500">{s.zone}</span>
-        </div>
-
-        <div className="mt-3 flex gap-1">
-          {(['menu', 'orders', 'bill'] as Tab[]).map((t) => (
-            <Button
-              key={t}
-              className="flex-1"
-              variant={tab === t ? 'subtle' : 'ghost'}
-              onClick={() => setTab(t)}
-            >
-              {t === 'menu' ? 'เมนู' : t === 'orders' ? 'ออเดอร์' : 'ยอดของโต๊ะ'}
-            </Button>
-          ))}
-        </div>
+      {/* ธงประจำโต๊ะ */}
+      <header className="tapestry pennant px-5 pt-5 pb-10 text-center">
+        <div className="brand text-xs">⚜ Boardgame Cafe</div>
+        <h1 className="mt-2 font-sans text-3xl font-bold text-gold-light">โต๊ะ {s.tableCode}</h1>
+        <p className="mt-1 text-xs text-[#f3e6c8]/70">
+          {s.zone} · ยินดีต้อนรับสู่โรงเตี๊ยม ขอให้สนุกกับเกมนะ
+        </p>
       </header>
 
-      <main className="flex-1 p-4 pb-32">
+      <nav className="sticky top-0 z-30 -mt-4 px-4 pt-1 pb-3">
+        <div className="seg flex w-full shadow-lg">
+          {(['menu', 'orders', 'bill'] as Tab[]).map((t) => (
+            <button key={t} type="button" aria-pressed={tab === t} onClick={() => setTab(t)} className="relative flex-1">
+              {t === 'menu' ? 'เมนู' : t === 'orders' ? 'ออเดอร์' : 'ยอดของโต๊ะ'}
+              {t === 'orders' && liveOrders > 0 && (
+                <span className="absolute -top-1 right-2 grid h-4 min-w-4 place-items-center rounded-full bg-crimson px-1 text-[0.6rem] font-bold text-vellum">
+                  {liveOrders}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      <main className="flex-1 px-4 pb-36">
         {justSent && (
-          <Card className="mb-4 border-emerald-800/70 bg-emerald-950/30 text-sm text-emerald-300">
+          <div className="mb-4 flex animate-unroll items-center gap-3 rounded-xl border border-forest/40 bg-forest/10 p-3 text-sm text-forest-deep">
+            <span className="wax-seal seal-stamp h-9 w-9 shrink-0 text-sm">✓</span>
             ส่งเข้าครัวแล้ว ติดตามสถานะได้ที่แท็บออเดอร์
-          </Card>
+          </div>
         )}
 
-        {tab === 'menu' && (
-          <>
-            <Card className="mb-4">
-              <label className="text-sm text-slate-400">สั่งในชื่อ</label>
-              <select
-                value={passId}
-                onChange={(e) => setPassId(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-600"
-              >
-                <option value="">แชร์ทั้งโต๊ะ (หารกัน)</option>
-                {s.passes.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.displayName}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-2 text-xs text-slate-500">
-                เลือกชื่อตัวเองไว้ ตอนเช็คบิลจะแยกได้ว่าใครสั่งอะไร
-              </p>
-            </Card>
-
-            <div className="space-y-5">
-              {groups.map(([category, items]) => (
-                <div key={category}>
-                  <h2 className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                    {CATEGORY_LABEL[category]}
-                  </h2>
-                  <div className="space-y-1">
-                    {items.map((item) => {
-                      const qty = cart[item.id] ?? 0
-                      return (
-                        <div
-                          key={item.id}
-                          className={`flex items-center justify-between gap-2 rounded-lg px-2 py-2 ${
-                            item.available ? '' : 'opacity-40'
-                          }`}
-                        >
-                          <div className="flex min-w-0 items-center gap-3">
-                            {menuImageUrl(item.imagePath) && (
-                              <img
-                                src={menuImageUrl(item.imagePath)!}
-                                alt=""
-                                loading="lazy"
-                                className="h-14 w-14 shrink-0 rounded-lg object-cover"
-                              />
-                            )}
-                            <div className="min-w-0">
-                              <div className="truncate">
-                                {item.name}
-                                {!item.available && (
-                                  <span className="ml-2 text-xs text-rose-400">ของหมด</span>
-                                )}
-                              </div>
-                              <div className="tabular text-sm text-slate-500">
-                                ฿{formatBaht(item.price)}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-1">
-                            <Button
-                              disabled={qty === 0}
-                              onClick={() => setCart((c) => ({ ...c, [item.id]: Math.max(0, qty - 1) }))}
-                            >
-                              −
-                            </Button>
-                            <span className="tabular w-6 text-center">{qty || ''}</span>
-                            <Button
-                              disabled={!item.available}
-                              onClick={() => setCart((c) => ({ ...c, [item.id]: qty + 1 }))}
-                            >
-                              +
-                            </Button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {tab === 'orders' && <OrderList orders={orders.data ?? []} passes={s.passes} />}
-
-        {tab === 'bill' && (
-          <>
-            {bill.isPending && <Empty>กำลังคิดยอด…</Empty>}
-            {bill.data && (
-              <Card>
-                <ul className="space-y-1 text-sm">
-                  {bill.data.lines.map((line) => (
-                    <li key={line.id} className="flex justify-between gap-3">
-                      <span className="min-w-0 truncate text-slate-300">{line.label}</span>
-                      <span className="tabular shrink-0">฿{formatBaht(line.amount)}</span>
-                    </li>
+        <div key={tab} className="animate-page">
+          {tab === 'menu' && (
+            <>
+              <Card className="mb-4 !p-3">
+                <label className="text-xs font-medium text-ink-soft">สั่งในชื่อ</label>
+                <select value={passId} onChange={(e) => setPassId(e.target.value)} className={`${INPUT} mt-1`}>
+                  <option value="">แชร์ทั้งโต๊ะ (หารกัน)</option>
+                  {s.passes.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.displayName}
+                    </option>
                   ))}
-                </ul>
-                <div className="mt-3 flex justify-between border-t border-slate-800 pt-3 text-lg font-bold">
-                  <span>ยอดรวมทั้งโต๊ะ</span>
-                  <span className="tabular text-emerald-400">฿{formatBaht(bill.data.total)}</span>
-                </div>
-                <p className="mt-3 text-xs text-slate-500">
-                  ค่าเล่นยังเดินอยู่ ยอดนี้เป็นยอด ณ ตอนนี้ · ชำระเงินที่เคาน์เตอร์
+                </select>
+                <p className="mt-1.5 text-xs text-ink-faint">
+                  เลือกชื่อตัวเองไว้ ตอนเช็คบิลจะแยกได้ว่าใครสั่งอะไร
                 </p>
               </Card>
-            )}
-          </>
-        )}
+
+              {/* ทางลัดไปแต่ละหมวด */}
+              <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1">
+                {groups.map(([category]) => (
+                  <button
+                    key={category}
+                    type="button"
+                    className="chip"
+                    onClick={() =>
+                      document.getElementById(`cat-${category}`)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+                    }
+                  >
+                    {CATEGORY_ICON[category]} {CATEGORY_LABEL[category]}
+                  </button>
+                ))}
+              </div>
+
+              <div className="space-y-6">
+                {groups.map(([category, items]) => (
+                  <section key={category} id={`cat-${category}`} className="scroll-mt-20">
+                    <h2 className="flourish mb-2 text-sm font-semibold">{CATEGORY_LABEL[category]}</h2>
+                    <div className="space-y-2">
+                      {items.map((item) => {
+                        const qty = cart[item.id] ?? 0
+                        const img = menuImageUrl(item.imagePath)
+                        return (
+                          <div
+                            key={item.id}
+                            className={`panel flex items-center justify-between gap-3 rounded-xl p-2.5 transition ${
+                              item.available ? '' : 'opacity-50'
+                            } ${qty > 0 ? '!border-gold/60' : ''}`}
+                          >
+                            <div className="flex min-w-0 items-center gap-3">
+                              {img ? (
+                                <img src={img} alt="" loading="lazy" className="h-16 w-16 shrink-0 rounded-lg object-cover" />
+                              ) : (
+                                <div className="grid h-16 w-16 shrink-0 place-items-center rounded-lg bg-parchment-deep text-2xl">
+                                  {CATEGORY_ICON[item.category]}
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <div className="truncate font-medium">{item.name}</div>
+                                <div className="tabular text-sm font-semibold text-gold-deep">
+                                  ฿{formatBaht(item.price)}
+                                </div>
+                                {!item.available && <div className="text-xs text-crimson">ของหมด</div>}
+                              </div>
+                            </div>
+                            <Stepper
+                              qty={qty}
+                              disabled={!item.available}
+                              onAdd={flyCoin}
+                              onChange={(n) => setCart((c) => ({ ...c, [item.id]: n }))}
+                            />
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            </>
+          )}
+
+          {tab === 'orders' && <OrderList orders={orders.data ?? []} passes={s.passes} />}
+
+          {tab === 'bill' && (
+            <>
+              {bill.isPending && <Empty icon="⚖">กำลังคิดยอด…</Empty>}
+              {bill.data && (
+                <Card ornate>
+                  <h2 className="text-center font-display text-sm tracking-[0.2em] text-gold-deep uppercase">
+                    ใบแจ้งยอด
+                  </h2>
+                  <ul className="mt-4 space-y-1.5 text-sm">
+                    {bill.data.lines.map((line) => (
+                      <li key={line.id} className="flex justify-between gap-3">
+                        <span className="min-w-0 truncate text-ink-soft">{line.label}</span>
+                        <span className="tabular shrink-0">฿{formatBaht(line.amount)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-4 flex items-baseline justify-between border-t border-double border-line-strong pt-3 text-lg font-bold">
+                    <span className="font-display">ยอดรวมทั้งโต๊ะ</span>
+                    <span className="tabular text-2xl text-gold-deep">฿{formatBaht(bill.data.total)}</span>
+                  </div>
+                  <p className="mt-3 text-center text-xs text-ink-faint italic">
+                    ค่าเล่นยังเดินอยู่ ยอดนี้เป็นยอด ณ ตอนนี้ · ชำระเงินที่เคาน์เตอร์
+                  </p>
+                </Card>
+              )}
+            </>
+          )}
+        </div>
       </main>
 
       {tab === 'menu' && cartCount > 0 && (
-        <div className="fixed inset-x-0 bottom-0 mx-auto max-w-lg border-t border-slate-800 bg-slate-900 p-4">
-          {error && <p className="mb-2 text-sm text-rose-400">{error}</p>}
-          <div className="mb-2 flex justify-between text-sm">
-            <span className="text-slate-400">{cartCount} รายการ</span>
-            <span className="tabular font-bold">฿{formatBaht(cartTotal)}</span>
+        <div className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-lg animate-unroll px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="tapestry flex items-center gap-3 rounded-2xl p-3 shadow-2xl">
+            <div ref={bagRef} key={cartCount} className="relative grid h-11 w-11 shrink-0 animate-bump place-items-center rounded-full bg-gold/20 text-2xl">
+              💰
+              <span className="tabular absolute -top-1 -right-1 grid h-5 min-w-5 place-items-center rounded-full bg-crimson px-1 text-[0.65rem] font-bold text-vellum">
+                {cartCount}
+              </span>
+            </div>
+            <div className="min-w-0 flex-1">
+              {error && <p className="truncate text-xs text-[#ffb4a8]">{error}</p>}
+              <div className="text-xs text-[#f3e6c8]/70">{cartCount} รายการ</div>
+              <div className="tabular font-bold text-gold-light">฿{formatBaht(cartTotal)}</div>
+            </div>
+            <Button variant="primary" className="!px-5 !py-2.5" onClick={send} disabled={sending}>
+              {sending ? 'กำลังส่ง…' : 'ส่งเข้าครัว'}
+            </Button>
           </div>
-          <Button variant="primary" className="w-full !py-3" onClick={send} disabled={sending}>
-            {sending ? 'กำลังส่ง…' : 'ส่งเข้าครัว'}
-          </Button>
         </div>
       )}
+
+      {coins.map((c) => (
+        <span
+          key={c.id}
+          className="coin-fly"
+          style={{ left: c.x, top: c.y, ['--dx' as string]: `${c.dx}px`, ['--dy' as string]: `${c.dy}px` }}
+          onAnimationEnd={() => setCoins((all) => all.filter((x) => x.id !== c.id))}
+        />
+      ))}
     </div>
   )
 }
@@ -290,32 +355,61 @@ function OrderList({
   orders: GuestOrder[]
   passes: { id: string; displayName: string }[]
 }) {
-  if (orders.length === 0) return <Empty>ยังไม่มีออเดอร์</Empty>
+  if (orders.length === 0) return <Empty icon="🍺">ยังไม่มีออเดอร์</Empty>
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {orders.map((order) => {
         const who = order.orderedByPassId
           ? passes.find((p) => p.id === order.orderedByPassId)?.displayName
           : 'แชร์ทั้งโต๊ะ'
         const total = order.lines.reduce((s, l) => s + l.amount, 0)
         const st = STATUS[order.status]
+        const step = TRACK.findIndex((t) => t.status === order.status)
         return (
           <Card key={order.id}>
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-sm">
                 <Badge tone={st.tone}>{st.label}</Badge>
-                <span className="text-slate-400">{who ?? '—'}</span>
+                <span className="text-ink-faint">{who ?? '—'}</span>
               </div>
               <span className="tabular text-sm font-semibold">฿{formatBaht(total)}</span>
             </div>
-            <ul className="mt-2 space-y-0.5 text-sm text-slate-300">
+
+            {/* เส้นทางของออเดอร์ */}
+            {step >= 0 && (
+              <ol className="mt-4 flex items-center" aria-label="สถานะออเดอร์">
+                {TRACK.map((t, i) => (
+                  <li key={t.status} className="flex flex-1 items-center last:flex-none">
+                    <div className="flex flex-col items-center gap-1">
+                      <span
+                        className={`grid h-6 w-6 place-items-center rounded-full border text-[0.6rem] transition ${
+                          i < step
+                            ? 'border-forest bg-forest text-vellum'
+                            : i === step
+                              ? 'animate-pulse border-gold bg-gold text-ink'
+                              : 'border-line-strong bg-vellum text-ink-faint'
+                        }`}
+                      >
+                        {i < step ? '✓' : i + 1}
+                      </span>
+                      <span className={`text-[0.65rem] ${i <= step ? 'text-ink' : 'text-ink-faint'}`}>{t.label}</span>
+                    </div>
+                    {i < TRACK.length - 1 && (
+                      <span className={`mx-1 mb-4 h-0.5 flex-1 rounded ${i < step ? 'bg-forest' : 'bg-line'}`} />
+                    )}
+                  </li>
+                ))}
+              </ol>
+            )}
+
+            <ul className="mt-3 space-y-0.5 border-t border-dashed border-line pt-2 text-sm text-ink-soft">
               {order.lines.map((line) => (
                 <li key={line.id} className="flex justify-between">
                   <span>
                     {line.name} × {line.qty}
                   </span>
-                  <span className="tabular text-slate-400">฿{formatBaht(line.amount)}</span>
+                  <span className="tabular text-ink-faint">฿{formatBaht(line.amount)}</span>
                 </li>
               ))}
             </ul>
@@ -328,7 +422,7 @@ function OrderList({
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center p-8 text-center">
+    <div className="flex min-h-screen animate-page flex-col items-center justify-center p-8 text-center">
       {children}
     </div>
   )

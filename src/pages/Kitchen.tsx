@@ -1,7 +1,8 @@
+import { useEffect, useRef, useState } from 'react'
 import { useNow, useSnapshot } from '../hooks/useData'
 import { db } from '../data'
 import type { Order, OrderStatus } from '../domain/types'
-import { Badge, Button, Card, Empty } from '../components/ui'
+import { Badge, Button, Empty, Icon, PageHeader } from '../components/ui'
 
 /** SLA — เกินแล้วการ์ดเปลี่ยนสี ให้ครัวเห็นแต่ไกล */
 const SLA_MINUTES = 12
@@ -13,22 +14,32 @@ const NEXT: Partial<Record<OrderStatus, { to: OrderStatus; label: string }>> = {
   ready: { to: 'served', label: 'เสิร์ฟแล้ว' },
 }
 
-const COLUMNS: { status: OrderStatus; title: string }[] = [
-  { status: 'placed', title: 'เข้าใหม่' },
-  { status: 'accepted', title: 'รับแล้ว' },
-  { status: 'preparing', title: 'กำลังทำ' },
-  { status: 'ready', title: 'พร้อมเสิร์ฟ' },
+// Tailwind สแกนคลาสแบบ static — เขียนชื่อคลาสเต็มไว้ตรงนี้
+const COLUMNS: { status: OrderStatus; title: string; accent: string }[] = [
+  { status: 'placed', title: 'เข้าใหม่', accent: 'border-t-lapis' },
+  { status: 'accepted', title: 'รับแล้ว', accent: 'border-t-gold' },
+  { status: 'preparing', title: 'กำลังทำ', accent: 'border-t-ember' },
+  { status: 'ready', title: 'พร้อมเสิร์ฟ', accent: 'border-t-royal' },
 ]
 
 export default function Kitchen() {
   const { data } = useSnapshot()
   const now = useNow(1000)
 
-  if (!data) return null
-
-  const active = data.orders.filter((o) =>
+  const active = (data?.orders ?? []).filter((o) =>
     ['placed', 'accepted', 'preparing', 'ready'].includes(o.status),
   )
+  const incoming = active.filter((o) => o.status === 'placed').length
+
+  // ออเดอร์ใหม่เข้ามา → กระดิ่งสั่น (ไม่สั่นตอนเปิดหน้าครั้งแรก)
+  const prevIncoming = useRef<number | null>(null)
+  const [ring, setRing] = useState(0)
+  useEffect(() => {
+    if (prevIncoming.current !== null && incoming > prevIncoming.current) setRing((n) => n + 1)
+    prevIncoming.current = incoming
+  }, [incoming])
+
+  if (!data) return null
 
   function tableOf(order: Order) {
     // ใช้ occupancy ปัจจุบัน ไม่ใช่ snapshot ตอนสั่ง — ลูกค้าอาจย้ายโต๊ะไปแล้ว
@@ -38,76 +49,133 @@ export default function Kitchen() {
     return { code: table?.code ?? '—', moved }
   }
 
-  if (active.length === 0) return <Empty>ไม่มีออเดอร์ค้าง 🎉</Empty>
+  const late = active.filter(
+    (o) => (now.getTime() - new Date(o.placedAt).getTime()) / 60_000 >= SLA_MINUTES,
+  ).length
 
   return (
-    <div className="grid gap-4 lg:grid-cols-4">
-      {COLUMNS.map((col) => {
-        const orders = active.filter((o) => o.status === col.status)
-        return (
-          <section key={col.status}>
-            <h2 className="mb-2 text-sm font-semibold text-slate-400">
-              {col.title}{' '}
-              <span className="tabular text-slate-600">({orders.length})</span>
-            </h2>
-            <div className="space-y-2">
-              {orders.map((order) => {
-                const waited = Math.floor((now.getTime() - new Date(order.placedAt).getTime()) / 60_000)
-                const late = waited >= SLA_MINUTES
-                const next = NEXT[order.status]
-                const { code, moved } = tableOf(order)
-                return (
-                  <Card
-                    key={order.id}
-                    className={late ? 'border-rose-700/70 bg-rose-950/20' : ''}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-lg font-bold">{code}</span>
-                      <span className={`tabular text-sm ${late ? 'text-rose-400' : 'text-slate-400'}`}>
-                        {waited} นาที
-                      </span>
-                    </div>
-                    {moved && (
-                      <div className="mt-1">
-                        <Badge tone="amber">ลูกค้าย้ายโต๊ะแล้ว</Badge>
-                      </div>
-                    )}
-                    <ul className="mt-2 space-y-1 text-sm">
-                      {order.lines.map((line) => (
-                        <li key={line.id}>
-                          <span className="tabular font-semibold">{line.qty}×</span> {line.nameSnapshot}
-                          {line.note && (
-                            <div className="text-xs text-amber-400">↳ {line.note}</div>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="mt-3 flex gap-1">
-                      {next && (
-                        <Button
-                          variant="primary"
-                          className="flex-1"
-                          onClick={() => db.updateOrderStatus(order.id, next.to)}
-                        >
-                          {next.label}
-                        </Button>
-                      )}
-                      {order.status === 'placed' && (
-                        <Button
-                          variant="danger"
-                          onClick={() => db.updateOrderStatus(order.id, 'rejected')}
-                        >
-                          ของหมด
-                        </Button>
-                      )}
-                    </div>
-                  </Card>
-                )
-              })}
+    <div>
+      <PageHeader
+        eyebrow="เตาไฟหลังร้าน"
+        title="ครัว"
+        subtitle={`เป้าหมาย ${SLA_MINUTES} นาทีต่อออเดอร์ · ค้างอยู่ ${active.length} ใบ`}
+        actions={
+          <div className="flex items-center gap-2">
+            {late > 0 && <Badge tone="crimson">เลยเวลา {late} ใบ</Badge>}
+            <div
+              key={ring}
+              className={`grid h-11 w-11 place-items-center rounded-full border border-gold/50 bg-gold/10 text-gold-deep ${
+                ring > 0 ? 'animate-ring' : ''
+              }`}
+              title="กระดิ่งดังเมื่อมีออเดอร์ใหม่"
+            >
+              <Icon name="bell" />
             </div>
-          </section>
-        )
-      })}
+          </div>
+        }
+      />
+
+      {active.length === 0 ? (
+        <Empty icon="🍲">ไม่มีออเดอร์ค้าง 🎉</Empty>
+      ) : (
+        <div className="-mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-4 lg:overflow-visible lg:px-0">
+          {COLUMNS.map((col) => {
+            const orders = active.filter((o) => o.status === col.status)
+            return (
+              <section
+                key={col.status}
+                className={`w-72 shrink-0 snap-start rounded-xl border-t-4 bg-parchment-deep/50 p-3 lg:w-auto ${col.accent}`}
+              >
+                <h2 className="mb-3 flex items-center justify-between px-1 text-sm font-bold">
+                  {col.title}{' '}
+                  <span className="tabular rounded-full bg-vellum px-2 py-0.5 text-xs text-ink-faint">
+                    ({orders.length})
+                  </span>
+                </h2>
+                <div className="space-y-3">
+                  {orders.length === 0 && (
+                    <p className="py-6 text-center text-xs text-ink-faint italic">— ว่าง —</p>
+                  )}
+                  {orders.map((order) => (
+                    <Ticket key={order.id} order={order} now={now} {...tableOf(order)} />
+                  ))}
+                </div>
+              </section>
+            )
+          })}
+        </div>
+      )}
     </div>
+  )
+}
+
+function Ticket({
+  order,
+  now,
+  code,
+  moved,
+}: {
+  order: Order
+  now: Date
+  code: string
+  moved: unknown
+}) {
+  const waited = Math.floor((now.getTime() - new Date(order.placedAt).getTime()) / 60_000)
+  const late = waited >= SLA_MINUTES
+  const next = NEXT[order.status]
+  const pct = Math.min(100, (waited / SLA_MINUTES) * 100)
+
+  return (
+    <article
+      className={`panel animate-page overflow-hidden rounded-lg ${late ? 'animate-ember-pulse !border-crimson/60' : ''}`}
+    >
+      <div className="flex items-center justify-between px-3 pt-3">
+        <span className="text-xl tracking-wide font-bold">{code}</span>
+        <span className={`tabular flex items-center gap-1 text-sm ${late ? 'font-bold text-crimson' : 'text-ink-faint'}`}>
+          <Icon name="clock" className="h-4 w-4" />
+          {waited} นาที
+        </span>
+      </div>
+
+      {/* เวลาที่รอเทียบกับ SLA */}
+      <div className="mx-3 mt-2 h-1 overflow-hidden rounded-full bg-parchment-deep">
+        <div
+          className={`h-full rounded-full transition-all ${late ? 'bg-crimson' : pct > 66 ? 'bg-ember' : 'bg-forest'}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+
+      {moved ? (
+        <div className="mx-3 mt-2">
+          <Badge tone="ember">ลูกค้าย้ายโต๊ะแล้ว</Badge>
+        </div>
+      ) : null}
+
+      <ul className="mx-3 mt-3 space-y-1.5 border-t border-dashed border-line-strong pt-3 text-sm">
+        {order.lines.map((line) => (
+          <li key={line.id}>
+            <span className="tabular font-bold text-gold-deep">{line.qty}×</span> {line.nameSnapshot}
+            {line.note && <div className="pl-5 text-xs text-ember-deep italic">↳ {line.note}</div>}
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-3 flex gap-1.5 bg-parchment/60 p-2">
+        {next && (
+          <Button
+            variant={order.status === 'ready' ? 'forest' : 'primary'}
+            className="flex-1"
+            onClick={() => db.updateOrderStatus(order.id, next.to)}
+          >
+            {next.label}
+          </Button>
+        )}
+        {order.status === 'placed' && (
+          <Button variant="danger" onClick={() => db.updateOrderStatus(order.id, 'rejected')}>
+            ของหมด
+          </Button>
+        )}
+      </div>
+    </article>
   )
 }

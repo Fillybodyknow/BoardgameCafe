@@ -294,7 +294,7 @@ describe('หน้าจองของลูกค้า', () => {
     window.location.hash = '#/book'
     render(<App />)
 
-    expect(await screen.findByText('🎲 จองโต๊ะ')).toBeTruthy()
+    expect(await screen.findByText('⚜ จองโต๊ะ')).toBeTruthy()
     expect(screen.queryByText(/เข้าสู่ระบบพนักงาน/)).toBeNull()
     await waitFor(() => expect(screen.getByText('เลือกโต๊ะ')).toBeTruthy())
     expect(await screen.findByText('A1')).toBeTruthy()

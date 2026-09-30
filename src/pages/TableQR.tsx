@@ -3,7 +3,11 @@ import QRCode from 'qrcode'
 import { db } from '../data'
 import { useSnapshot } from '../hooks/useData'
 import type { CafeTable } from '../domain/types'
-import { Badge, Button, Card, Empty, SectionTitle } from '../components/ui'
+import { Badge, Button, Card, Empty, Icon, PageHeader } from '../components/ui'
+import type { IconName } from '../components/ui'
+
+// สีหมึกบนกระดาษหนัง — ยังตัดกันชัดพอให้กล้องมือถืออ่านได้
+const QR_COLOR = { dark: '#2a1c12', light: '#fffdf7' }
 
 /** URL ที่ฝังใน QR — ต้องเป็น absolute เพราะลูกค้าเปิดจากมือถือตัวเอง */
 function guestUrl(token: string): string {
@@ -21,11 +25,10 @@ export default function TableQR() {
   const [codes, setCodes] = useState<Record<string, string>>({})
   const [bookingQR, setBookingQR] = useState<string>('')
   const [busy, setBusy] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    void QRCode.toDataURL(bookingUrl(), {
-      width: 320, margin: 1, color: { dark: '#0f172a', light: '#ffffff' },
-    }).then(setBookingQR)
+    void QRCode.toDataURL(bookingUrl(), { width: 320, margin: 1, color: QR_COLOR }).then(setBookingQR)
   }, [])
 
   const tables = data?.tables ?? []
@@ -39,7 +42,7 @@ export default function TableQR() {
         next[table.id] = await QRCode.toDataURL(guestUrl(table.qrToken), {
           width: 320,
           margin: 1,
-          color: { dark: '#0f172a', light: '#ffffff' },
+          color: QR_COLOR,
         })
       }
       if (!cancelled) setCodes(next)
@@ -56,92 +59,150 @@ export default function TableQR() {
   const missing = tables.some((t) => !t.qrToken)
 
   return (
-    <div className="space-y-4">
-      <SectionTitle>QR ประจำโต๊ะ</SectionTitle>
+    <div>
+      <PageHeader
+        eyebrow="ป้ายประจำโต๊ะ"
+        title="QR ประจำโต๊ะ"
+        subtitle="พิมพ์ติดไว้ที่โต๊ะ ลูกค้าสแกนแล้วสั่งอาหารได้เองโดยไม่ต้องล็อกอิน"
+      />
 
-      <Card className="text-sm text-slate-400">
-        พิมพ์ติดไว้ที่โต๊ะ ลูกค้าสแกนแล้วสั่งอาหารได้เองโดยไม่ต้องล็อกอิน
-        <br />
-        QR ใช้สั่งของได้เฉพาะตอนที่โต๊ะนั้นเปิดบิลอยู่ — ปิดบิลแล้วใบเดิมสั่งอะไรไม่ได้
-        จนกว่าจะมีลูกค้าใหม่นั่ง
-        <br />
-        <span className="text-amber-400">
-          ถ้าสงสัยว่า QR หลุดออกนอกร้าน ให้กด "เปลี่ยน QR" แล้วพิมพ์ใบใหม่ — ใบเก่าจะใช้ไม่ได้ทันที
-        </span>
-      </Card>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Rule icon="qr" title="สแกนแล้วสั่งได้เลย">
+          ไม่ต้องสมัคร ไม่ต้องล็อกอิน
+        </Rule>
+        <Rule icon="table" title="ใช้ได้เฉพาะตอนเปิดโต๊ะ">
+          ปิดบิลแล้วใบเดิมสั่งอะไรไม่ได้ จนกว่าจะมีลูกค้าใหม่นั่ง
+        </Rule>
+        <Rule icon="refresh" title="QR หลุดออกนอกร้าน?" warn>
+          กด "เปลี่ยน QR" แล้วพิมพ์ใบใหม่ — ใบเก่าจะใช้ไม่ได้ทันที
+        </Rule>
+      </div>
 
-      <Card>
-        <div className="flex flex-wrap items-center gap-4">
-          {bookingQR && (
+      <Card ornate className="mt-6">
+        <div className="flex flex-col items-center gap-5 sm:flex-row">
+          {bookingQR ? (
             <img
               src={bookingQR}
               alt="QR จองโต๊ะ"
-              className="w-28 shrink-0 rounded-lg bg-white p-1.5"
+              className="w-36 shrink-0 rounded-lg border-4 border-double border-gold/60 bg-[#fffdf7] p-2"
             />
+          ) : (
+            <div className="aspect-square w-36 shrink-0 animate-pulse rounded-lg bg-parchment-deep" />
           )}
-          <div className="min-w-0 flex-1">
-            <h3 className="font-semibold">QR จองโต๊ะล่วงหน้า</h3>
-            <p className="mt-1 text-sm text-slate-400">
+          <div className="min-w-0 flex-1 text-center sm:text-left">
+            <p className="font-display text-[0.7rem] tracking-[0.25em] text-gold-deep uppercase">
+              ประกาศหน้าร้าน
+            </p>
+            <h3 className="text-xl font-bold">QR จองโต๊ะล่วงหน้า</h3>
+            <p className="mt-1 text-sm text-ink-soft">
               คนละใบกับ QR ประจำโต๊ะ — ใบนี้ไม่ผูกกับโต๊ะไหน เอาไปติดหน้าร้าน
               โพสต์เพจ หรือส่งให้ลูกค้าทางแชตได้เลย
             </p>
-            <code className="mt-2 block truncate text-xs text-slate-500">{bookingUrl()}</code>
-            <div className="mt-2 flex gap-1">
-              <Button onClick={() => void navigator.clipboard?.writeText(bookingUrl())}>
-                คัดลอกลิงก์
+            <code className="mt-3 block truncate rounded bg-parchment-deep px-2 py-1 text-xs text-ink-faint">
+              {bookingUrl()}
+            </code>
+            <div className="mt-3 flex justify-center gap-2 sm:justify-start">
+              <Button
+                onClick={() => {
+                  void navigator.clipboard?.writeText(bookingUrl())
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 1500)
+                }}
+              >
+                <Icon name="copy" className="h-4 w-4" />
+                {copied ? 'คัดลอกแล้ว ✓' : 'คัดลอกลิงก์'}
               </Button>
-              <Button onClick={() => printBooking(bookingQR)}>พิมพ์</Button>
+              <Button onClick={() => printBooking(bookingQR)}>
+                <Icon name="print" className="h-4 w-4" />
+                พิมพ์
+              </Button>
             </div>
           </div>
         </div>
       </Card>
 
       {missing && (
-        <Empty>
-          ข้อมูลโต๊ะยังไม่มี token — ต้องรัน migration ล่าสุดก่อน (supabase/setup-all.sql)
-        </Empty>
+        <Empty>ข้อมูลโต๊ะยังไม่มี token — ต้องรัน migration ล่าสุดก่อน (supabase/setup-all.sql)</Empty>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {tables.filter((t) => t.qrToken).map((table) => (
-          <Card key={table.id} className="text-center">
-            <div className="flex items-center justify-between">
-              <span className="text-lg font-bold">{table.code}</span>
-              <Badge tone={table.status === 'occupied' ? 'emerald' : 'slate'}>{table.zone}</Badge>
-            </div>
+      <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {tables
+          .filter((t) => t.qrToken)
+          .map((table) => (
+            <article key={table.id} className="panel lift rounded-xl p-2">
+              {/* ป้ายตั้งโต๊ะ: กรอบคู่ด้านใน */}
+              <div className="rounded-lg border-4 border-double border-gold/50 p-4 text-center">
+                <div className="flex items-center justify-between">
+                  <Badge tone={table.status === 'occupied' ? 'forest' : 'neutral'}>{table.zone}</Badge>
+                  <span className="text-xs text-ink-faint">{table.seatMax} ที่นั่ง</span>
+                </div>
+                <div className="mt-2 text-4xl tracking-wide font-bold">{table.code}</div>
+                <div className="divider my-2 text-[0.6rem]" aria-hidden>
+                  ◆
+                </div>
+                {codes[table.id] ? (
+                  <img
+                    src={codes[table.id]}
+                    alt={`QR โต๊ะ ${table.code}`}
+                    className="mx-auto w-full max-w-[200px] rounded bg-[#fffdf7] p-1"
+                  />
+                ) : (
+                  <div className="mx-auto aspect-square w-full max-w-[200px] animate-pulse rounded bg-parchment-deep" />
+                )}
+                <p className="mt-2 text-xs text-ink-faint italic">สแกนเพื่อสั่งอาหารและเครื่องดื่ม</p>
+              </div>
 
-            {codes[table.id] ? (
-              <img
-                src={codes[table.id]}
-                alt={`QR โต๊ะ ${table.code}`}
-                className="mx-auto mt-3 w-full max-w-[220px] rounded-lg bg-white p-2"
-              />
-            ) : (
-              <div className="mx-auto mt-3 aspect-square w-full max-w-[220px] animate-pulse rounded-lg bg-slate-800" />
-            )}
+              <div className="mt-2 flex gap-1.5">
+                <Button className="flex-1" onClick={() => printOne(table, codes[table.id])}>
+                  <Icon name="print" className="h-4 w-4" />
+                  พิมพ์
+                </Button>
+                <Button
+                  variant="danger"
+                  disabled={busy === table.id}
+                  onClick={async () => {
+                    if (!confirm(`เปลี่ยน QR ของโต๊ะ ${table.code}? ใบที่พิมพ์ไว้จะใช้ไม่ได้ทันที`)) return
+                    setBusy(table.id)
+                    try {
+                      await db.rotateTableToken(table.id)
+                    } finally {
+                      setBusy(null)
+                    }
+                  }}
+                >
+                  เปลี่ยน QR
+                </Button>
+              </div>
+            </article>
+          ))}
+      </div>
+    </div>
+  )
+}
 
-            <div className="mt-3 flex gap-1">
-              <Button className="flex-1" onClick={() => printOne(table, codes[table.id])}>
-                พิมพ์
-              </Button>
-              <Button
-                variant="danger"
-                disabled={busy === table.id}
-                onClick={async () => {
-                  if (!confirm(`เปลี่ยน QR ของโต๊ะ ${table.code}? ใบที่พิมพ์ไว้จะใช้ไม่ได้ทันที`)) return
-                  setBusy(table.id)
-                  try {
-                    await db.rotateTableToken(table.id)
-                  } finally {
-                    setBusy(null)
-                  }
-                }}
-              >
-                เปลี่ยน QR
-              </Button>
-            </div>
-          </Card>
-        ))}
+function Rule({
+  icon,
+  title,
+  warn,
+  children,
+}: {
+  icon: IconName
+  title: string
+  warn?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <div className={`panel flex gap-3 rounded-xl p-4 ${warn ? '!border-ember/40 !bg-ember/5' : ''}`}>
+      <div
+        className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${
+          warn ? 'bg-ember/15 text-ember-deep' : 'bg-gold/15 text-gold-deep'
+        }`}
+      >
+        <Icon name={icon} className="h-4 w-4" />
+      </div>
+      <div className="min-w-0">
+        <div className="text-sm font-semibold">{title}</div>
+        <div className="text-xs text-ink-soft">{children}</div>
       </div>
     </div>
   )
@@ -157,23 +218,28 @@ function printOne(table: CafeTable, dataUrl?: string) {
 }
 
 function printSheet(title: string, subtitle: string, dataUrl: string, hint: string) {
-  const w = window.open('', '_blank', 'width=480,height=640')
+  const w = window.open('', '_blank', 'width=480,height=720')
   if (!w) return
   w.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8">
     <title>${title}</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Taviraj:wght@400;700&display=swap">
     <style>
-      body { font-family: system-ui, sans-serif; text-align: center; padding: 32px; }
-      h1 { font-size: 56px; margin: 0 0 8px; }
-      p { color: #475569; margin: 4px 0 24px; }
-      img { width: 320px; }
-      .hint { margin-top: 24px; font-size: 18px; }
-    </style></head><body>
+      body { font-family: 'Taviraj', Georgia, serif; text-align: center; padding: 32px; color: #2a1c12; }
+      .frame { display: inline-block; padding: 24px 40px; border: 6px double #b8872e; border-radius: 12px; }
+      .orn { color: #b8872e; letter-spacing: 10px; margin: 0 0 12px; }
+      h1 { font-size: 60px; margin: 0 0 4px; }
+      p { color: #5b4633; margin: 4px 0 20px; }
+      img { width: 300px; }
+      .hint { margin-top: 20px; font-size: 18px; }
+    </style></head><body><div class="frame">
+    <div class="orn">❦ ◆ ❦</div>
     <h1>${title}</h1>
     <p>${subtitle}</p>
     <img src="${dataUrl}" alt="QR">
     <p class="hint">${hint}</p>
-    </body></html>`)
+    </div></body></html>`)
   w.document.close()
   w.focus()
-  w.print()
+  // รอฟอนต์โหลดก่อนสั่งพิมพ์ ไม่งั้นหัวป้ายออกมาเป็นฟอนต์ระบบ
+  w.onload = () => w.print()
 }

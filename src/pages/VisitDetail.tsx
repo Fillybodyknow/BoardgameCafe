@@ -6,16 +6,18 @@ import {
   billableMinutes, computeBill, formatBaht, formatDuration, playTimeCharge, splitByOwner,
 } from '../domain/pricing'
 import type { GuestPass, Order, RatePlan } from '../domain/types'
-import { Badge, Button, Card, Empty, SectionTitle } from '../components/ui'
+import {
+  Badge, Button, Card, Empty, Icon, INPUT, Modal, SectionTitle, Segmented, celebrate,
+} from '../components/ui'
 import type { Tone } from '../components/ui'
 import OrderDialog from './OrderDialog'
 import PaymentDialog from './PaymentDialog'
 
 const PASS_TONE: Record<GuestPass['status'], Tone> = {
-  active: 'emerald',
-  paused: 'amber',
-  checked_out: 'slate',
-  billed: 'slate',
+  active: 'forest',
+  paused: 'ember',
+  checked_out: 'neutral',
+  billed: 'neutral',
 }
 
 const PASS_LABEL: Record<GuestPass['status'], string> = {
@@ -26,14 +28,17 @@ const PASS_LABEL: Record<GuestPass['status'], string> = {
 }
 
 const ORDER_TONE: Record<Order['status'], Tone> = {
-  placed: 'sky', accepted: 'sky', preparing: 'amber', ready: 'violet',
-  served: 'emerald', rejected: 'rose', cancelled: 'slate',
+  placed: 'lapis', accepted: 'lapis', preparing: 'ember', ready: 'royal',
+  served: 'forest', rejected: 'crimson', cancelled: 'neutral',
 }
 
 const ORDER_LABEL: Record<Order['status'], string> = {
   placed: 'สั่งแล้ว', accepted: 'ครัวรับแล้ว', preparing: 'กำลังทำ', ready: 'พร้อมเสิร์ฟ',
   served: 'เสิร์ฟแล้ว', rejected: 'ของหมด', cancelled: 'ยกเลิก',
 }
+
+const time = (iso: string) =>
+  new Date(iso).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })
 
 export default function VisitDetail() {
   const { visitId = '' } = useParams()
@@ -68,51 +73,56 @@ export default function VisitDetail() {
   const bill = computeBill({ visitId: visit.id, passes, orders, ratePlans, now })
   const billable = passes.filter((p) => p.status !== 'billed')
   const split = splitByOwner(bill, billable)
+  const isOpen = visit.status === 'open'
 
   return (
-    <div className="space-y-6">
+    <div>
+      <Link
+        to="/"
+        className="mb-4 inline-flex items-center gap-1.5 text-sm text-ink-faint transition hover:text-ink"
+      >
+        <Icon name="arrowLeft" className="h-4 w-4" /> กลับผังโต๊ะ
+      </Link>
+
       {/* หัวบิล */}
-      <Card>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold">{visit.code}</h1>
-              <Badge tone={visit.status === 'open' ? 'emerald' : 'slate'}>
-                {visit.status === 'open' ? 'เปิดอยู่' : 'ปิดแล้ว'}
-              </Badge>
-              {visit.source === 'reservation' && <Badge tone="sky">จองล่วงหน้า</Badge>}
+      <Card ornate className="overflow-hidden">
+        <div className="flex flex-wrap items-center gap-5">
+          <div className="shield h-20 w-16 shrink-0 bg-wine text-lg text-gold-light shadow-lg">
+            {tables.map((t) => t.code).join('+') || '—'}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-bold">{visit.code}</h1>
+              <Badge tone={isOpen ? 'forest' : 'neutral'}>{isOpen ? 'เปิดอยู่' : 'ปิดแล้ว'}</Badge>
+              {visit.source === 'reservation' && <Badge tone="lapis">จองล่วงหน้า</Badge>}
             </div>
-            <p className="mt-1 text-sm text-slate-400">
-              โต๊ะ {tables.map((t) => t.code).join(' + ') || '—'} · เปิด{' '}
-              {new Date(visit.openedAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+            <p className="mt-1 text-sm text-ink-soft">
+              โต๊ะ {tables.map((t) => t.code).join(' + ') || '—'} · เปิด {time(visit.openedAt)}
               {history.length > 0 && (
-                <span className="ml-1 text-amber-400">
-                  · ย้ายโต๊ะมาแล้ว {history.length} ครั้ง
-                </span>
+                <span className="ml-1 text-ember-deep">· ย้ายโต๊ะมาแล้ว {history.length} ครั้ง</span>
               )}
             </p>
           </div>
           <div className="text-right">
-            <div className="text-xs text-slate-500">ยอดปัจจุบัน</div>
-            <div className="tabular text-2xl font-bold text-emerald-400">
-              ฿{formatBaht(bill.total)}
-            </div>
+            <div className="text-xs tracking-wide text-ink-faint">ยอดปัจจุบัน</div>
+            <div className="tabular text-3xl font-bold text-gold-deep">฿{formatBaht(bill.total)}</div>
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button variant="primary" onClick={() => setShowOrder(true)} disabled={visit.status !== 'open'}>
+        <div className="mt-5 flex flex-wrap gap-2 border-t border-line pt-4">
+          <Button variant="primary" onClick={() => setShowOrder(true)} disabled={!isOpen}>
             + รับออเดอร์
           </Button>
-          <Button onClick={() => setShowAddPass(true)} disabled={visit.status !== 'open'}>
+          <Button onClick={() => setShowAddPass(true)} disabled={!isOpen}>
             + เพิ่มคน
           </Button>
-          <Button onClick={() => setShowMove(true)} disabled={visit.status !== 'open'}>
+          <Button onClick={() => setShowMove(true)} disabled={!isOpen}>
             ย้าย / เพิ่มโต๊ะ
           </Button>
           <Button
-            variant="danger"
-            disabled={visit.status !== 'open'}
+            variant="forest"
+            className="sm:ml-auto"
+            disabled={!isOpen}
             onClick={() => setShowPayment(true)}
           >
             เช็คบิล
@@ -120,186 +130,127 @@ export default function VisitDetail() {
         </div>
       </Card>
 
-      {/* ผู้เล่น — หัวใจของระบบ */}
-      <section>
-        <SectionTitle>ผู้เล่น ({passes.length})</SectionTitle>
-        <div className="space-y-2">
-          {passes.map((pass) => {
-            const plan = ratePlans[pass.ratePlanId]
-            const mins = billableMinutes(pass, now)
-            const charge = plan ? playTimeCharge(mins, plan) : 0
-            const live = pass.status === 'active'
-            return (
-              <Card key={pass.id} className="flex flex-wrap items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold">{pass.displayName}</span>
-                    <Badge tone={PASS_TONE[pass.status]}>{PASS_LABEL[pass.status]}</Badge>
-                  </div>
-                  <div className="tabular mt-1 text-sm text-slate-400">
-                    {plan?.name ?? '—'} · เข้า{' '}
-                    {new Date(pass.checkedInAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
-                    {pass.checkedOutAt && (
-                      <> → ออก {new Date(pass.checkedOutAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</>
-                    )}
-                    {pass.pausedMinutes > 0 && (
-                      <span className="ml-1 text-amber-400">· หักพัก {pass.pausedMinutes} นาที</span>
-                    )}
-                  </div>
-                </div>
+      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_22rem]">
+        <div className="space-y-8">
+          {/* ผู้เล่น — หัวใจของระบบ */}
+          <section>
+            <SectionTitle>ผู้เล่น ({passes.length})</SectionTitle>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {passes.map((pass) => (
+                <PassCard key={pass.id} pass={pass} plan={ratePlans[pass.ratePlanId]} now={now} />
+              ))}
+            </div>
+          </section>
 
-                <div className="flex items-center gap-3">
-                  <div className="text-right">
-                    <div className={`tabular text-sm ${live ? 'text-emerald-400' : 'text-slate-400'}`}>
-                      {formatDuration(mins)}
-                    </div>
-                    <div className="tabular text-sm font-semibold">฿{formatBaht(charge)}</div>
-                  </div>
-
-                  <div className="flex gap-1">
-                    {pass.status === 'active' && (
-                      <Button onClick={() => db.pausePass(pass.id)}>พัก</Button>
-                    )}
-                    {pass.status === 'paused' && (
-                      <Button variant="subtle" onClick={() => db.resumePass(pass.id)}>
-                        กลับมาแล้ว
-                      </Button>
-                    )}
-                    {(pass.status === 'active' || pass.status === 'paused') && (
-                      <Button variant="danger" onClick={() => db.checkOutPass(pass.id)}>
-                        กลับก่อน
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </Card>
-            )
-          })}
+          {/* ออเดอร์ */}
+          <section>
+            <SectionTitle>ออเดอร์ ({orders.length})</SectionTitle>
+            {orders.length === 0 ? (
+              <Empty icon="🍺">ยังไม่มีออเดอร์</Empty>
+            ) : (
+              <div className="space-y-2">
+                {orders.map((order) => {
+                  const owner = order.orderedByPassId
+                    ? passes.find((p) => p.id === order.orderedByPassId)?.displayName
+                    : null
+                  const total = order.lines.reduce((s, l) => s + l.unitPriceSnapshot * l.qty, 0)
+                  return (
+                    <Card key={order.id} className="!p-0">
+                      <div className="flex items-center justify-between gap-2 border-b border-dashed border-line px-4 py-2.5">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Badge tone={ORDER_TONE[order.status]}>{ORDER_LABEL[order.status]}</Badge>
+                          <span className="text-ink-faint">
+                            {order.splitMode === 'shared' ? 'แชร์ทั้งโต๊ะ' : `สั่งโดย ${owner ?? 'ไม่ระบุ'}`}
+                            {order.placedBy === 'guest' && ' · ลูกค้าสั่งเอง'}
+                          </span>
+                        </div>
+                        <span className="tabular text-sm font-semibold">฿{formatBaht(total)}</span>
+                      </div>
+                      <ul className="space-y-1 px-4 py-3 text-sm">
+                        {order.lines.map((line) => (
+                          <li key={line.id} className="flex justify-between gap-3">
+                            <span>
+                              <span className="tabular mr-1.5 font-semibold text-gold-deep">{line.qty}×</span>
+                              {line.nameSnapshot}
+                              {line.note && <span className="ml-1 text-xs text-ember-deep">({line.note})</span>}
+                            </span>
+                            <span className="tabular text-ink-faint">
+                              ฿{formatBaht(line.unitPriceSnapshot * line.qty)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
+          </section>
         </div>
-      </section>
 
-      {/* ออเดอร์ */}
-      <section>
-        <SectionTitle>ออเดอร์ ({orders.length})</SectionTitle>
-        {orders.length === 0 ? (
-          <Empty>ยังไม่มีออเดอร์</Empty>
-        ) : (
-          <div className="space-y-2">
-            {orders.map((order) => {
-              const owner = order.orderedByPassId
-                ? passes.find((p) => p.id === order.orderedByPassId)?.displayName
-                : null
-              const total = order.lines.reduce((s, l) => s + l.unitPriceSnapshot * l.qty, 0)
-              return (
-                <Card key={order.id}>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Badge tone={ORDER_TONE[order.status]}>{ORDER_LABEL[order.status]}</Badge>
-                      <span className="text-slate-400">
-                        {order.splitMode === 'shared' ? 'แชร์ทั้งโต๊ะ' : (owner ?? 'ไม่ระบุ')}
-                        {order.placedBy === 'guest' && ' · ลูกค้าสั่งเอง'}
-                      </span>
-                    </div>
-                    <span className="tabular text-sm font-semibold">฿{formatBaht(total)}</span>
+        {/* บิล — ติดอยู่ด้านข้างบนจอใหญ่ */}
+        <aside className="lg:sticky lg:top-8 lg:self-start">
+          <SectionTitle>สมุดบัญชี</SectionTitle>
+          <Segmented
+            className="mb-3 w-full"
+            value={splitMode}
+            onChange={setSplitMode}
+            options={[
+              { value: 'together', label: 'จ่ายรวม' },
+              { value: 'by_owner', label: 'แยกตามคนสั่ง' },
+            ]}
+          />
+
+          {splitMode === 'together' ? (
+            <Card className="animate-page">
+              <ul className="space-y-1.5 text-sm">
+                {bill.lines.map((line) => (
+                  <li key={line.id} className="flex justify-between gap-3">
+                    <span className="min-w-0 truncate text-ink-soft">{line.label}</span>
+                    <span className="tabular shrink-0">฿{formatBaht(line.amount)}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-4 space-y-1 border-t border-double border-line-strong pt-3 text-sm">
+                <Row label="รวม" value={bill.subtotal} />
+                <Row label="VAT 7% (รวมในราคาแล้ว)" value={bill.vat} muted />
+                <div className="mt-2 flex items-baseline justify-between text-lg font-bold">
+                  <span className="font-display">ยอดสุทธิ</span>
+                  <span className="tabular text-gold-deep">฿{formatBaht(bill.total)}</span>
+                </div>
+              </div>
+            </Card>
+          ) : (
+            <div className="animate-page space-y-2">
+              {split.map((part) => (
+                <Card key={part.pass.id}>
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold">{part.pass.displayName}</span>
+                    <span className="tabular font-bold text-gold-deep">฿{formatBaht(part.total)}</span>
                   </div>
-                  <ul className="mt-2 space-y-0.5 text-sm text-slate-300">
-                    {order.lines.map((line) => (
-                      <li key={line.id} className="flex justify-between">
-                        <span>
-                          {line.nameSnapshot} × {line.qty}
-                          {line.note && <span className="ml-1 text-xs text-amber-400">({line.note})</span>}
-                        </span>
-                        <span className="tabular text-slate-400">
-                          ฿{formatBaht(line.unitPriceSnapshot * line.qty)}
-                        </span>
+                  <ul className="mt-2 space-y-0.5 text-sm text-ink-faint">
+                    {part.ownLines.map((line) => (
+                      <li key={line.id} className="flex justify-between gap-2">
+                        <span className="truncate">{line.label}</span>
+                        <span className="tabular">฿{formatBaht(line.amount)}</span>
                       </li>
                     ))}
+                    {part.sharedShare > 0 && (
+                      <li className="flex justify-between text-ember-deep">
+                        <span>ส่วนแบ่งของแชร์ทั้งโต๊ะ</span>
+                        <span className="tabular">฿{formatBaht(part.sharedShare)}</span>
+                      </li>
+                    )}
                   </ul>
                 </Card>
-              )
-            })}
-          </div>
-        )}
-      </section>
-
-      {/* บิล */}
-      <section>
-        <SectionTitle
-          action={
-            <div className="flex gap-1">
-              <Button
-                variant={splitMode === 'together' ? 'subtle' : 'ghost'}
-                onClick={() => setSplitMode('together')}
-              >
-                จ่ายรวม
-              </Button>
-              <Button
-                variant={splitMode === 'by_owner' ? 'subtle' : 'ghost'}
-                onClick={() => setSplitMode('by_owner')}
-              >
-                แยกตามคนสั่ง
-              </Button>
-            </div>
-          }
-        >
-          บิล
-        </SectionTitle>
-
-        {splitMode === 'together' ? (
-          <Card>
-            <ul className="space-y-1 text-sm">
-              {bill.lines.map((line) => (
-                <li key={line.id} className="flex justify-between gap-3">
-                  <span className="min-w-0 truncate text-slate-300">{line.label}</span>
-                  <span className="tabular shrink-0">฿{formatBaht(line.amount)}</span>
-                </li>
               ))}
-            </ul>
-            <div className="mt-3 space-y-1 border-t border-slate-800 pt-3 text-sm">
-              <Row label="รวม" value={bill.subtotal} />
-              <Row label="VAT 7% (รวมในราคาแล้ว)" value={bill.vat} muted />
-              <div className="mt-2 flex justify-between text-lg font-bold">
-                <span>ยอดสุทธิ</span>
-                <span className="tabular text-emerald-400">฿{formatBaht(bill.total)}</span>
-              </div>
+              <p className="text-xs text-ink-faint">
+                คนที่กลับไปแล้วยังอยู่ในรายการจนกว่าจะปิดบิล — จ่ายแยกก่อนได้
+              </p>
             </div>
-          </Card>
-        ) : (
-          <div className="space-y-2">
-            {split.map((part) => (
-              <Card key={part.pass.id}>
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold">{part.pass.displayName}</span>
-                  <span className="tabular font-bold text-emerald-400">
-                    ฿{formatBaht(part.total)}
-                  </span>
-                </div>
-                <ul className="mt-2 space-y-0.5 text-sm text-slate-400">
-                  {part.ownLines.map((line) => (
-                    <li key={line.id} className="flex justify-between">
-                      <span className="truncate">{line.label}</span>
-                      <span className="tabular">฿{formatBaht(line.amount)}</span>
-                    </li>
-                  ))}
-                  {part.sharedShare > 0 && (
-                    <li className="flex justify-between text-amber-400/80">
-                      <span>ส่วนแบ่งของแชร์ทั้งโต๊ะ</span>
-                      <span className="tabular">฿{formatBaht(part.sharedShare)}</span>
-                    </li>
-                  )}
-                </ul>
-              </Card>
-            ))}
-            <p className="text-xs text-slate-500">
-              คนที่กลับไปแล้วยังอยู่ในรายการจนกว่าจะปิดบิล — จ่ายแยกก่อนได้
-            </p>
-          </div>
-        )}
-      </section>
-
-      <Link to="/" className="inline-block text-sm text-slate-400 hover:text-slate-200">
-        ← กลับผังโต๊ะ
-      </Link>
+          )}
+        </aside>
+      </div>
 
       {showOrder && <OrderDialog visitId={visit.id} passes={passes} onClose={() => setShowOrder(false)} />}
       {showAddPass && <AddPassDialog visitId={visit.id} onClose={() => setShowAddPass(false)} />}
@@ -310,30 +261,103 @@ export default function VisitDetail() {
           bill={bill}
           passes={passes}
           onClose={() => setShowPayment(false)}
-          onPaid={() => navigate('/')}
+          onPaid={() => {
+            celebrate(`ปิดบิล ${visit.code} เรียบร้อย`)
+            navigate('/')
+          }}
         />
       )}
     </div>
   )
 }
 
+function PassCard({ pass, plan, now }: { pass: GuestPass; plan?: RatePlan; now: Date }) {
+  const mins = billableMinutes(pass, now)
+  const charge = plan ? playTimeCharge(mins, plan) : 0
+  const live = pass.status === 'active'
+  const gone = pass.status === 'checked_out' || pass.status === 'billed'
+
+  return (
+    <Card className={`flex flex-col gap-3 ${gone ? 'opacity-60' : ''}`}>
+      <div className="flex items-start gap-3">
+        <div
+          className={`shield h-11 w-9 shrink-0 text-base ${
+            live ? 'bg-forest text-vellum' : pass.status === 'paused' ? 'bg-ember text-vellum' : 'bg-line text-ink-soft'
+          }`}
+          aria-hidden
+        >
+          {initialOf(pass.displayName)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold">{pass.displayName}</span>
+            <Badge tone={PASS_TONE[pass.status]}>{PASS_LABEL[pass.status]}</Badge>
+          </div>
+          <div className="tabular mt-0.5 text-xs text-ink-faint">
+            {plan?.name ?? '—'} · เข้า {time(pass.checkedInAt)}
+            {pass.checkedOutAt && <> → ออก {time(pass.checkedOutAt)}</>}
+            {pass.pausedMinutes > 0 && (
+              <span className="ml-1 text-ember-deep">· หักพัก {pass.pausedMinutes} นาที</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-end justify-between gap-2 rounded-lg bg-parchment-deep/60 px-3 py-2">
+        <div className={`tabular flex items-center gap-1.5 text-sm ${live ? 'text-forest-deep' : 'text-ink-faint'}`}>
+          <Icon name="hourglass" className={`h-4 w-4 ${live ? 'animate-pulse' : ''}`} />
+          {formatDuration(mins)}
+        </div>
+        <div className="tabular text-base font-semibold">฿{formatBaht(charge)}</div>
+      </div>
+
+      {(pass.status === 'active' || pass.status === 'paused') && (
+        <div className="flex gap-1.5">
+          {pass.status === 'active' && (
+            <Button className="flex-1" onClick={() => db.pausePass(pass.id)}>
+              พัก
+            </Button>
+          )}
+          {pass.status === 'paused' && (
+            <Button className="flex-1" variant="subtle" onClick={() => db.resumePass(pass.id)}>
+              กลับมาแล้ว
+            </Button>
+          )}
+          <Button className="flex-1" variant="danger" onClick={() => db.checkOutPass(pass.id)}>
+            กลับก่อน
+          </Button>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+/** อักษรแรกของชื่อสำหรับโล่ — ข้ามสระหน้า (เ แ โ ใ ไ) ไม่งั้น "เมย์" ได้ "เ" */
+function initialOf(name: string) {
+  return [...name].find((ch) => !'เแโใไ'.includes(ch)) ?? name.slice(0, 1)
+}
+
 function Row({ label, value, muted }: { label: string; value: number; muted?: boolean }) {
   return (
-    <div className={`flex justify-between ${muted ? 'text-slate-500' : ''}`}>
+    <div className={`flex justify-between ${muted ? 'text-ink-faint' : ''}`}>
       <span>{label}</span>
       <span className="tabular">฿{formatBaht(value)}</span>
     </div>
   )
 }
 
-function Dialog({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+function Actions({ onCancel, onOk, okLabel, disabled }: {
+  onCancel: () => void
+  onOk: () => void
+  okLabel: string
+  disabled?: boolean
+}) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center sm:p-4">
-      <div className="w-full max-w-md rounded-t-2xl border border-slate-800 bg-slate-900 p-5 sm:rounded-2xl">
-        <h3 className="text-lg font-bold">{title}</h3>
-        {hint && <p className="mt-1 text-sm text-slate-400">{hint}</p>}
-        {children}
-      </div>
+    <div className="flex gap-2">
+      <Button className="flex-1" onClick={onCancel}>ยกเลิก</Button>
+      <Button className="flex-1" variant="primary" disabled={disabled} onClick={onOk}>
+        {okLabel}
+      </Button>
     </div>
   )
 }
@@ -345,20 +369,33 @@ function AddPassDialog({ visitId, onClose }: { visitId: string; onClose: () => v
   const [ratePlanId, setRatePlanId] = useState('')
   const defaultPlanId = data?.ratePlans[0]?.id ?? ''
 
+  async function add() {
+    await db.addPass(visitId, {
+      name: name.trim() || 'ผู้เล่นใหม่',
+      ratePlanId: ratePlanId || defaultPlanId,
+    })
+    onClose()
+  }
+
   return (
-    <Dialog title="เพิ่มคนเข้ากลุ่ม" hint="นาฬิกาของคนนี้เริ่มนับตอนนี้ ไม่กระทบคนที่มาก่อน">
-      <div className="mt-4 space-y-2">
+    <Modal
+      title="เพิ่มคนเข้ากลุ่ม"
+      hint="นาฬิกาของคนนี้เริ่มนับตอนนี้ ไม่กระทบคนที่มาก่อน"
+      onClose={onClose}
+      footer={<Actions onCancel={onClose} onOk={add} okLabel="เพิ่ม" />}
+    >
+      <div className="space-y-3">
         <input
           autoFocus
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="ชื่อเล่น"
-          className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-600"
+          className={INPUT}
         />
         <select
           value={ratePlanId || defaultPlanId}
           onChange={(e) => setRatePlanId(e.target.value)}
-          className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-600"
+          className={INPUT}
         >
           {(data?.ratePlans ?? []).map((plan) => (
             <option key={plan.id} value={plan.id}>
@@ -367,23 +404,7 @@ function AddPassDialog({ visitId, onClose }: { visitId: string; onClose: () => v
           ))}
         </select>
       </div>
-      <div className="mt-5 flex gap-2">
-        <Button className="flex-1" onClick={onClose}>ยกเลิก</Button>
-        <Button
-          className="flex-1"
-          variant="primary"
-          onClick={async () => {
-            await db.addPass(visitId, {
-              name: name.trim() || 'ผู้เล่นใหม่',
-              ratePlanId: ratePlanId || defaultPlanId,
-            })
-            onClose()
-          }}
-        >
-          เพิ่ม
-        </Button>
-      </div>
-    </Dialog>
+    </Modal>
   )
 }
 
@@ -394,41 +415,38 @@ function MoveTableDialog({ visitId, onClose }: { visitId: string; onClose: () =>
   const available = (data?.tables ?? []).filter((t) => t.status === 'free' || t.allowShare)
 
   return (
-    <Dialog
+    <Modal
       title="ย้าย / เพิ่มโต๊ะ"
       hint="เลือกได้หลายโต๊ะ (กลุ่มใหญ่รวมโต๊ะ) — ประวัติโต๊ะเดิมถูกเก็บไว้ บิลไม่กระทบ"
+      onClose={onClose}
+      footer={
+        <Actions
+          onCancel={onClose}
+          disabled={picked.length === 0}
+          okLabel={`ย้ายไป ${picked.length} โต๊ะ`}
+          onOk={async () => {
+            await db.moveVisitToTables(visitId, picked)
+            onClose()
+          }}
+        />
+      }
     >
-      <div className="mt-4 grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
         {available.map((table) => {
           const on = picked.includes(table.id)
           return (
             <button
               key={table.id}
+              aria-pressed={on}
               onClick={() => setPicked((p) => (on ? p.filter((id) => id !== table.id) : [...p, table.id]))}
-              className={`rounded-lg border px-2 py-3 text-sm transition ${
-                on ? 'border-emerald-500 bg-emerald-950/40' : 'border-slate-700 hover:border-slate-500'
-              }`}
+              className="pick px-2 py-3 text-sm"
             >
-              <div className="font-bold">{table.code}</div>
-              <div className="text-xs text-slate-500">{table.seatMax} ที่</div>
+              <div className="text-lg tracking-wide font-bold">{table.code}</div>
+              <div className="text-xs text-ink-faint">{table.seatMax} ที่</div>
             </button>
           )
         })}
       </div>
-      <div className="mt-5 flex gap-2">
-        <Button className="flex-1" onClick={onClose}>ยกเลิก</Button>
-        <Button
-          className="flex-1"
-          variant="primary"
-          disabled={picked.length === 0}
-          onClick={async () => {
-            await db.moveVisitToTables(visitId, picked)
-            onClose()
-          }}
-        >
-          ย้ายไป {picked.length} โต๊ะ
-        </Button>
-      </div>
-    </Dialog>
+    </Modal>
   )
 }

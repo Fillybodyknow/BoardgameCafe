@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useNow, useSnapshot } from '../hooks/useData'
 import { db } from '../data'
-import { Badge, Button, Card, Empty, SectionTitle } from '../components/ui'
+import { Badge, Button, Card, Empty, INPUT, Modal, PageHeader, Segmented } from '../components/ui'
 import type { CafeTable, Reservation, ReservationStatus } from '../domain/types'
 import type { Tone } from '../components/ui'
 
@@ -10,14 +10,29 @@ import type { Tone } from '../components/ui'
 const GRACE_MINUTES = 20
 
 const TONE: Record<ReservationStatus, Tone> = {
-  pending: 'amber', confirmed: 'sky', seated: 'emerald', no_show: 'rose', cancelled: 'slate',
+  pending: 'ember', confirmed: 'lapis', seated: 'forest', no_show: 'crimson', cancelled: 'neutral',
 }
 const LABEL: Record<ReservationStatus, string> = {
   pending: 'รอยืนยัน', confirmed: 'ยืนยันแล้ว', seated: 'เช็คอินแล้ว',
   no_show: 'ไม่มา', cancelled: 'ยกเลิก',
 }
+// สีเส้นเวลาด้านซ้ายของการ์ด
+const RAIL: Record<ReservationStatus, string> = {
+  pending: 'bg-ember', confirmed: 'bg-lapis', seated: 'bg-forest', no_show: 'bg-crimson', cancelled: 'bg-line-strong',
+}
 
 type Filter = 'active' | 'all'
+
+/** หัวกลุ่มวัน: วันนี้ / พรุ่งนี้ / เมื่อวาน / วันที่ */
+function dayLabel(d: Date, now: Date) {
+  const key = (x: Date) => x.toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' })
+  const diff = Math.round((new Date(key(d)).getTime() - new Date(key(now)).getTime()) / 86_400_000)
+  const date = d.toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long' })
+  if (diff === 0) return { title: 'วันนี้', date }
+  if (diff === 1) return { title: 'พรุ่งนี้', date }
+  if (diff === -1) return { title: 'เมื่อวาน', date }
+  return { title: date, date: '' }
+}
 
 export default function Reservations() {
   const { data } = useSnapshot()
@@ -38,38 +53,62 @@ export default function Reservations() {
 
   const pendingCount = sorted.filter((r) => r.status === 'pending').length
 
+  // จัดกลุ่มตามวัน (เรียงเวลาอยู่แล้ว กลุ่มจึงเรียงตามไปด้วย)
+  const days: { title: string; date: string; items: Reservation[] }[] = []
+  for (const r of shown) {
+    const label = dayLabel(new Date(r.startAt), now)
+    const last = days[days.length - 1]
+    if (last && last.title === label.title) last.items.push(r)
+    else days.push({ ...label, items: [r] })
+  }
+
   return (
-    <div className="space-y-4">
-      <SectionTitle
-        action={
-          <div className="flex gap-1">
-            <Button
-              variant={filter === 'active' ? 'subtle' : 'ghost'}
-              onClick={() => setFilter('active')}
-            >
-              ที่ยังไม่จบ
-            </Button>
-            <Button variant={filter === 'all' ? 'subtle' : 'ghost'} onClick={() => setFilter('all')}>
-              ทั้งหมด
-            </Button>
-          </div>
+    <div>
+      <PageHeader
+        eyebrow="สมุดนัดหมาย"
+        title="คิวจอง"
+        subtitle={
+          pendingCount > 0 ? (
+            <span className="text-ember-deep">มีคำขอรอยืนยัน {pendingCount} รายการ</span>
+          ) : (
+            'ไม่มีคำขอค้างยืนยัน'
+          )
         }
-      >
-        คิวจอง {pendingCount > 0 && <span className="text-amber-400">· รอยืนยัน {pendingCount}</span>}
-      </SectionTitle>
+        actions={
+          <Segmented
+            value={filter}
+            onChange={setFilter}
+            options={[
+              { value: 'active', label: 'ที่ยังไม่จบ' },
+              { value: 'all', label: 'ทั้งหมด' },
+            ]}
+          />
+        }
+      />
 
       {shown.length === 0 ? (
-        <Empty>{filter === 'active' ? 'ไม่มีคิวจองค้างอยู่' : 'ยังไม่มีการจอง'}</Empty>
+        <Empty icon="📜">{filter === 'active' ? 'ไม่มีคิวจองค้างอยู่' : 'ยังไม่มีการจอง'}</Empty>
       ) : (
-        <div className="space-y-2">
-          {shown.map((r) => (
-            <ReservationCard
-              key={r.id}
-              reservation={r}
-              tables={data.tables}
-              now={now}
-              onSeat={() => setSeating(r)}
-            />
+        <div className="space-y-8">
+          {days.map((day) => (
+            <section key={day.title}>
+              <div className="mb-3 flex items-baseline gap-3">
+                <h2 className="font-display text-lg font-bold text-gold-deep">{day.title}</h2>
+                {day.date && <span className="text-sm text-ink-faint">{day.date}</span>}
+                <span className="h-px flex-1 bg-line-strong/60" />
+              </div>
+              <div className="space-y-3">
+                {day.items.map((r) => (
+                  <ReservationCard
+                    key={r.id}
+                    reservation={r}
+                    tables={data.tables}
+                    now={now}
+                    onSeat={() => setSeating(r)}
+                  />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       )}
@@ -118,70 +157,74 @@ function ReservationCard({
   }
 
   return (
-    <Card className={overdue ? 'border-rose-700/70 bg-rose-950/20' : ''}>
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold">{r.customerName}</span>
-            <Badge tone={TONE[r.status]}>{LABEL[r.status]}</Badge>
-            {r.source === 'online' && <Badge tone="violet">จองออนไลน์</Badge>}
-            {overdue && <Badge tone="rose">เลยเวลา {lateBy} นาที</Badge>}
-          </div>
-          <div className="tabular mt-1 text-sm text-slate-400">
-            {r.partySize} คน · {r.durationMinutes / 60} ชม. · {r.phone}
-            {codes.length > 0 && <> · โต๊ะ {codes.join(', ')}</>}
-            {r.code && <> · รหัส {r.code}</>}
-          </div>
-          {r.note && <div className="mt-1 text-sm text-amber-400/90">📝 {r.note}</div>}
-        </div>
+    <Card
+      className={`flex gap-4 overflow-hidden !p-0 ${overdue ? 'animate-ember-pulse !border-crimson/50' : ''} ${
+        open ? '' : 'opacity-70'
+      }`}
+    >
+      <div className={`w-1.5 shrink-0 ${RAIL[r.status]}`} />
 
-        <div className="tabular text-right">
-          <div className="text-lg font-bold">
-            {start.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
-          </div>
-          <div className="text-xs text-slate-500">
-            {start.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}
-            {' · '}
-            {lateBy < 0 ? `อีก ${-lateBy} นาที` : `ผ่านมา ${lateBy} นาที`}
-          </div>
+      {/* เวลานัด */}
+      <div className="tabular flex w-20 shrink-0 flex-col items-center justify-center border-r border-dashed border-line py-4 text-center">
+        <div className="text-xl leading-none font-bold">
+          {start.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+        </div>
+        <div className={`mt-1 text-[0.7rem] ${overdue ? 'text-crimson' : 'text-ink-faint'}`}>
+          {lateBy < 0 ? `อีก ${-lateBy} นาที` : `ผ่านมา ${lateBy} นาที`}
         </div>
       </div>
 
-      {busyTables.length > 0 && open && (
-        <p className="mt-2 rounded-lg bg-amber-950/40 p-2 text-xs text-amber-300">
-          โต๊ะ {busyTables.join(', ')} ยังมีลูกค้าอยู่ — ปิดบิลโต๊ะเดิมก่อน หรือเลือกโต๊ะอื่นตอนเช็คอิน
-        </p>
-      )}
-
-      {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
-
-      {open && (
-        <div className="mt-3 flex flex-wrap gap-1">
-          {r.status === 'pending' && (
-            <Button variant="primary" disabled={busy} onClick={() => act(() => db.confirmReservation(r.id))}>
-              ยืนยัน
-            </Button>
-          )}
-          <Button variant="subtle" disabled={busy} onClick={onSeat}>
-            เช็คอิน
-          </Button>
-          <Button disabled={busy} onClick={() => act(() => db.markNoShow(r.id))}>
-            ไม่มา
-          </Button>
-          <Button
-            variant="danger"
-            disabled={busy}
-            onClick={() =>
-              act(async () => {
-                const reason = prompt('เหตุผลที่ปฏิเสธ (ไม่ใส่ก็ได้)') ?? undefined
-                await db.rejectReservation(r.id, reason)
-              })
-            }
-          >
-            ปฏิเสธ
-          </Button>
+      <div className="min-w-0 flex-1 py-4 pr-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-semibold">{r.customerName}</span>
+          <Badge tone={TONE[r.status]}>{LABEL[r.status]}</Badge>
+          {r.source === 'online' && <Badge tone="royal">จองออนไลน์</Badge>}
+          {overdue && <Badge tone="crimson">เลยเวลา {lateBy} นาที</Badge>}
         </div>
-      )}
+        <div className="tabular mt-1 flex flex-wrap gap-x-3 text-sm text-ink-soft">
+          <span>{r.partySize} คน · {r.durationMinutes / 60} ชม.</span>
+          <span>☎ {r.phone}</span>
+          {codes.length > 0 && <span>โต๊ะ {codes.join(', ')}</span>}
+          {r.code && <span className="text-ink-faint">รหัส {r.code}</span>}
+        </div>
+        {r.note && <div className="mt-1.5 text-sm text-ember-deep italic">“{r.note}”</div>}
+
+        {busyTables.length > 0 && open && (
+          <p className="mt-2 rounded-lg border border-ember/30 bg-ember/10 p-2 text-xs text-ember-deep">
+            โต๊ะ {busyTables.join(', ')} ยังมีลูกค้าอยู่ — ปิดบิลโต๊ะเดิมก่อน หรือเลือกโต๊ะอื่นตอนเช็คอิน
+          </p>
+        )}
+
+        {error && <p className="mt-2 animate-shake text-sm text-crimson">{error}</p>}
+
+        {open && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {r.status === 'pending' && (
+              <Button variant="primary" disabled={busy} onClick={() => act(() => db.confirmReservation(r.id))}>
+                ยืนยัน
+              </Button>
+            )}
+            <Button variant="forest" disabled={busy} onClick={onSeat}>
+              เช็คอิน
+            </Button>
+            <Button disabled={busy} onClick={() => act(() => db.markNoShow(r.id))}>
+              ไม่มา
+            </Button>
+            <Button
+              variant="danger"
+              disabled={busy}
+              onClick={() =>
+                act(async () => {
+                  const reason = prompt('เหตุผลที่ปฏิเสธ (ไม่ใส่ก็ได้)') ?? undefined
+                  await db.rejectReservation(r.id, reason)
+                })
+              }
+            >
+              ปฏิเสธ
+            </Button>
+          </div>
+        )}
+      </div>
     </Card>
   )
 }
@@ -224,93 +267,14 @@ function SeatDialog({ reservation: r, onClose }: { reservation: Reservation; onC
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center sm:p-4">
-      <div className="flex max-h-[92vh] w-full max-w-md flex-col rounded-t-2xl border border-slate-800 bg-slate-900 sm:rounded-2xl">
-        <div className="border-b border-slate-800 p-5">
-          <h3 className="text-lg font-bold">เช็คอิน · {r.customerName}</h3>
-          <p className="mt-1 text-sm text-slate-400">
-            จอง {r.partySize} คน · {r.durationMinutes / 60} ชม.
-          </p>
-        </div>
-
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
-          <div>
-            <h4 className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
-              โต๊ะ
-            </h4>
-            <div className="grid grid-cols-4 gap-2">
-              {selectable.map((t) => {
-                const on = tableIds.includes(t.id)
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() =>
-                      setTableIds((p) => (on ? p.filter((x) => x !== t.id) : [...p, t.id]))
-                    }
-                    className={`rounded-lg border px-2 py-2 text-sm transition ${
-                      on ? 'border-emerald-500 bg-emerald-950/40' : 'border-slate-700'
-                    }`}
-                  >
-                    <div className="font-bold">{t.code}</div>
-                    {t.status === 'occupied' && !t.allowShare && (
-                      <div className="text-xs text-rose-400">ไม่ว่าง</div>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          <div>
-            <h4 className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
-              ผู้เล่น
-            </h4>
-            <div className="space-y-2">
-              {guests.map((g, i) => (
-                <div key={i} className="flex gap-2">
-                  <input
-                    value={g.name}
-                    onChange={(e) =>
-                      setGuests((p) => p.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))
-                    }
-                    placeholder={`ชื่อเล่นคนที่ ${i + 1}`}
-                    className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-600"
-                  />
-                  <select
-                    value={g.ratePlanId || defaultPlanId}
-                    onChange={(e) =>
-                      setGuests((p) =>
-                        p.map((x, j) => (j === i ? { ...x, ratePlanId: e.target.value } : x)),
-                      )
-                    }
-                    className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm outline-none"
-                  >
-                    {data.ratePlans.map((plan) => (
-                      <option key={plan.id} value={plan.id}>
-                        {plan.name}
-                      </option>
-                    ))}
-                  </select>
-                  {guests.length > 1 && (
-                    <Button variant="danger" onClick={() => setGuests((p) => p.filter((_, j) => j !== i))}>
-                      ✕
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
-            <Button
-              variant="subtle"
-              className="mt-2 w-full"
-              onClick={() => setGuests((p) => [...p, { name: '', ratePlanId: '' }])}
-            >
-              + เพิ่มคน (มาเกินที่จองไว้)
-            </Button>
-          </div>
-        </div>
-
-        <div className="border-t border-slate-800 p-5">
-          {error && <p className="mb-2 text-sm text-rose-400">{error}</p>}
+    <Modal
+      title={`เช็คอิน · ${r.customerName}`}
+      hint={`จอง ${r.partySize} คน · ${r.durationMinutes / 60} ชม.`}
+      onClose={onClose}
+      dismissible={!busy}
+      footer={
+        <>
+          {error && <p className="mb-2 animate-shake text-sm text-crimson">{error}</p>}
           <div className="flex gap-2">
             <Button className="flex-1" onClick={onClose} disabled={busy}>
               ยกเลิก
@@ -324,8 +288,69 @@ function SeatDialog({ reservation: r, onClose }: { reservation: Reservation; onC
               เปิดโต๊ะ
             </Button>
           </div>
-        </div>
+        </>
+      }
+    >
+      <h4 className="flourish mb-2 text-xs font-semibold">โต๊ะ</h4>
+      <div className="grid grid-cols-4 gap-2">
+        {selectable.map((t) => {
+          const on = tableIds.includes(t.id)
+          return (
+            <button
+              key={t.id}
+              aria-pressed={on}
+              onClick={() => setTableIds((p) => (on ? p.filter((x) => x !== t.id) : [...p, t.id]))}
+              className="pick px-2 py-2 text-sm"
+            >
+              <div className="tracking-wide font-bold">{t.code}</div>
+              {t.status === 'occupied' && !t.allowShare && <div className="text-xs text-crimson">ไม่ว่าง</div>}
+            </button>
+          )
+        })}
       </div>
-    </div>
+
+      <h4 className="flourish mt-5 mb-2 text-xs font-semibold">ผู้เล่น</h4>
+      <div className="space-y-2">
+        {guests.map((g, i) => (
+          <div key={i} className="flex gap-2">
+            <input
+              value={g.name}
+              onChange={(e) => setGuests((p) => p.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))}
+              placeholder={`ชื่อเล่นคนที่ ${i + 1}`}
+              className={`${INPUT} min-w-0 flex-1`}
+            />
+            <select
+              value={g.ratePlanId || defaultPlanId}
+              onChange={(e) =>
+                setGuests((p) => p.map((x, j) => (j === i ? { ...x, ratePlanId: e.target.value } : x)))
+              }
+              className={`${INPUT} !w-auto`}
+            >
+              {data.ratePlans.map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.name}
+                </option>
+              ))}
+            </select>
+            {guests.length > 1 && (
+              <Button
+                variant="danger"
+                aria-label={`ลบคนที่ ${i + 1}`}
+                className="!px-2.5"
+                onClick={() => setGuests((p) => p.filter((_, j) => j !== i))}
+              >
+                ✕
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
+      <Button
+        className="mt-3 w-full border-dashed"
+        onClick={() => setGuests((p) => [...p, { name: '', ratePlanId: '' }])}
+      >
+        + เพิ่มคน (มาเกินที่จองไว้)
+      </Button>
+    </Modal>
   )
 }

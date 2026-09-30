@@ -4,14 +4,14 @@ import { useSnapshot, useNow } from '../hooks/useData'
 import { db } from '../data'
 import { billableMinutes, computeBill, formatBaht, formatDuration } from '../domain/pricing'
 import type { CafeTable, RatePlan, TableStatus } from '../domain/types'
-import { Badge, Button, Card, SectionTitle } from '../components/ui'
-import type { Tone } from '../components/ui'
+import { Badge, Button, Dot, Icon, INPUT, Modal, PageHeader, SectionTitle } from '../components/ui'
+import type { IconName, Tone } from '../components/ui'
 
-const STATUS_STYLE: Record<TableStatus, { ring: string; label: string; tone: Tone }> = {
-  free: { ring: 'border-slate-700 hover:border-emerald-600', label: 'ว่าง', tone: 'slate' },
-  reserved: { ring: 'border-sky-700/70 bg-sky-950/30', label: 'จองไว้', tone: 'sky' },
-  occupied: { ring: 'border-emerald-700/70 bg-emerald-950/25', label: 'มีลูกค้า', tone: 'emerald' },
-  cleaning: { ring: 'border-amber-700/70 bg-amber-950/25', label: 'กำลังเก็บ', tone: 'amber' },
+const STATUS_STYLE: Record<TableStatus, { ribbon: string; tile: string; label: string; tone: Tone }> = {
+  free: { ribbon: 'bg-line-strong', tile: 'hover:border-gold', label: 'ว่าง', tone: 'neutral' },
+  reserved: { ribbon: 'bg-lapis', tile: 'border-lapis/40 bg-lapis/5', label: 'จองไว้', tone: 'lapis' },
+  occupied: { ribbon: 'bg-forest', tile: 'border-forest/40', label: 'มีลูกค้า', tone: 'forest' },
+  cleaning: { ribbon: 'bg-ember', tile: 'border-ember/40 bg-ember/5', label: 'กำลังเก็บ', tone: 'ember' },
 }
 
 export default function FloorMap() {
@@ -68,84 +68,196 @@ export default function FloorMap() {
     return sum + bill.total
   }, 0)
 
+  const occupiedCount = data.tables.filter((t) => t.status === 'occupied').length
+  const guestsIn = data.passes.filter((p) => p.status === 'active' || p.status === 'paused').length
+  const kitchenQueue = data.orders.filter((o) => ['placed', 'accepted', 'preparing'].includes(o.status)).length
+
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="โต๊ะที่ใช้อยู่" value={`${data.tables.filter((t) => t.status === 'occupied').length}/${data.tables.length}`} />
-        <Stat label="ลูกค้าในร้าน" value={String(data.passes.filter((p) => p.status === 'active' || p.status === 'paused').length)} />
-        <Stat label="ออเดอร์ค้างครัว" value={String(data.orders.filter((o) => ['placed', 'accepted', 'preparing'].includes(o.status)).length)} />
-        <Stat label="ยอดค้างบิล" value={`฿${formatBaht(runningTotal)}`} />
+    <div>
+      <PageHeader
+        eyebrow="ห้องโถงใหญ่"
+        title="ผังโต๊ะ"
+        subtitle={
+          <span className="flex flex-wrap gap-x-4 gap-y-1">
+            {(['free', 'reserved', 'occupied'] as TableStatus[]).map((s) => (
+              <span key={s} className="flex items-center gap-1.5">
+                <Dot tone={STATUS_STYLE[s].tone} />
+                {STATUS_STYLE[s].label}
+              </span>
+            ))}
+          </span>
+        }
+      />
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat icon="table" label="โต๊ะที่ใช้อยู่" value={`${occupiedCount}/${data.tables.length}`} />
+        <Stat icon="users" label="ลูกค้าในร้าน" value={String(guestsIn)} />
+        <Stat icon="cauldron" label="ออเดอร์ค้างครัว" value={String(kitchenQueue)} alert={kitchenQueue > 0} />
+        <Stat icon="coins" label="ยอดค้างบิล" value={`฿${formatBaht(runningTotal)}`} gold />
       </div>
 
-      {zones.map(([zone, tables]) => (
-        <section key={zone}>
-          <SectionTitle>{zone}</SectionTitle>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {tables.map((table) => {
-              const style = STATUS_STYLE[table.status]
-              const occupied = visitAt(table.id)
-
-              const body = (
-                <div className={`h-full rounded-xl border p-3 text-left transition ${style.ring}`}>
-                  <div className="flex items-start justify-between">
-                    <span className="text-lg font-bold">{table.code}</span>
-                    <Badge tone={style.tone}>{style.label}</Badge>
-                  </div>
-
-                  {occupied ? (
-                    <div className="mt-2 space-y-1 text-sm">
-                      <div className="text-slate-400">
-                        {occupied.visit.code} · {occupied.active.length} คน
-                      </div>
-                      <div className="tabular text-slate-300">
-                        ⏱ {formatDuration(occupied.longest)}
-                      </div>
-                      <div className="tabular font-semibold text-emerald-400">
-                        ฿{formatBaht(occupied.bill.total)}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-2 text-sm text-slate-500">
-                      {table.seatMin}–{table.seatMax} ที่นั่ง
-                      {table.allowShare && <span className="ml-1 text-xs">· นั่งร่วมได้</span>}
-                    </div>
-                  )}
-                </div>
-              )
-
-              if (occupied) {
-                return (
-                  <Link key={table.id} to={`/visit/${occupied.visit.id}`} className="block">
-                    {body}
-                  </Link>
-                )
-              }
-              return (
-                <button
-                  key={table.id}
-                  onClick={() => table.status === 'free' && setSeating(table)}
-                  disabled={table.status !== 'free'}
-                  className="block text-left disabled:opacity-60"
-                >
-                  {body}
-                </button>
-              )
-            })}
-          </div>
-        </section>
-      ))}
+      <div className="mt-8 space-y-8">
+        {zones.map(([zone, tables]) => {
+          const free = tables.filter((t) => t.status === 'free').length
+          return (
+            <section key={zone}>
+              <SectionTitle
+                action={
+                  <span className="text-xs text-ink-faint">
+                    ว่าง {free} จาก {tables.length}
+                  </span>
+                }
+              >
+                {zone}
+              </SectionTitle>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {tables.map((table) => (
+                  <TableTile
+                    key={table.id}
+                    table={table}
+                    occupied={visitAt(table.id)}
+                    onSeat={() => setSeating(table)}
+                  />
+                ))}
+              </div>
+            </section>
+          )
+        })}
+      </div>
 
       {seating && <SeatDialog table={seating} onClose={() => setSeating(null)} />}
     </div>
   )
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function TableTile({
+  table,
+  occupied,
+  onSeat,
+}: {
+  table: CafeTable
+  occupied: {
+    visit: { id: string; code: string }
+    active: unknown[]
+    bill: { total: number }
+    longest: number
+  } | null
+  onSeat: () => void
+}) {
+  const style = STATUS_STYLE[table.status]
+  const filled = occupied ? Math.min(occupied.active.length, table.seatMax) : 0
+
+  const body = (
+    <div
+      className={`panel lift group flex h-full flex-col overflow-hidden rounded-xl text-left ${style.tile}`}
+    >
+      <div className={`h-1.5 ${style.ribbon}`} />
+      <div className="flex flex-1 flex-col p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl tracking-wide leading-none font-bold">{table.code}</span>
+            {occupied && <span className="flame" aria-hidden />}
+          </div>
+          <Badge tone={style.tone}>{style.label}</Badge>
+        </div>
+
+        {/* จุดที่นั่ง — ทึบ = มีคนนั่ง */}
+        <div className="mt-3 flex flex-wrap gap-1" aria-hidden>
+          {Array.from({ length: table.seatMax }, (_, i) => (
+            <span
+              key={i}
+              className={`h-2 w-2 rounded-full ${
+                i < filled ? 'bg-forest' : 'border border-line-strong bg-transparent'
+              }`}
+            />
+          ))}
+        </div>
+
+        {occupied ? (
+          <div className="mt-3 space-y-1 text-sm">
+            <div className="text-ink-faint">
+              {occupied.visit.code} · {occupied.active.length} คน
+            </div>
+            <div className="tabular flex items-center gap-1.5 text-ink-soft">
+              <Icon name="hourglass" className="h-4 w-4" />
+              {formatDuration(occupied.longest)}
+            </div>
+            <div className="tabular pt-1 text-lg font-bold text-gold-deep">
+              ฿{formatBaht(occupied.bill.total)}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-3 flex flex-1 flex-col justify-between text-sm text-ink-faint">
+            <span>
+              {table.seatMin}–{table.seatMax} ที่นั่ง
+              {table.allowShare && <span className="ml-1 text-xs">· นั่งร่วมได้</span>}
+            </span>
+            {table.status === 'free' && (
+              <span className="mt-2 text-xs text-gold-deep opacity-0 transition group-hover:opacity-100">
+                แตะเพื่อรับแขก →
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+
+  if (occupied) {
+    return (
+      <Link to={`/visit/${occupied.visit.id}`} className="block rounded-xl">
+        {body}
+      </Link>
+    )
+  }
   return (
-    <Card className="py-3">
-      <div className="text-xs text-slate-500">{label}</div>
-      <div className="tabular mt-1 text-xl font-bold">{value}</div>
-    </Card>
+    <button
+      onClick={() => table.status === 'free' && onSeat()}
+      disabled={table.status !== 'free'}
+      className="block rounded-xl text-left disabled:opacity-70"
+    >
+      {body}
+    </button>
+  )
+}
+
+function Stat({
+  icon,
+  label,
+  value,
+  gold,
+  alert,
+}: {
+  icon: IconName
+  label: string
+  value: string
+  gold?: boolean
+  alert?: boolean
+}) {
+  return (
+    <div className="panel flex items-center gap-3 rounded-xl p-4">
+      <div
+        className={`grid h-11 w-11 shrink-0 place-items-center rounded-full border ${
+          gold
+            ? 'border-gold/50 bg-gold/15 text-gold-deep'
+            : alert
+              ? 'border-ember/40 bg-ember/10 text-ember-deep'
+              : 'border-line-strong bg-parchment-deep text-ink-soft'
+        }`}
+      >
+        <Icon name={icon} />
+      </div>
+      <div className="min-w-0">
+        <div className="text-xs text-ink-faint">{label}</div>
+        {/* key ตามค่า ให้ตัวเลขเด้งทุกครั้งที่เปลี่ยน */}
+        <div
+          key={value}
+          className={`tabular animate-bump truncate text-xl font-bold ${gold ? 'text-gold-deep' : ''}`}
+        >
+          {value}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -180,58 +292,13 @@ function SeatDialog({ table, onClose }: { table: CafeTable; onClose: () => void 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-4">
-      <div className="w-full max-w-md rounded-t-2xl border border-slate-800 bg-slate-900 p-5 sm:rounded-2xl">
-        <h3 className="text-lg font-bold">เปิดโต๊ะ {table.code}</h3>
-        <p className="mt-1 text-sm text-slate-400">
-          นาฬิกาเริ่มนับแยกรายคน — เพิ่มคนทีหลังได้ตลอด
-        </p>
-
-        <div className="mt-4 space-y-2">
-          {guests.map((guest, i) => (
-            <div key={i} className="flex gap-2">
-              <input
-                value={guest.name}
-                onChange={(e) =>
-                  setGuests((prev) => prev.map((g, j) => (j === i ? { ...g, name: e.target.value } : g)))
-                }
-                placeholder={`ชื่อเล่นคนที่ ${i + 1}`}
-                className="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-600"
-              />
-              <select
-                value={guest.ratePlanId || defaultPlanId}
-                onChange={(e) =>
-                  setGuests((prev) =>
-                    prev.map((g, j) => (j === i ? { ...g, ratePlanId: e.target.value } : g)),
-                  )
-                }
-                className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-sm outline-none focus:border-emerald-600"
-              >
-                {data.ratePlans.map((plan) => (
-                  <option key={plan.id} value={plan.id}>
-                    {plan.name}
-                  </option>
-                ))}
-              </select>
-              {guests.length > 1 && (
-                <Button variant="danger" onClick={() => setGuests((p) => p.filter((_, j) => j !== i))}>
-                  ✕
-                </Button>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <Button
-          className="mt-2 w-full"
-          variant="subtle"
-          onClick={() => setGuests((p) => [...p, { name: '', ratePlanId: defaultPlanId }])}
-          disabled={guests.length >= table.seatMax}
-        >
-          + เพิ่มคน (สูงสุด {table.seatMax})
-        </Button>
-
-        <div className="mt-5 flex gap-2">
+    <Modal
+      title={`เปิดโต๊ะ ${table.code}`}
+      hint="นาฬิกาเริ่มนับแยกรายคน — เพิ่มคนทีหลังได้ตลอด"
+      onClose={onClose}
+      dismissible={!busy}
+      footer={
+        <div className="flex gap-2">
           <Button className="flex-1" onClick={onClose}>
             ยกเลิก
           </Button>
@@ -239,7 +306,56 @@ function SeatDialog({ table, onClose }: { table: CafeTable; onClose: () => void 
             เปิดโต๊ะ
           </Button>
         </div>
+      }
+    >
+      <div className="space-y-2">
+        {guests.map((guest, i) => (
+          <div key={i} className="flex animate-page items-center gap-2">
+            <span className="shield h-8 w-7 shrink-0 bg-wine text-xs text-gold-light">{i + 1}</span>
+            <input
+              value={guest.name}
+              onChange={(e) =>
+                setGuests((prev) => prev.map((g, j) => (j === i ? { ...g, name: e.target.value } : g)))
+              }
+              placeholder={`ชื่อเล่นคนที่ ${i + 1}`}
+              className={`${INPUT} min-w-0 flex-1`}
+            />
+            <select
+              value={guest.ratePlanId || defaultPlanId}
+              onChange={(e) =>
+                setGuests((prev) =>
+                  prev.map((g, j) => (j === i ? { ...g, ratePlanId: e.target.value } : g)),
+                )
+              }
+              className={`${INPUT} !w-auto`}
+            >
+              {data.ratePlans.map((plan) => (
+                <option key={plan.id} value={plan.id}>
+                  {plan.name}
+                </option>
+              ))}
+            </select>
+            {guests.length > 1 && (
+              <Button
+                variant="danger"
+                aria-label={`ลบคนที่ ${i + 1}`}
+                className="!px-2.5"
+                onClick={() => setGuests((p) => p.filter((_, j) => j !== i))}
+              >
+                ✕
+              </Button>
+            )}
+          </div>
+        ))}
       </div>
-    </div>
+
+      <Button
+        className="mt-3 w-full border-dashed"
+        onClick={() => setGuests((p) => [...p, { name: '', ratePlanId: defaultPlanId }])}
+        disabled={guests.length >= table.seatMax}
+      >
+        + เพิ่มคน (สูงสุด {table.seatMax})
+      </Button>
+    </Modal>
   )
 }

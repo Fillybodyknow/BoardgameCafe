@@ -5,7 +5,9 @@ import { formatBytes, resizeToJpeg } from '../lib/image'
 import { SNAPSHOT_KEY } from '../hooks/useData'
 import { formatBaht } from '../domain/pricing'
 import type { MenuCategory, ShopHours, TaxConfig } from '../domain/types'
-import { Badge, Button, Card, Empty, SectionTitle } from '../components/ui'
+import {
+  Badge, Button, Card, Empty, Field, INPUT, Modal, PageHeader, SectionTitle, Segmented,
+} from '../components/ui'
 
 const CATEGORY_LABEL: Record<MenuCategory, string> = {
   drink: 'เครื่องดื่ม', snack: 'ของกินเล่น', food: 'อาหารจานหลัก', dessert: 'ของหวาน',
@@ -41,25 +43,28 @@ export default function Owner() {
   }
 
   return (
-    <div className="space-y-4">
-      <SectionTitle>ตั้งค่าร้าน</SectionTitle>
+    <div>
+      <PageHeader
+        eyebrow="ห้องบัญชาการของเจ้าของร้าน"
+        title="ตั้งค่าร้าน"
+        subtitle="เมนู โต๊ะ เรตราคา และเวลาทำการ — แก้แล้วหน้าร้านเห็นทันที"
+      />
 
-      <div className="flex gap-1 overflow-x-auto">
-        {TABS.map((t) => (
-          <Button
-            key={t.key}
-            variant={tab === t.key ? 'subtle' : 'ghost'}
-            onClick={() => setTab(t.key)}
-          >
-            {t.label}
-          </Button>
-        ))}
+      <div className="-mx-4 mb-6 overflow-x-auto px-4">
+        <Segmented
+          value={tab}
+          onChange={setTab}
+          options={TABS.map((t) => ({ value: t.key, label: t.label }))}
+          className="min-w-full sm:min-w-0"
+        />
       </div>
 
+      <div key={tab} className="animate-page">
       {tab === 'menu' && <MenuTab />}
       {tab === 'tables' && <TablesTab />}
       {tab === 'rates' && <RatesTab />}
       {tab === 'hours' && <HoursTab />}
+      </div>
     </div>
   )
 }
@@ -80,23 +85,13 @@ function useSave<T>(keys: string[], fn: (v: T) => Promise<void>) {
 function Err({ error }: { error: unknown }) {
   if (!error) return null
   return (
-    <p className="mt-2 text-sm text-rose-400">
+    <p className="mt-2 animate-shake text-sm text-crimson">
       {error instanceof Error ? error.message : 'บันทึกไม่สำเร็จ'}
     </p>
   )
 }
 
-const input =
-  'w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-600'
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="block">
-      <span className="text-xs text-slate-400">{label}</span>
-      <div className="mt-1">{children}</div>
-    </label>
-  )
-}
+const input = INPUT
 
 // ================================================================== เมนู ====
 
@@ -134,21 +129,22 @@ function MenuTab() {
         + เพิ่มเมนู
       </Button>
 
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-ink-faint">
         แก้ราคามีผลกับออเดอร์ใหม่เท่านั้น — ออเดอร์ที่สั่งไปแล้วและใบเสร็จเก่าใช้ราคา ณ ตอนสั่ง
       </p>
 
+      <div className="grid gap-3 lg:grid-cols-2">
       {active.map((m) => (
-        <Card key={m.id} className="flex flex-wrap items-center justify-between gap-2">
+        <Card key={m.id} className="lift flex flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-3">
             <Thumb path={m.imagePath} alt={m.name} />
             <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="font-semibold">{m.name}</span>
-              <Badge tone="slate">{m.sku}</Badge>
-              {!m.available && <Badge tone="rose">ของหมด</Badge>}
+              <Badge tone="neutral">{m.sku}</Badge>
+              {!m.available && <Badge tone="crimson">ของหมด</Badge>}
             </div>
-            <div className="tabular mt-0.5 text-sm text-slate-400">
+            <div className="tabular mt-0.5 text-sm text-ink-soft">
               {CATEGORY_LABEL[m.category]} · ฿{formatBaht(m.price)}
             </div>
             </div>
@@ -177,18 +173,19 @@ function MenuTab() {
           </div>
         </Card>
       ))}
+      </div>
 
       <Err error={archive.error} />
 
       {archived.length > 0 && (
-        <details className="rounded-xl border border-slate-800 p-3">
-          <summary className="cursor-pointer text-sm text-slate-400">
-            เก็บเข้ากรุแล้ว ({archived.length})
+        <details className="panel rounded-xl p-3">
+          <summary className="cursor-pointer text-sm text-ink-soft">
+            🗝 เก็บเข้ากรุแล้ว ({archived.length})
           </summary>
           <div className="mt-2 space-y-1">
             {archived.map((m) => (
               <div key={m.id} className="flex items-center justify-between gap-2 text-sm">
-                <span className="text-slate-500">{m.name}</span>
+                <span className="text-ink-faint">{m.name}</span>
                 <Button onClick={() => archive.mutate({ id: m.id, archived: false })}>
                   เอากลับมา
                 </Button>
@@ -252,7 +249,7 @@ function MenuTab() {
               type="checkbox"
               checked={draft.available}
               onChange={(e) => setDraft({ ...draft, available: e.target.checked })}
-              className="accent-emerald-500"
+              className="h-4 w-4 accent-[#3d6b46]"
             />
             มีขายอยู่ (ติ๊กออกถ้าของหมดวันนี้)
           </label>
@@ -263,7 +260,7 @@ function MenuTab() {
               path={(items.data ?? []).find((m) => m.id === draft.id)?.imagePath ?? null}
             />
           ) : (
-            <p className="mt-3 rounded-lg bg-slate-800/60 p-2 text-xs text-slate-400">
+            <p className="mt-3 rounded-lg bg-parchment-deep/70 p-2 text-xs text-ink-soft">
               บันทึกเมนูก่อน แล้วเปิดกลับมาแก้เพื่อใส่รูป
             </p>
           )}
@@ -285,7 +282,7 @@ function Thumb({ path, alt }: { path?: string | null; alt: string }) {
   const url = menuImageUrl(path)
   if (!url) {
     return (
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-600">
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-parchment-deep text-ink-faint">
         🍽
       </div>
     )
@@ -347,13 +344,13 @@ function ImageField({ itemId, path }: { itemId: string; path: string | null }) {
   const url = menuImageUrl(path)
 
   return (
-    <div className="mt-3 rounded-lg border border-slate-800 p-3">
-      <div className="text-xs text-slate-400">รูปประกอบ</div>
+    <div className="mt-3 rounded-lg border border-dashed border-line-strong bg-parchment/50 p-3">
+      <div className="text-xs font-medium text-ink-soft">รูปประกอบ</div>
       <div className="mt-2 flex items-center gap-3">
         {url ? (
           <img src={url} alt="" className="h-20 w-20 rounded-lg object-cover" />
         ) : (
-          <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-slate-800 text-2xl text-slate-600">
+          <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-parchment-deep text-2xl text-ink-faint">
             🍽
           </div>
         )}
@@ -363,7 +360,7 @@ function ImageField({ itemId, path }: { itemId: string; path: string | null }) {
             accept="image/jpeg,image/png,image/webp"
             disabled={busy}
             onChange={(e) => void pick(e.target.files?.[0])}
-            className="block w-full text-xs text-slate-400 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-800 file:px-3 file:py-1.5 file:text-slate-200"
+            className="block w-full text-xs text-ink-faint file:mr-2 file:rounded-lg file:border file:border-line-strong file:bg-vellum file:px-3 file:py-1.5 file:text-ink hover:file:border-gold"
           />
           {url && (
             <Button variant="danger" disabled={busy} onClick={remove}>
@@ -372,10 +369,10 @@ function ImageField({ itemId, path }: { itemId: string; path: string | null }) {
           )}
         </div>
       </div>
-      {busy && <p className="mt-2 text-xs text-slate-500">กำลังย่อและอัปโหลด…</p>}
-      {info && <p className="mt-2 text-xs text-emerald-400">{info}</p>}
-      {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
-      <p className="mt-2 text-xs text-slate-500">
+      {busy && <p className="mt-2 text-xs text-ink-faint">กำลังย่อและอัปโหลด…</p>}
+      {info && <p className="mt-2 text-xs text-forest-deep">✓ {info}</p>}
+      {error && <p className="mt-2 animate-shake text-sm text-crimson">{error}</p>}
+      <p className="mt-2 text-xs text-ink-faint">
         ย่อให้เหลือกว้างสุด 800px อัตโนมัติ — ถ่ายจากมือถือได้เลย
       </p>
     </div>
@@ -418,16 +415,17 @@ function TablesTab() {
         + เพิ่มโต๊ะ
       </Button>
 
+      <div className="grid gap-3 lg:grid-cols-2">
       {active.map((t) => (
-        <Card key={t.id} className="flex flex-wrap items-center justify-between gap-2">
+        <Card key={t.id} className="lift flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-bold">{t.code}</span>
-              <Badge tone="slate">{t.zone}</Badge>
-              {t.allowShare && <Badge tone="violet">นั่งร่วมได้</Badge>}
-              {t.status === 'occupied' && <Badge tone="emerald">มีลูกค้า</Badge>}
+              <span className="text-lg tracking-wide font-bold">{t.code}</span>
+              <Badge tone="neutral">{t.zone}</Badge>
+              {t.allowShare && <Badge tone="royal">นั่งร่วมได้</Badge>}
+              {t.status === 'occupied' && <Badge tone="forest">มีลูกค้า</Badge>}
             </div>
-            <div className="mt-0.5 text-sm text-slate-400">
+            <div className="mt-0.5 text-sm text-ink-soft">
               {t.seatMin}–{t.seatMax} ที่นั่ง
             </div>
           </div>
@@ -456,18 +454,19 @@ function TablesTab() {
           </div>
         </Card>
       ))}
+      </div>
 
       <Err error={archive.error} />
 
       {archived.length > 0 && (
-        <details className="rounded-xl border border-slate-800 p-3">
-          <summary className="cursor-pointer text-sm text-slate-400">
-            เก็บเข้ากรุแล้ว ({archived.length})
+        <details className="panel rounded-xl p-3">
+          <summary className="cursor-pointer text-sm text-ink-soft">
+            🗝 เก็บเข้ากรุแล้ว ({archived.length})
           </summary>
           <div className="mt-2 space-y-1">
             {archived.map((t) => (
               <div key={t.id} className="flex items-center justify-between gap-2 text-sm">
-                <span className="text-slate-500">{t.code} · {t.zone}</span>
+                <span className="text-ink-faint">{t.code} · {t.zone}</span>
                 <Button onClick={() => archive.mutate({ id: t.id, archived: false })}>
                   เอากลับมา
                 </Button>
@@ -530,7 +529,7 @@ function TablesTab() {
               type="checkbox"
               checked={draft.allowShare}
               onChange={(e) => setDraft({ ...draft, allowShare: e.target.checked })}
-              className="accent-emerald-500"
+              className="h-4 w-4 accent-[#3d6b46]"
             />
             ให้คนละกลุ่มนั่งร่วมกันได้ (โต๊ะยาว / เคาน์เตอร์)
           </label>
@@ -581,19 +580,19 @@ function RatesTab() {
         + เพิ่มเรตราคา
       </Button>
 
-      <Card className="text-xs text-slate-400">
-        ขึ้นราคาแล้ว <b className="text-slate-200">ไม่กระทบลูกค้าที่กำลังนั่งอยู่</b> —
+      <Card className="!border-lapis/30 !bg-lapis/5 text-xs text-lapis-deep">
+        ขึ้นราคาแล้ว <b className="text-ink">ไม่กระทบลูกค้าที่กำลังนั่งอยู่</b> —
         แต่ละคนถือเรต ณ เวลาที่เช็คอินติดตัวไว้แล้ว ราคาใหม่ใช้กับคนที่เช็คอินหลังจากนี้เท่านั้น
       </Card>
 
       {(plans.data ?? []).map((p) => (
-        <Card key={p.id} className="flex flex-wrap items-center justify-between gap-2">
+        <Card key={p.id} className="lift flex flex-wrap items-center justify-between gap-2">
           <div>
             <div className="flex items-center gap-2">
               <span className="font-semibold">{p.name}</span>
-              {p.active === false && <Badge tone="slate">ปิดใช้</Badge>}
+              {p.active === false && <Badge tone="neutral">ปิดใช้</Badge>}
             </div>
-            <div className="tabular mt-0.5 text-sm text-slate-400">
+            <div className="tabular mt-0.5 text-sm text-ink-soft">
               ฿{formatBaht(p.pricePerHour)}/ชม. · ปัดทุก {p.roundToMinutes} นาที · ขั้นต่ำ{' '}
               {p.minimumMinutes} นาที
               {p.dayPassCap !== null && <> · เหมาวัน ฿{formatBaht(p.dayPassCap)}</>}
@@ -677,7 +676,7 @@ function RatesTab() {
               type="checkbox"
               checked={draft.active}
               onChange={(e) => setDraft({ ...draft, active: e.target.checked })}
-              className="accent-emerald-500"
+              className="h-4 w-4 accent-[#3d6b46]"
             />
             เปิดให้เลือกตอนเปิดโต๊ะ
           </label>
@@ -714,15 +713,15 @@ function HoursTab() {
     <div className="space-y-4">
       <div className="space-y-2">
         {(hours.data ?? []).map((h) => (
-          <Card key={h.weekday} className="flex flex-wrap items-center gap-3">
-            <span className="w-20 shrink-0 font-semibold">{WEEKDAY[h.weekday]}</span>
+          <Card key={h.weekday} className={`flex flex-wrap items-center gap-3 !py-3 ${h.closed ? 'opacity-60' : ''}`}>
+            <span className="w-24 shrink-0 font-display font-semibold">{WEEKDAY[h.weekday]}</span>
 
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
                 checked={h.closed}
                 onChange={(e) => saveHours.mutate({ ...h, closed: e.target.checked })}
-                className="accent-rose-500"
+                className="h-4 w-4 accent-[#a02c2d]"
               />
               ปิด
             </label>
@@ -733,21 +732,21 @@ function HoursTab() {
                   type="time"
                   value={h.openTime}
                   onChange={(e) => saveHours.mutate({ ...h, openTime: e.target.value })}
-                  className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-sm outline-none"
+                  className={`${INPUT} !w-auto !py-1`}
                 />
-                <span className="text-slate-500">–</span>
+                <span className="text-ink-faint">–</span>
                 <input
                   type="time"
                   value={h.closeTime}
                   onChange={(e) => saveHours.mutate({ ...h, closeTime: e.target.value })}
-                  className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-sm outline-none"
+                  className={`${INPUT} !w-auto !py-1`}
                 />
               </div>
             )}
           </Card>
         ))}
         <Err error={saveHours.error} />
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-ink-faint">
           ยังไม่รองรับร้านที่ปิดหลังเที่ยงคืน เพราะระบบจองยังไม่อนุญาตให้รอบเล่นข้ามวัน
         </p>
       </div>
@@ -789,7 +788,7 @@ function HoursTab() {
                 type="checkbox"
                 checked={draftTax.vatIncluded}
                 onChange={(e) => setDraftTax({ ...draftTax, vatIncluded: e.target.checked })}
-                className="accent-emerald-500"
+                className="h-4 w-4 accent-[#3d6b46]"
               />
               ราคาที่ตั้งไว้รวม VAT แล้ว
             </label>
@@ -821,15 +820,9 @@ function Dialog({
   onClose: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 sm:items-center sm:p-4">
-      <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl border border-slate-800 bg-slate-900 p-5 sm:rounded-2xl">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-lg font-bold">{title}</h3>
-          <Button onClick={onClose}>✕</Button>
-        </div>
-        <div className="space-y-2">{children}</div>
-      </div>
-    </div>
+    <Modal title={title} onClose={onClose}>
+      <div className="space-y-3">{children}</div>
+    </Modal>
   )
 }
 

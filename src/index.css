@@ -1,28 +1,638 @@
 @import 'tailwindcss';
 
+/*
+  ธีม "หนังสือวิจิตรยุคกลาง" (Illuminated manuscript) — โทนสว่าง
+  ─────────────────────────────────────────────────────────────
+  พื้นกระดาษหนัง หมึกน้ำตาลเข้ม ปิดทอง แถบนำทางเป็นผ้าทอสีไวน์
+  ใช้ชื่อสีเชิงความหมาย (parchment/ink/gold/…) แทนชื่อสี Tailwind ตรงๆ
+  เพื่อให้เปลี่ยนโทนทั้งแอปได้จากตรงนี้ที่เดียว
+
+  ความหมายของสีในแอป
+    gold    ปุ่มหลัก / เงิน          forest  มีลูกค้า / สำเร็จ
+    lapis   จองไว้ / ข้อมูล          crimson ลบ / ผิดพลาด / เลยเวลา
+    ember   เตือน / พัก              royal   พร้อมเสิร์ฟ / ออนไลน์
+*/
 @theme {
-  --font-sans: 'IBM Plex Sans Thai', ui-sans-serif, system-ui, sans-serif;
+  /* Taviraj ตัวเลขกว้างเท่ากันทุกตัว — นาฬิกาไม่เด้ง
+     Cinzel ตัวเลขกว้างไม่เท่ากัน ใช้กับหัวข้อเท่านั้น ห้ามใช้กับตัวเลขที่เปลี่ยนค่า */
+  --font-sans: 'Taviraj', 'Noto Serif Thai', Georgia, serif;
+  --font-display: 'Cinzel', 'Taviraj', Georgia, serif;
+  --font-initial: 'Cinzel Decorative', 'Cinzel', 'Taviraj', Georgia, serif;
+
+  --color-parchment: #f3ead6;
+  --color-parchment-deep: #e9ddc2;
+  --color-vellum: #fcf8ef;
+  --color-ink: #2a1c12;
+  --color-ink-soft: #5b4633;
+  --color-ink-faint: #7a6549;
+  --color-line: #ddcfae;
+  --color-line-strong: #c6ae80;
+
+  --color-gold: #b8872e;
+  --color-gold-light: #e4c373;
+  --color-gold-deep: #86600f;
+  --color-wine: #3f1519;
+  --color-wine-light: #5c2127;
+  --color-crimson: #a02c2d;
+  --color-crimson-deep: #74191c;
+  --color-forest: #3d6b46;
+  --color-forest-deep: #274b2f;
+  --color-lapis: #30569a;
+  --color-lapis-deep: #213a6b;
+  --color-ember: #b9621c;
+  --color-ember-deep: #86420f;
+  --color-royal: #6c3e91;
+
+  --radius-md: 0.3rem;
+  --radius-lg: 0.45rem;
+  --radius-xl: 0.65rem;
+  --radius-2xl: 0.9rem;
+
+  /* backwards ไม่ใช่ both — ถ้าค้าง transform ไว้หลังจบ ลูกที่เป็น position:fixed (dialog) จะถูกขังอยู่ในกรอบนี้ */
+  --animate-page: page-in 0.35s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  --animate-unroll: unroll 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  --animate-fade: fade 0.2s ease-out both;
+  --animate-bump: bump 0.35s ease-out;
+  --animate-flicker: flicker 2.4s ease-in-out infinite;
+  --animate-ring: ring 0.9s ease-in-out;
+  --animate-ember-pulse: ember-pulse 1.8s ease-in-out infinite;
+  --animate-shake: shake 0.4s ease-in-out;
 }
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
+  /* เกรนกระดาษ — สีน้ำตาลจางๆ */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .24 0 0 0 0 .12 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  /* ลายมุมกรอบปิดทอง สำหรับ .ornate */
+  --corner-tl: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='%23b8872e' stroke-width='1.3'%3E%3Cg transform=''%3E%3Cpath d='M1.5 30V9A7.5 7.5 0 0 1 9 1.5h21'/%3E%3Cpath d='M5.5 30V11.5a6 6 0 0 1 6-6H30' opacity='.45'/%3E%3Cpath d='M1.5 9c4.5 0 7 2.5 7 7M9 1.5c0 4.5 2.5 7 7 7'/%3E%3Ccircle cx='12' cy='12' r='1.8' fill='%23b8872e' stroke='none'/%3E%3C/g%3E%3C/svg%3E");
+  --corner-tr: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='%23b8872e' stroke-width='1.3'%3E%3Cg transform='scale(-1 1) translate(-32 0)'%3E%3Cpath d='M1.5 30V9A7.5 7.5 0 0 1 9 1.5h21'/%3E%3Cpath d='M5.5 30V11.5a6 6 0 0 1 6-6H30' opacity='.45'/%3E%3Cpath d='M1.5 9c4.5 0 7 2.5 7 7M9 1.5c0 4.5 2.5 7 7 7'/%3E%3Ccircle cx='12' cy='12' r='1.8' fill='%23b8872e' stroke='none'/%3E%3C/g%3E%3C/svg%3E");
+  --corner-bl: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='%23b8872e' stroke-width='1.3'%3E%3Cg transform='scale(1 -1) translate(0 -32)'%3E%3Cpath d='M1.5 30V9A7.5 7.5 0 0 1 9 1.5h21'/%3E%3Cpath d='M5.5 30V11.5a6 6 0 0 1 6-6H30' opacity='.45'/%3E%3Cpath d='M1.5 9c4.5 0 7 2.5 7 7M9 1.5c0 4.5 2.5 7 7 7'/%3E%3Ccircle cx='12' cy='12' r='1.8' fill='%23b8872e' stroke='none'/%3E%3C/g%3E%3C/svg%3E");
+  --corner-br: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' fill='none' stroke='%23b8872e' stroke-width='1.3'%3E%3Cg transform='scale(-1 -1) translate(-32 -32)'%3E%3Cpath d='M1.5 30V9A7.5 7.5 0 0 1 9 1.5h21'/%3E%3Cpath d='M5.5 30V11.5a6 6 0 0 1 6-6H30' opacity='.45'/%3E%3Cpath d='M1.5 9c4.5 0 7 2.5 7 7M9 1.5c0 4.5 2.5 7 7 7'/%3E%3Ccircle cx='12' cy='12' r='1.8' fill='%23b8872e' stroke='none'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 html,
 body,
 #root {
-  height: 100%;
+  min-height: 100%;
 }
 
 body {
   margin: 0;
-  background: var(--color-slate-950);
-  color: var(--color-slate-100);
+  color: var(--color-ink);
   font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
   -webkit-tap-highlight-color: transparent;
+  background-color: var(--color-parchment);
+  /* กระดาษหนัง: เกรน + ขอบไหม้จางๆ + คราบแสงกลางหน้า */
+  background-image:
+    var(--grain),
+    radial-gradient(ellipse 70% 50% at 50% 20%, rgb(255 252 240 / 0.7), transparent 70%),
+    radial-gradient(ellipse at center, transparent 60%, rgb(120 80 30 / 0.14) 100%);
+  background-attachment: fixed;
+}
+
+/* อยู่ใน layer base เพื่อให้คลาส font-sans ของ Tailwind ทับได้ */
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    letter-spacing: 0.01em;
+  }
+}
+
+::selection {
+  background: rgb(184 135 46 / 0.3);
 }
 
 /* ตัวเลขเวลา/เงิน ต้องความกว้างคงที่ ไม่งั้นนาฬิกาเด้งทุกวินาที */
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+::placeholder {
+  color: var(--color-ink-faint);
+  opacity: 0.7;
+  font-style: italic;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+@layer components {
+  /* ------------------------------------------------------------ พื้นผิว */
+
+  /* แผ่นกระดาษเวลลัม — การ์ดทั่วไป */
+  .panel {
+    position: relative;
+    background-color: var(--color-vellum);
+    background-image: var(--grain);
+    border: 1px solid var(--color-line);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.8),
+      0 1px 2px rgb(70 45 20 / 0.06),
+      0 10px 24px -16px rgb(70 45 20 / 0.35);
+  }
+
+  /* การ์ดที่กดได้ ลอยขึ้นเล็กน้อยเมื่อชี้ */
+  .lift {
+    transition:
+      transform 0.18s ease,
+      box-shadow 0.18s ease,
+      border-color 0.18s ease;
+  }
+  .lift:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.8),
+      0 2px 4px rgb(70 45 20 / 0.08),
+      0 18px 30px -16px rgb(70 45 20 / 0.45);
+  }
+  .lift:active {
+    transform: translateY(0);
+  }
+
+  /* กรอบปิดทองสี่มุม — ใช้กับการ์ดสำคัญและ dialog */
+  .ornate::before {
+    content: '';
+    position: absolute;
+    inset: 5px;
+    pointer-events: none;
+    background:
+      var(--corner-tl) top left / 26px no-repeat,
+      var(--corner-tr) top right / 26px no-repeat,
+      var(--corner-bl) bottom left / 26px no-repeat,
+      var(--corner-br) bottom right / 26px no-repeat;
+    opacity: 0.9;
+  }
+
+  /* ผ้าทอสีไวน์ลายข้าวหลามตัด — แถบนำทาง */
+  .tapestry {
+    background-color: var(--color-wine);
+    background-image:
+      var(--grain),
+      repeating-linear-gradient(45deg, rgb(228 195 115 / 0.06) 0 1px, transparent 1px 14px),
+      repeating-linear-gradient(-45deg, rgb(228 195 115 / 0.06) 0 1px, transparent 1px 14px),
+      linear-gradient(180deg, var(--color-wine-light), var(--color-wine));
+    color: #f3e6c8;
+  }
+
+  /* เส้นคั่นประดับ ◆ ตรงกลาง */
+  .divider {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: var(--color-gold);
+  }
+  .divider::before,
+  .divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--color-line-strong) 30%, var(--color-line-strong) 70%, transparent);
+  }
+
+  /* หัวข้อ section: ❧ นำหน้า + เส้นทองลากยาว */
+  .flourish {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-family: var(--font-display);
+    color: var(--color-gold-deep);
+    letter-spacing: 0.08em;
+  }
+  .flourish::before {
+    content: '❧';
+    font-family: Georgia, serif;
+    transform: scaleX(-1);
+    color: var(--color-gold);
+  }
+  .flourish::after {
+    content: '';
+    flex: 1;
+    min-width: 2rem;
+    height: 1px;
+    background: linear-gradient(90deg, var(--color-line-strong), transparent);
+  }
+
+  /* ช่องกรอก: กระดาษบุ๋มลงเล็กน้อย โฟกัสแล้วเรืองทอง */
+  .field {
+    width: 100%;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-line-strong);
+    background: #fffdf7;
+    padding: 0.55rem 0.8rem;
+    font-size: 0.9rem;
+    color: var(--color-ink);
+    outline: none;
+    box-shadow: inset 0 1px 2px rgb(70 45 20 / 0.1);
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s;
+  }
+  .field:focus {
+    border-color: var(--color-gold);
+    box-shadow:
+      inset 0 1px 2px rgb(70 45 20 / 0.1),
+      0 0 0 3px rgb(184 135 46 / 0.2);
+  }
+
+  /* ------------------------------------------------------------ ปุ่ม */
+
+  .btn {
+    position: relative;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    transition:
+      background-color 0.15s,
+      border-color 0.15s,
+      color 0.15s,
+      box-shadow 0.15s,
+      transform 0.1s,
+      filter 0.15s;
+  }
+  .btn:active:not(:disabled) {
+    transform: translateY(1px) scale(0.98);
+  }
+
+  /* ปุ่มหลัก: แผ่นทองนูน มีแสงวาบวิ่งผ่านตอนชี้ */
+  .btn-gold {
+    color: var(--color-ink);
+    background-image: linear-gradient(180deg, #f0d792, var(--color-gold-light) 40%, var(--color-gold) 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 250 225 / 0.9),
+      inset 0 -1px 0 rgb(90 60 10 / 0.25),
+      0 0 0 1px #9c7424,
+      0 3px 8px -3px rgb(120 80 20 / 0.55);
+    text-shadow: 0 1px 0 rgb(255 245 210 / 0.6);
+  }
+  .btn-gold::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(110deg, transparent 30%, rgb(255 255 255 / 0.55) 50%, transparent 70%);
+    transform: translateX(-120%);
+    pointer-events: none;
+  }
+  .btn-gold:hover:not(:disabled)::after {
+    transition: transform 0.7s ease;
+    transform: translateX(120%);
+  }
+  .btn-gold:hover:not(:disabled) {
+    filter: brightness(1.04) saturate(1.05);
+  }
+
+  /* ------------------------------------------------------------ ส่วนควบคุม */
+
+  /* ปุ่มแบ่งส่วน (segmented) */
+  .seg {
+    display: inline-flex;
+    gap: 0.2rem;
+    padding: 0.2rem;
+    border-radius: var(--radius-xl);
+    background: var(--color-parchment-deep);
+    box-shadow: inset 0 1px 3px rgb(70 45 20 / 0.15);
+  }
+  .seg > button {
+    border-radius: var(--radius-lg);
+    padding: 0.4rem 0.85rem;
+    font-size: 0.875rem;
+    color: var(--color-ink-soft);
+    white-space: nowrap;
+    transition:
+      background-color 0.15s,
+      color 0.15s,
+      box-shadow 0.15s;
+  }
+  .seg > button:hover {
+    color: var(--color-ink);
+  }
+  .seg > button[aria-pressed='true'] {
+    background: var(--color-vellum);
+    color: var(--color-ink);
+    font-weight: 600;
+    box-shadow:
+      0 1px 2px rgb(70 45 20 / 0.15),
+      inset 0 -2px 0 var(--color-gold);
+  }
+
+  /* ชิป (ตัวกรอง/ช่วงเวลา) */
+  .chip {
+    border-radius: 999px;
+    border: 1px solid var(--color-line-strong);
+    background: var(--color-vellum);
+    padding: 0.3rem 0.8rem;
+    font-size: 0.85rem;
+    color: var(--color-ink-soft);
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .chip:hover:not(:disabled) {
+    border-color: var(--color-gold);
+    color: var(--color-ink);
+  }
+  .chip[aria-pressed='true'] {
+    border-color: var(--color-gold-deep);
+    background: var(--color-wine);
+    color: #f6e7c1;
+    box-shadow: 0 2px 6px -2px rgb(63 21 25 / 0.5);
+  }
+  .chip:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    text-decoration: line-through;
+  }
+
+  /* ช่องเลือกได้ (โต๊ะ ฯลฯ) */
+  .pick {
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--color-line-strong);
+    background: var(--color-vellum);
+    transition: all 0.15s;
+  }
+  .pick:hover:not(:disabled) {
+    border-color: var(--color-gold);
+    transform: translateY(-1px);
+  }
+  .pick[aria-pressed='true'] {
+    border-color: var(--color-forest);
+    background: rgb(61 107 70 / 0.1);
+    box-shadow:
+      0 0 0 2px rgb(61 107 70 / 0.35),
+      0 4px 10px -4px rgb(39 75 47 / 0.45);
+  }
+  .pick:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+    background: repeating-linear-gradient(135deg, transparent 0 6px, rgb(70 45 20 / 0.05) 6px 12px);
+  }
+
+  /* ------------------------------------------------------------ นำทาง */
+
+  .nav-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: rgb(243 230 200 / 0.72);
+    transition:
+      color 0.15s,
+      background-color 0.15s;
+  }
+  .nav-item:hover {
+    color: #fff4d8;
+    background: rgb(255 240 200 / 0.06);
+  }
+  .nav-item.active {
+    color: var(--color-gold-light);
+    background: linear-gradient(90deg, rgb(228 195 115 / 0.18), rgb(228 195 115 / 0.04));
+  }
+  .nav-item.active::before {
+    content: '';
+    position: absolute;
+    background: var(--color-gold-light);
+    box-shadow: 0 0 10px var(--color-gold-light);
+    border-radius: 2px;
+  }
+  /* มือถือ: ขีดทองอยู่ด้านบนของแท็บ / จอใหญ่: อยู่ด้านซ้าย */
+  @media (width < 64rem) {
+    .nav-item.active::before {
+      top: 0;
+      left: 30%;
+      right: 30%;
+      height: 2px;
+    }
+  }
+  @media (width >= 64rem) {
+    .nav-item.active::before {
+      left: 0;
+      top: 20%;
+      bottom: 20%;
+      width: 3px;
+    }
+  }
+
+  .brand {
+    font-family: var(--font-initial);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--color-gold-light);
+    text-shadow:
+      0 1px 0 rgb(0 0 0 / 0.5),
+      0 0 14px rgb(228 195 115 / 0.35);
+  }
+
+  /* ------------------------------------------------------------ ตกแต่ง */
+
+  /* โล่ตราประจำตระกูล */
+  .shield {
+    display: grid;
+    place-items: center;
+    clip-path: polygon(0 0, 100% 0, 100% 58%, 50% 100%, 0 58%);
+    /* ตัวย่อ/รหัสโต๊ะในโล่ — Cinzel ทำให้เลข 1 ดูเหมือนตัว l จึงใช้ฟอนต์เนื้อหา */
+    font-family: var(--font-sans);
+    font-weight: 700;
+  }
+
+  /* ธงชายแฉก (ปลายธงผ่าเป็นหางนกนางแอ่น) */
+  .pennant {
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 14px), 0 100%);
+  }
+
+  /* ตราประทับครั่ง */
+  .wax-seal {
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: #f7d9b8;
+    background:
+      radial-gradient(circle at 35% 30%, #d0514a, var(--color-crimson) 45%, var(--color-crimson-deep) 100%);
+    box-shadow:
+      inset 0 0 0 5px rgb(0 0 0 / 0.12),
+      inset 0 0 0 7px rgb(255 200 180 / 0.12),
+      0 6px 16px -4px rgb(116 25 28 / 0.6);
+    font-family: var(--font-initial);
+    text-shadow: 0 -1px 0 rgb(0 0 0 / 0.35);
+  }
+
+  /* อักษรนำแบบหนังสือวิจิตร — ปกเกม */
+  .illuminated {
+    font-family: var(--font-initial);
+    color: var(--color-gold-light);
+    text-shadow:
+      0 1px 0 rgb(0 0 0 / 0.4),
+      0 0 18px rgb(228 195 115 / 0.4);
+  }
+
+  /* เปลวเทียน */
+  .flame {
+    display: inline-block;
+    width: 0.55em;
+    height: 0.8em;
+    border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+    background: radial-gradient(ellipse at 50% 75%, #fff6c9 0 18%, #ffc44d 40%, #e8741a 75%, transparent 76%);
+    filter: drop-shadow(0 0 4px rgb(255 170 60 / 0.9));
+    transform-origin: 50% 100%;
+    animation: var(--animate-flicker);
+  }
+
+  /* เหรียญลอยเข้าถุง (หน้าสั่งอาหารของลูกค้า) */
+  .coin-fly {
+    position: fixed;
+    z-index: 60;
+    width: 22px;
+    height: 22px;
+    margin: -11px 0 0 -11px;
+    border-radius: 50%;
+    pointer-events: none;
+    background: radial-gradient(circle at 35% 30%, #fff1b8, #e4c373 45%, #a87a22);
+    box-shadow:
+      inset 0 0 0 2px rgb(134 96 15 / 0.5),
+      0 2px 6px rgb(120 80 20 / 0.5);
+    animation: coin-fly 0.7s cubic-bezier(0.5, -0.4, 0.7, 1) forwards;
+  }
+
+  /* ตราประทับกลางจอตอนปิดบิล */
+  .seal-stamp {
+    animation: stamp 0.55s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  }
+
+  /* ลูกเต๋ากำลังทอย */
+  .dice-rolling {
+    animation: dice 0.45s linear infinite;
+  }
+
+  /* การ์ดที่ลูกเต๋าชี้อยู่ */
+  .fate {
+    box-shadow:
+      0 0 0 2px var(--color-gold),
+      0 0 24px -2px rgb(228 195 115 / 0.9) !important;
+    transform: translateY(-3px) scale(1.02);
+  }
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+@keyframes unroll {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scaleY(0.94);
+    transform-origin: top;
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes bump {
+  40% {
+    transform: scale(1.18);
+  }
+}
+@keyframes flicker {
+  0%,
+  100% {
+    transform: scale(1, 1) rotate(-2deg);
+    opacity: 1;
+  }
+  25% {
+    transform: scale(0.92, 1.08) rotate(2deg);
+  }
+  50% {
+    transform: scale(1.05, 0.94) rotate(-1deg);
+    opacity: 0.85;
+  }
+  75% {
+    transform: scale(0.96, 1.04) rotate(3deg);
+  }
+}
+@keyframes ring {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  15%,
+  45%,
+  75% {
+    transform: rotate(16deg);
+  }
+  30%,
+  60%,
+  90% {
+    transform: rotate(-16deg);
+  }
+}
+@keyframes ember-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgb(160 44 45 / 0.5),
+      0 0 0 0 rgb(160 44 45 / 0.35);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgb(160 44 45 / 0.8),
+      0 0 0 6px rgb(160 44 45 / 0);
+  }
+}
+@keyframes shake {
+  25% {
+    transform: translateX(-3px);
+  }
+  75% {
+    transform: translateX(3px);
+  }
+}
+@keyframes coin-fly {
+  to {
+    transform: translate(var(--dx), var(--dy)) scale(0.5) rotate(540deg);
+    opacity: 0.2;
+  }
+}
+@keyframes stamp {
+  from {
+    opacity: 0;
+    transform: scale(2.4) rotate(-25deg);
+  }
+  70% {
+    opacity: 1;
+  }
+}
+@keyframes dice {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  body {
+    background: white;
+  }
 }

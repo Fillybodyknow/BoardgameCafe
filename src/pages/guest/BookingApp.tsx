@@ -1,18 +1,21 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import { bookingDb } from '../../data'
-import type { AvailableTable, BookingLookup, BookingReceipt } from '../../domain/types'
-import { Badge, Button, Card, Empty } from '../../components/ui'
+import type { AvailableTable, BookingLookup, BookingReceipt, ShopHours } from '../../domain/types'
+import { Badge, Button, Card, Empty, Field, INPUT, Segmented } from '../../components/ui'
 import type { Tone } from '../../components/ui'
 
 const STATUS: Record<string, { label: string; tone: Tone; hint: string }> = {
-  pending: { label: 'รอร้านยืนยัน', tone: 'amber', hint: 'ร้านจะติดต่อกลับเพื่อยืนยัน' },
-  confirmed: { label: 'ยืนยันแล้ว', tone: 'emerald', hint: 'แล้วเจอกันที่ร้านนะครับ' },
-  seated: { label: 'เช็คอินแล้ว', tone: 'sky', hint: 'กำลังใช้บริการอยู่' },
-  cancelled: { label: 'ยกเลิกแล้ว', tone: 'slate', hint: '' },
-  no_show: { label: 'ไม่ได้มาตามนัด', tone: 'rose', hint: '' },
+  pending: { label: 'รอร้านยืนยัน', tone: 'ember', hint: 'ร้านจะติดต่อกลับเพื่อยืนยัน' },
+  confirmed: { label: 'ยืนยันแล้ว', tone: 'forest', hint: 'แล้วเจอกันที่ร้านนะครับ' },
+  seated: { label: 'เช็คอินแล้ว', tone: 'lapis', hint: 'กำลังใช้บริการอยู่' },
+  cancelled: { label: 'ยกเลิกแล้ว', tone: 'neutral', hint: '' },
+  no_show: { label: 'ไม่ได้มาตามนัด', tone: 'crimson', hint: '' },
 }
+
+/** แสดงวันให้กดเลือกล่วงหน้ากี่วัน — ไกลกว่านี้ใช้ช่องเลือกวันที่ */
+const QUICK_DAYS = 14
 
 /** แปลงเวลาไทยเป็น ISO โดยไม่พึ่ง timezone ของเครื่องลูกค้า (+07:00 ตายตัว) */
 function bangkokToISO(date: string, time: string): string {
@@ -22,6 +25,18 @@ function bangkokToISO(date: string, time: string): string {
 /** วันนี้ตามเวลาไทย ในรูปแบบ YYYY-MM-DD */
 function todayBangkok(): string {
   return new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10)
+}
+
+/** เลื่อนวันแบบ YYYY-MM-DD ไป n วัน */
+function addDays(date: string, n: number): string {
+  return new Date(new Date(`${date}T12:00:00+07:00`).getTime() + n * 86_400_000 + 7 * 3600_000)
+    .toISOString()
+    .slice(0, 10)
+}
+
+/** 0 = อาทิตย์ ตรงกับ shop_hours ฝั่งฐานข้อมูล */
+function weekdayOf(date: string): number {
+  return new Date(`${date}T12:00:00+07:00`).getUTCDay()
 }
 
 function fmtDateTime(iso: string): string {
@@ -37,28 +52,27 @@ export default function BookingApp() {
 
   return (
     <div className="mx-auto flex min-h-screen max-w-lg flex-col">
-      <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur">
-        <h1 className="text-xl font-bold">🎲 จองโต๊ะ</h1>
+      <header className="tapestry pennant px-5 pt-6 pb-12 text-center">
+        <div className="wax-seal mx-auto h-12 w-12 text-xl">⚜</div>
+        <h1 className="brand mt-3 text-2xl">⚜ จองโต๊ะ</h1>
         <ShopHoursLine />
-        <div className="mt-3 flex gap-1">
-          <Button
-            className="flex-1"
-            variant={mode === 'book' ? 'subtle' : 'ghost'}
-            onClick={() => setParams({})}
-          >
-            จองใหม่
-          </Button>
-          <Button
-            className="flex-1"
-            variant={mode === 'find' ? 'subtle' : 'ghost'}
-            onClick={() => setParams({ m: 'find' })}
-          >
-            ดูรายการที่จองไว้
-          </Button>
-        </div>
       </header>
 
-      <main className="flex-1 p-4">{mode === 'book' ? <BookForm /> : <FindBooking />}</main>
+      <div className="sticky top-0 z-30 -mt-5 px-4 pb-3">
+        <Segmented
+          className="w-full shadow-lg"
+          value={mode}
+          onChange={(m) => setParams(m === 'find' ? { m: 'find' } : {})}
+          options={[
+            { value: 'book', label: 'จองใหม่' },
+            { value: 'find', label: 'ดูรายการที่จองไว้' },
+          ]}
+        />
+      </div>
+
+      <main key={mode} className="flex-1 animate-page px-4 pb-10">
+        {mode === 'book' ? <BookForm /> : <FindBooking />}
+      </main>
     </div>
   )
 }
@@ -74,11 +88,25 @@ function ShopHoursLine() {
     open.every((h) => h.openTime === open[0]!.openTime && h.closeTime === open[0]!.closeTime)
 
   return (
-    <p className="mt-0.5 text-xs text-slate-500">
+    <p className="mt-1 text-xs text-[#f3e6c8]/70">
       {same
         ? `เปิด ${open[0]!.openTime} – ${open[0]!.closeTime} ทุกวัน`
         : 'เวลาทำการต่างกันในแต่ละวัน — เลือกวันแล้วดูช่วงเวลาที่จองได้'}
     </p>
+  )
+}
+
+/** หัวข้อแต่ละขั้นของฟอร์ม — เลขโรมันในตรา */
+function Step({ n, title, aside, children }: { n: string; title: string; aside?: ReactNode; children: ReactNode }) {
+  return (
+    <section>
+      <div className="mb-3 flex items-center gap-3">
+        <span className="wax-seal h-8 w-8 shrink-0 text-xs">{n}</span>
+        <h2 className="flex-1 font-display text-base font-bold">{title}</h2>
+        {aside}
+      </div>
+      {children}
+    </section>
   )
 }
 
@@ -115,11 +143,23 @@ function BookForm() {
     return new Date(Date.now() + (days * 24 + 7) * 3600_000).toISOString().slice(0, 10)
   }, [cfg.data])
 
-  /** เวลาทำการของวันที่เลือก — 0 = อาทิตย์ ตรงกับ shop_hours ฝั่งฐานข้อมูล */
-  const today = useMemo(() => {
-    const weekday = new Date(`${date}T12:00:00+07:00`).getUTCDay()
-    return hours.data?.find((h) => h.weekday === weekday)
-  }, [hours.data, date])
+  /** วันที่ให้กดเลือกเร็ว ๆ — ไม่เกินเพดานจองล่วงหน้าของร้าน */
+  const quickDays = useMemo(() => {
+    const out: string[] = []
+    const first = todayBangkok()
+    for (let i = 0; i < QUICK_DAYS; i++) {
+      const d = addDays(first, i)
+      if (d > maxDate) break
+      out.push(d)
+    }
+    return out
+  }, [maxDate])
+
+  const hoursOf = (d: string): ShopHours | undefined =>
+    hours.data?.find((h) => h.weekday === weekdayOf(d))
+
+  /** เวลาทำการของวันที่เลือก */
+  const today = useMemo(() => hoursOf(date), [hours.data, date])
 
   const slots = useMemo(() => {
     if (!today || today.closed) return []
@@ -167,139 +207,200 @@ function BookForm() {
     }
   }
 
+  const ready = picked.length > 0 && name.trim() && phone.trim() && seats >= party && slots.length > 0
+
   return (
-    <div className="space-y-4">
-      <Card className="space-y-3">
-        <div className="grid grid-cols-2 gap-2">
-          <Field label="วันที่">
-            <input
-              type="date"
-              value={date}
-              min={todayBangkok()}
-              max={maxDate}
-              onChange={(e) => setDate(e.target.value)}
-              className={inputClass}
-            />
-          </Field>
-          <Field label="เวลา">
-            <select value={time} onChange={(e) => setTime(e.target.value)} className={inputClass}>
-              {slots.map((s) => (
-                <option key={s} value={s}>
-                  {s} น.
-                </option>
-              ))}
-            </select>
-          </Field>
-        </div>
+    <div className="space-y-8">
+      <Step n="I" title="วันและเวลา">
+        <Card className="space-y-4">
+          <div>
+            <div className="mb-2 text-xs font-medium text-ink-soft">วันที่</div>
+            <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+              {quickDays.map((d) => {
+                const closed = hoursOf(d)?.closed
+                const dt = new Date(`${d}T12:00:00+07:00`)
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    aria-pressed={date === d}
+                    disabled={closed}
+                    onClick={() => setDate(d)}
+                    className="pick flex w-14 shrink-0 flex-col items-center py-2"
+                  >
+                    <span className="text-[0.65rem] text-ink-faint">
+                      {dt.toLocaleDateString('th-TH', { weekday: 'short', timeZone: 'Asia/Bangkok' })}
+                    </span>
+                    <span className="tabular text-lg leading-tight font-bold">
+                      {dt.toLocaleDateString('th-TH', { day: 'numeric', timeZone: 'Asia/Bangkok' })}
+                    </span>
+                    <span className="text-[0.6rem] text-ink-faint">
+                      {closed ? 'ปิด' : dt.toLocaleDateString('th-TH', { month: 'short', timeZone: 'Asia/Bangkok' })}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+            <label className="mt-2 flex items-center gap-2 text-xs text-ink-faint">
+              หรือเลือกวันอื่น
+              <input
+                type="date"
+                value={date}
+                min={todayBangkok()}
+                max={maxDate}
+                onChange={(e) => e.target.value && setDate(e.target.value)}
+                className={`${INPUT} !w-auto !py-1 !text-xs`}
+              />
+            </label>
+          </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <Field label="เล่นกี่ชั่วโมง">
-            <select
-              value={duration}
-              onChange={(e) => setDuration(Number(e.target.value))}
-              className={inputClass}
-            >
-              {[60, 90, 120, 180, 240, 300].map((m) => (
-                <option key={m} value={m}>
-                  {m / 60} ชม.
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="กี่คน">
-            <input
-              type="number"
-              min={1}
-              max={20}
-              value={party}
-              onChange={(e) => setParty(Math.max(1, Number(e.target.value) || 1))}
-              className={inputClass}
-            />
-          </Field>
-        </div>
-      </Card>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="เล่นกี่ชั่วโมง">
+              <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} className={INPUT}>
+                {[60, 90, 120, 180, 240, 300].map((m) => (
+                  <option key={m} value={m}>
+                    {m / 60} ชม.
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <div>
+              <span className="text-xs font-medium tracking-wide text-ink-soft">กี่คน</span>
+              <div className="mt-1 flex items-center justify-between rounded-lg border border-line-strong bg-[#fffdf7] p-1">
+                <button
+                  type="button"
+                  aria-label="ลดจำนวนคน"
+                  onClick={() => setParty((p) => Math.max(1, p - 1))}
+                  className="grid h-8 w-8 place-items-center rounded-md text-lg text-ink-soft hover:bg-parchment-deep"
+                >
+                  −
+                </button>
+                <span key={party} className="tabular animate-bump font-bold">
+                  {party} คน
+                </span>
+                <button
+                  type="button"
+                  aria-label="เพิ่มจำนวนคน"
+                  onClick={() => setParty((p) => Math.min(20, p + 1))}
+                  className="grid h-8 w-8 place-items-center rounded-md text-lg text-gold-deep hover:bg-parchment-deep"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          </div>
 
-      {today?.closed && (
-        <Card className="border-rose-800/60 bg-rose-950/20 text-sm text-rose-300">
-          วันที่เลือกร้านปิด ลองเลือกวันอื่นครับ
-        </Card>
-      )}
-
-      {!today?.closed && slots.length === 0 && (
-        <Card className="border-amber-800/60 bg-amber-950/20 text-sm text-amber-300">
-          ระยะเวลาที่เลือกยาวเกินกว่าเวลาทำการของวันนี้ ({today?.openTime}–{today?.closeTime})
-          ลองลดจำนวนชั่วโมงลง
-        </Card>
-      )}
-
-      <div>
-        <div className="mb-2 flex items-baseline justify-between">
-          <h2 className="text-sm font-semibold text-slate-400">เลือกโต๊ะ</h2>
-          {picked.length > 0 && (
-            <span className={`text-xs ${seats >= party ? 'text-slate-500' : 'text-rose-400'}`}>
-              เลือกแล้ว {picked.length} โต๊ะ · นั่งได้ {seats} คน
-            </span>
+          {slots.length > 0 && (
+            <div>
+              <div className="mb-2 text-xs font-medium text-ink-soft">เวลาเริ่ม</div>
+              <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5">
+                {slots.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    aria-pressed={time === s}
+                    onClick={() => setTime(s)}
+                    className="chip tabular !px-0 text-center"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
-        </div>
+        </Card>
 
+        {today?.closed && (
+          <Card className="mt-3 !border-crimson/40 !bg-crimson/5 text-sm text-crimson-deep">
+            วันที่เลือกร้านปิด ลองเลือกวันอื่นครับ
+          </Card>
+        )}
+
+        {!today?.closed && slots.length === 0 && (
+          <Card className="mt-3 !border-ember/40 !bg-ember/5 text-sm text-ember-deep">
+            ระยะเวลาที่เลือกยาวเกินกว่าเวลาทำการของวันนี้ ({today?.openTime}–{today?.closeTime})
+            ลองลดจำนวนชั่วโมงลง
+          </Card>
+        )}
+      </Step>
+
+      <Step
+        n="II"
+        title="เลือกโต๊ะ"
+        aside={
+          picked.length > 0 && (
+            <span className={`text-xs ${seats >= party ? 'text-forest-deep' : 'text-crimson'}`}>
+              {picked.length} โต๊ะ · นั่งได้ {seats} คน
+            </span>
+          )
+        }
+      >
         {tables.isPending ? (
-          <Empty>กำลังเช็คโต๊ะว่าง…</Empty>
+          <Empty icon="⏳">กำลังเช็คโต๊ะว่าง…</Empty>
         ) : (
           <TablePicker
             tables={tables.data ?? []}
             picked={picked}
-            onToggle={(id) =>
-              setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
-            }
+            onToggle={(id) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))}
           />
         )}
+      </Step>
+
+      <Step n="III" title="ข้อมูลผู้จอง">
+        <Card className="space-y-3">
+          <Field label="ชื่อผู้จอง">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="ชื่อ-นามสกุล หรือชื่อเล่น"
+              className={INPUT}
+            />
+          </Field>
+          <Field label="เบอร์โทร">
+            <input
+              inputMode="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="08x-xxx-xxxx"
+              className={INPUT}
+            />
+          </Field>
+          <Field label="หมายเหตุ (ถ้ามี)">
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="เช่น มีเด็กเล็ก / ขอโต๊ะเงียบ"
+              className={INPUT}
+            />
+          </Field>
+        </Card>
+      </Step>
+
+      <div>
+        {/* สรุปก่อนส่ง */}
+        <div className="panel mb-3 rounded-xl px-4 py-3 text-sm">
+          <div className="flex justify-between gap-3">
+            <span className="text-ink-faint">นัดหมาย</span>
+            <span className="tabular text-right font-medium">
+              {slots.length > 0 ? fmtDateTime(startAt) : '—'} · {duration / 60} ชม.
+            </span>
+          </div>
+          <div className="mt-1 flex justify-between gap-3">
+            <span className="text-ink-faint">ผู้ร่วมโต๊ะ</span>
+            <span className="font-medium">{party} คน</span>
+          </div>
+        </div>
+
+        {error && <p className="mb-2 animate-shake text-sm text-crimson">{error}</p>}
+
+        <Button variant="primary" className="w-full !py-3 !text-base" disabled={busy || !ready} onClick={submit}>
+          {busy ? 'กำลังส่งคำขอ…' : 'ส่งคำขอจอง'}
+        </Button>
+
+        <p className="mt-3 text-center text-xs text-ink-faint">
+          ส่งแล้วรอร้านยืนยันอีกครั้ง คุณจะได้รหัสจองไว้เปิดดูและยกเลิกเอง
+        </p>
       </div>
-
-      <Card className="space-y-2">
-        <Field label="ชื่อผู้จอง">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="ชื่อ-นามสกุล หรือชื่อเล่น"
-            className={inputClass}
-          />
-        </Field>
-        <Field label="เบอร์โทร">
-          <input
-            inputMode="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="08x-xxx-xxxx"
-            className={inputClass}
-          />
-        </Field>
-        <Field label="หมายเหตุ (ถ้ามี)">
-          <input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder="เช่น มีเด็กเล็ก / ขอโต๊ะเงียบ"
-            className={inputClass}
-          />
-        </Field>
-      </Card>
-
-      {error && <p className="text-sm text-rose-400">{error}</p>}
-
-      <Button
-        variant="primary"
-        className="w-full !py-3"
-        disabled={
-          busy || picked.length === 0 || !name.trim() || !phone.trim() ||
-          seats < party || slots.length === 0
-        }
-        onClick={submit}
-      >
-        {busy ? 'กำลังส่งคำขอ…' : 'ส่งคำขอจอง'}
-      </Button>
-
-      <p className="text-center text-xs text-slate-500">
-        ส่งแล้วรอร้านยืนยันอีกครั้ง คุณจะได้รหัสจองไว้เปิดดูและยกเลิกเอง
-      </p>
     </div>
   )
 }
@@ -324,35 +425,36 @@ function TablePicker({
   }, [tables])
 
   if (tables.every((t) => !t.available)) {
-    return <Empty>ช่วงเวลานี้เต็มหมดแล้ว ลองเปลี่ยนเวลาดูครับ</Empty>
+    return <Empty icon="🏰">ช่วงเวลานี้เต็มหมดแล้ว ลองเปลี่ยนเวลาดูครับ</Empty>
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {zones.map(([zone, list]) => (
         <div key={zone}>
-          <h3 className="mb-1 text-xs text-slate-500">{zone}</h3>
+          <h3 className="mb-1.5 font-sans text-xs font-medium text-ink-faint">{zone}</h3>
           <div className="grid grid-cols-3 gap-2">
             {list.map((t) => {
               const on = picked.includes(t.id)
               return (
                 <button
                   key={t.id}
+                  type="button"
+                  aria-pressed={on}
                   disabled={!t.available}
                   onClick={() => onToggle(t.id)}
-                  className={`rounded-lg border p-2 text-left transition ${
-                    !t.available
-                      ? 'cursor-not-allowed border-slate-800 bg-slate-900/40 opacity-40'
-                      : on
-                        ? 'border-emerald-500 bg-emerald-950/40'
-                        : 'border-slate-700 hover:border-slate-500'
-                  }`}
+                  className="pick relative p-3 text-left"
                 >
-                  <div className="font-bold">{t.code}</div>
-                  <div className="text-xs text-slate-500">
+                  <div className="text-lg tracking-wide font-bold">{t.code}</div>
+                  <div className="text-xs text-ink-faint">
                     {t.seatMin}–{t.seatMax} ที่
                   </div>
-                  {!t.available && <div className="text-xs text-rose-400">ไม่ว่าง</div>}
+                  {!t.available && <div className="text-xs text-crimson">ไม่ว่าง</div>}
+                  {on && (
+                    <span className="wax-seal seal-stamp absolute top-2 right-2 h-5 w-5 text-[0.55rem]" aria-hidden>
+                      ✓
+                    </span>
+                  )}
                 </button>
               )
             })}
@@ -366,29 +468,25 @@ function TablePicker({
 function Receipt({ receipt }: { receipt: BookingReceipt }) {
   const st = STATUS[receipt.status]
   return (
-    <div className="space-y-4 text-center">
-      <p className="text-5xl">📋</p>
-      <h2 className="text-lg font-bold">ส่งคำขอจองแล้ว</h2>
+    <div className="space-y-5 pt-4 text-center">
+      <div className="wax-seal seal-stamp mx-auto h-24 w-24 text-4xl">⚜</div>
+      <h2 className="text-xl font-bold">ส่งคำขอจองแล้ว</h2>
 
-      <Card>
-        <p className="text-sm text-slate-400">รหัสจองของคุณ</p>
-        <p className="tabular my-2 text-4xl font-bold tracking-[0.3em] text-emerald-400">
-          {receipt.code}
-        </p>
-        <p className="text-xs text-slate-500">
-          จดไว้ให้ดี ใช้คู่กับเบอร์โทรเพื่อเปิดดูหรือยกเลิกรายการ
-        </p>
+      <Card ornate>
+        <p className="text-sm text-ink-soft">รหัสจองของคุณ</p>
+        <p className="tabular my-3 text-4xl font-bold tracking-[0.3em] text-gold-deep">{receipt.code}</p>
+        <p className="text-xs text-ink-faint">จดไว้ให้ดี ใช้คู่กับเบอร์โทรเพื่อเปิดดูหรือยกเลิกรายการ</p>
       </Card>
 
-      <Card className="space-y-1 text-left text-sm">
+      <Card className="space-y-1.5 text-left text-sm">
         <Row label="สถานะ" value={st?.label ?? receipt.status} />
         <Row label="เวลา" value={fmtDateTime(receipt.startAt)} />
         <Row label="ระยะเวลา" value={`${receipt.durationMinutes / 60} ชม.`} />
         <Row label="โต๊ะ" value={receipt.tables.join(', ')} />
       </Card>
 
-      <p className="text-sm text-amber-400">{st?.hint}</p>
-      <Link to="/book?m=find" className="inline-block text-sm text-slate-400 underline">
+      <p className="text-sm text-ember-deep">{st?.hint}</p>
+      <Link to="/book?m=find" className="inline-block text-sm text-ink-soft underline underline-offset-2">
         ไปหน้าดูรายการที่จองไว้
       </Link>
     </div>
@@ -418,15 +516,16 @@ function FindBooking() {
   const canCancel = result && (result.status === 'pending' || result.status === 'confirmed')
 
   return (
-    <div className="space-y-4">
-      <Card className="space-y-2">
+    <div className="space-y-4 pt-2">
+      <Card ornate className="space-y-3">
+        <p className="text-center text-sm text-ink-soft">กรอกรหัสจองและเบอร์โทรที่ใช้ตอนจอง</p>
         <Field label="รหัสจอง">
           <input
             value={code}
             onChange={(e) => setCode(e.target.value.toUpperCase())}
             placeholder="เช่น K7M2XQ"
             maxLength={6}
-            className={`${inputClass} tabular text-center text-lg tracking-[0.3em]`}
+            className={`${INPUT} tabular !py-3 text-center !text-xl tracking-[0.35em]`}
           />
         </Field>
         <Field label="เบอร์โทรที่ใช้จอง">
@@ -435,12 +534,12 @@ function FindBooking() {
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="08x-xxx-xxxx"
-            className={inputClass}
+            className={INPUT}
           />
         </Field>
         <Button
           variant="primary"
-          className="w-full"
+          className="w-full !py-2.5"
           disabled={busy || code.length < 6 || !phone.trim()}
           onClick={() => run(async () => setResult(await bookingDb.lookup(code, phone)))}
         >
@@ -448,15 +547,15 @@ function FindBooking() {
         </Button>
       </Card>
 
-      {error && <p className="text-sm text-rose-400">{error}</p>}
+      {error && <p className="animate-shake text-center text-sm text-crimson">{error}</p>}
 
       {result && (
-        <Card className="space-y-2">
+        <Card className="animate-unroll space-y-3">
           <div className="flex items-center justify-between">
-            <span className="font-semibold">{result.customerName}</span>
-            <Badge tone={st?.tone ?? 'slate'}>{st?.label ?? result.status}</Badge>
+            <span className="font-display text-lg font-semibold">{result.customerName}</span>
+            <Badge tone={st?.tone ?? 'neutral'}>{st?.label ?? result.status}</Badge>
           </div>
-          <div className="space-y-1 text-sm">
+          <div className="space-y-1.5 border-t border-dashed border-line pt-3 text-sm">
             <Row label="เวลา" value={fmtDateTime(result.startAt)} />
             <Row label="ระยะเวลา" value={`${result.durationMinutes / 60} ชม.`} />
             <Row label="จำนวน" value={`${result.partySize} คน`} />
@@ -467,7 +566,7 @@ function FindBooking() {
           {canCancel && (
             <Button
               variant="danger"
-              className="mt-2 w-full"
+              className="w-full"
               disabled={busy}
               onClick={() =>
                 run(async () => {
@@ -486,22 +585,10 @@ function FindBooking() {
   )
 }
 
-const inputClass =
-  'w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-emerald-600'
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="text-xs text-slate-400">{label}</span>
-      <div className="mt-1">{children}</div>
-    </label>
-  )
-}
-
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-3">
-      <span className="text-slate-500">{label}</span>
+      <span className="text-ink-faint">{label}</span>
       <span className="text-right">{value}</span>
     </div>
   )
