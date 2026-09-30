@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { guestDb } from '../../data'
+import { guestDb, menuImageUrl } from '../../data'
 import { formatBaht } from '../../domain/pricing'
 import type { GuestOrder, MenuItem, OrderStatus } from '../../domain/types'
 import { Badge, Button, Card, Empty } from '../../components/ui'
@@ -193,15 +193,25 @@ export default function GuestApp() {
                             item.available ? '' : 'opacity-40'
                           }`}
                         >
-                          <div className="min-w-0">
-                            <div className="truncate">
-                              {item.name}
-                              {!item.available && (
-                                <span className="ml-2 text-xs text-rose-400">ของหมด</span>
-                              )}
-                            </div>
-                            <div className="tabular text-sm text-slate-500">
-                              ฿{formatBaht(item.price)}
+                          <div className="flex min-w-0 items-center gap-3">
+                            {menuImageUrl(item.imagePath) && (
+                              <img
+                                src={menuImageUrl(item.imagePath)!}
+                                alt=""
+                                loading="lazy"
+                                className="h-14 w-14 shrink-0 rounded-lg object-cover"
+                              />
+                            )}
+                            <div className="min-w-0">
+                              <div className="truncate">
+                                {item.name}
+                                {!item.available && (
+                                  <span className="ml-2 text-xs text-rose-400">ของหมด</span>
+                                )}
+                              </div>
+                              <div className="tabular text-sm text-slate-500">
+                                ฿{formatBaht(item.price)}
+                              </div>
                             </div>
                           </div>
                           <div className="flex shrink-0 items-center gap-1">

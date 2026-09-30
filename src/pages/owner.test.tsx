@@ -158,6 +158,26 @@ describe('ตั้งค่าร้าน (ระดับ adapter)', () => {
     ).rejects.toThrow(/0 ถึง 1/)
   })
 
+  it('ผูกรูปกับเมนูแล้วเห็นทั้งหน้าตั้งค่าและหน้าร้าน', async () => {
+    const item = (await mockAdminAdapter.allMenuItems())[0]!
+    const dataUrl = 'data:image/jpeg;base64,AAAA'
+
+    await mockAdminAdapter.uploadMenuImage(item.id, {
+      blob: new Blob(['x'], { type: 'image/jpeg' }),
+      dataUrl,
+    })
+
+    expect((await mockAdminAdapter.allMenuItems()).find((m) => m.id === item.id)!.imagePath)
+      .toBe(dataUrl)
+    // หน้าร้าน (snapshot) ต้องเห็นด้วย ไม่ใช่เห็นแค่หน้าตั้งค่า
+    const snap = await mockAdapter.getSnapshot()
+    expect(snap.menu.find((m) => m.id === item.id)!.imagePath).toBe(dataUrl)
+
+    await mockAdminAdapter.removeMenuImage(item.id)
+    expect((await mockAdminAdapter.allMenuItems()).find((m) => m.id === item.id)!.imagePath)
+      .toBe(null)
+  })
+
   it('บันทึกเวลาทำการแล้วอ่านกลับได้', async () => {
     await mockAdminAdapter.saveShopHours({
       weekday: 2, openTime: '12:00', closeTime: '22:00', closed: false,

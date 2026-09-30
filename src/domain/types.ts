@@ -104,6 +104,12 @@ export interface MenuItem {
   sortOrder?: number
   /** เก็บเข้ากรุ — ไม่ลบจริงเพราะ order_lines อ้างถึงอยู่ */
   archived?: boolean
+  /**
+   * path ในถัง menu-images เช่น "menu/abc123.jpg"
+   * เก็บ path ไม่ใช่ URL เต็ม เพราะโดเมนของโปรเจกต์เปลี่ยนได้
+   * (โหมดเดโมเก็บเป็น data URL ตรง ๆ)
+   */
+  imagePath?: string | null
 }
 
 export type OrderStatus =

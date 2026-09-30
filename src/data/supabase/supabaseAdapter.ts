@@ -283,6 +283,7 @@ function toMenuItem(r: Record<string, any>): MenuItem {
     id: r.id, sku: r.sku, name: r.name, category: r.category,
     price: Number(r.price), available: r.available,
     sortOrder: r.sort_order, archived: r.archived ?? false,
+    imagePath: r.image_path ?? null,
   }
 }
 

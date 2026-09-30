@@ -28,6 +28,20 @@ export const bookingDb: BookingPort = hasSupabase ? supabaseBookingAdapter : moc
 /** ตั้งค่าร้าน — ระดับผู้จัดการขึ้นไป */
 export const adminDb: AdminPort = hasSupabase ? supabaseAdminAdapter : mockAdminAdapter
 
+/**
+ * แปลง path ที่เก็บในฐานข้อมูลเป็น URL ที่เปิดได้จริง
+ *
+ * โหมดเดโมเก็บ data URL ไว้ตรง ๆ จึงคืนค่าเดิมกลับไป
+ * โหมดจริงประกอบ URL จากโดเมนของโปรเจกต์ ณ ตอนนั้น — เหตุผลที่ฐานข้อมูล
+ * เก็บแค่ path ไม่ใช่ URL เต็ม
+ */
+export function menuImageUrl(path?: string | null): string | null {
+  if (!path) return null
+  if (path.startsWith('data:')) return path
+  const base = import.meta.env.VITE_SUPABASE_URL as string | undefined
+  return base ? `${base}/storage/v1/object/public/menu-images/${path}` : null
+}
+
 export { mockAdapter }
 export { hasSupabase, supabase } from './supabase/client'
 export type { AdminPort, BookingPort, DataPort, GuestPort, Snapshot } from './port'

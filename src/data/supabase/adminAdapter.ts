@@ -4,6 +4,8 @@ import type {
 } from '../../domain/types'
 import { requireClient } from './client'
 
+export const BUCKET = 'menu-images'
+
 /**
  * ตั้งค่าร้าน — ทุกการเขียนผ่าน RPC ที่เรียก assert_manager() ฝั่งฐานข้อมูล
  * หน้าจอที่ซ่อนเมนูไว้ไม่ใช่การป้องกัน เป็นแค่ความสะดวก
@@ -32,6 +34,7 @@ export const supabaseAdminAdapter: AdminPort = {
       id: r.id, sku: r.sku, name: r.name, category: r.category,
       price: Number(r.price), available: r.available,
       sortOrder: r.sort_order, archived: r.archived,
+      imagePath: r.image_path ?? null,
     })) as MenuItem[]
   },
 
@@ -92,6 +95,41 @@ export const supabaseAdminAdapter: AdminPort = {
 
   async archiveMenuItem(id, archived) {
     await rpc('archive_menu_item', { p_id: id, p_archived: archived })
+  },
+
+  /**
+   * อัปโหลดไฟล์ก่อน แล้วค่อยผูกกับเมนู
+   *
+   * ลำดับนี้สำคัญ: ถ้าผูกก่อนแล้วอัปโหลดพัง เมนูจะชี้ไปไฟล์ที่ไม่มีอยู่จริง
+   * ทำแบบนี้แย่ที่สุดคือมีไฟล์ค้างที่ไม่มีใครอ้างถึง ซึ่งไม่กระทบการใช้งาน
+   */
+  async uploadMenuImage(id, image) {
+    const sb = requireClient()
+    const path = `menu/${crypto.randomUUID()}.jpg`
+
+    const { error: upErr } = await sb.storage
+      .from(BUCKET)
+      .upload(path, image.blob, { contentType: 'image/jpeg', upsert: false })
+    if (upErr) throw new Error(upErr.message)
+
+    let old: string | null = null
+    try {
+      old = await rpc<string | null>('set_menu_image', { p_id: id, p_path: path })
+    } catch (e) {
+      // ผูกไม่สำเร็จ — เก็บไฟล์ที่เพิ่งอัปทิ้ง ไม่ให้ค้างเป็นขยะ
+      await sb.storage.from(BUCKET).remove([path])
+      throw e
+    }
+
+    if (old && old !== path) {
+      // ลบรูปเก่าแบบ best-effort ถ้าลบไม่ได้ก็แค่ไฟล์ค้าง ไม่ทำให้อะไรพัง
+      await sb.storage.from(BUCKET).remove([old])
+    }
+  },
+
+  async removeMenuImage(id) {
+    const old = await rpc<string | null>('set_menu_image', { p_id: id, p_path: null })
+    if (old) await requireClient().storage.from(BUCKET).remove([old])
   },
 
   async saveTable(input) {

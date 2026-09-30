@@ -131,6 +131,9 @@ export interface AdminPort {
   }): Promise<void>
   /** ไม่ลบจริง เพราะใบเสร็จเก่าอ้างถึงอยู่ */
   archiveMenuItem(id: ID, archived: boolean): Promise<void>
+  /** อัปโหลดรูปที่ย่อแล้ว และเก็บกวาดไฟล์เดิมให้ด้วย */
+  uploadMenuImage(id: ID, image: { blob: Blob; dataUrl: string }): Promise<void>
+  removeMenuImage(id: ID): Promise<void>
 
   saveTable(input: {
     id: ID | null

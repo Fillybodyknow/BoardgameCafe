@@ -609,6 +609,13 @@ class MockAdapter implements DataPort {
     this.commit()
   }
 
+  setMenuImage(id: ID, path: string | null) {
+    const item = this.state.menu.find((m) => m.id === id)
+    if (!item) throw new Error('ไม่พบเมนู')
+    item.imagePath = path
+    this.commit()
+  }
+
   archiveMenuItem(id: ID, archived: boolean) {
     const item = this.state.menu.find((m) => m.id === id)
     if (!item) throw new Error('ไม่พบเมนู')

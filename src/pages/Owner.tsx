@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { adminDb } from '../data'
+import { adminDb, menuImageUrl } from '../data'
+import { formatBytes, resizeToJpeg } from '../lib/image'
 import { SNAPSHOT_KEY } from '../hooks/useData'
 import { formatBaht } from '../domain/pricing'
 import type { MenuCategory, ShopHours, TaxConfig } from '../domain/types'
@@ -139,7 +140,9 @@ function MenuTab() {
 
       {active.map((m) => (
         <Card key={m.id} className="flex flex-wrap items-center justify-between gap-2">
-          <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-3">
+            <Thumb path={m.imagePath} alt={m.name} />
+            <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="font-semibold">{m.name}</span>
               <Badge tone="slate">{m.sku}</Badge>
@@ -147,6 +150,7 @@ function MenuTab() {
             </div>
             <div className="tabular mt-0.5 text-sm text-slate-400">
               {CATEGORY_LABEL[m.category]} · ฿{formatBaht(m.price)}
+            </div>
             </div>
           </div>
           <div className="flex gap-1">
@@ -253,6 +257,17 @@ function MenuTab() {
             มีขายอยู่ (ติ๊กออกถ้าของหมดวันนี้)
           </label>
 
+          {draft.id ? (
+            <ImageField
+              itemId={draft.id}
+              path={(items.data ?? []).find((m) => m.id === draft.id)?.imagePath ?? null}
+            />
+          ) : (
+            <p className="mt-3 rounded-lg bg-slate-800/60 p-2 text-xs text-slate-400">
+              บันทึกเมนูก่อน แล้วเปิดกลับมาแก้เพื่อใส่รูป
+            </p>
+          )}
+
           <Err error={save.error} />
           <DialogActions
             busy={save.isPending}
@@ -261,6 +276,108 @@ function MenuTab() {
           />
         </Dialog>
       )}
+    </div>
+  )
+}
+
+/** รูปย่อในรายการ — โหลดแบบ lazy เพื่อไม่ให้ดึงรูปทุกใบพร้อมกัน */
+function Thumb({ path, alt }: { path?: string | null; alt: string }) {
+  const url = menuImageUrl(path)
+  if (!url) {
+    return (
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-slate-800 text-slate-600">
+        🍽
+      </div>
+    )
+  }
+  return (
+    <img
+      src={url}
+      alt={alt}
+      loading="lazy"
+      className="h-12 w-12 shrink-0 rounded-lg object-cover"
+    />
+  )
+}
+
+/**
+ * อัปโหลดรูปเมนู
+ *
+ * ย่อรูปในเบราว์เซอร์ก่อนส่งเสมอ รูปจากมือถือใบละหลายเมกะไบต์ ถ้าส่งดิบ ๆ
+ * ลูกค้าที่เปิดเมนูจะโหลดหนักและกินโควตา egress เร็วมาก
+ */
+function ImageField({ itemId, path }: { itemId: string; path: string | null }) {
+  const qc = useQueryClient()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
+
+  async function pick(file: File | undefined) {
+    if (!file) return
+    setBusy(true)
+    setError(null)
+    setInfo(null)
+    try {
+      const resized = await resizeToJpeg(file)
+      await adminDb.uploadMenuImage(itemId, resized)
+      setInfo(`ย่อจาก ${formatBytes(file.size)} เหลือ ${formatBytes(resized.blob.size)}`)
+      void qc.invalidateQueries({ queryKey: ['admin', 'menu'] })
+      void qc.invalidateQueries({ queryKey: SNAPSHOT_KEY })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'อัปโหลดไม่สำเร็จ')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function remove() {
+    setBusy(true)
+    setError(null)
+    try {
+      await adminDb.removeMenuImage(itemId)
+      void qc.invalidateQueries({ queryKey: ['admin', 'menu'] })
+      void qc.invalidateQueries({ queryKey: SNAPSHOT_KEY })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'ลบรูปไม่สำเร็จ')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const url = menuImageUrl(path)
+
+  return (
+    <div className="mt-3 rounded-lg border border-slate-800 p-3">
+      <div className="text-xs text-slate-400">รูปประกอบ</div>
+      <div className="mt-2 flex items-center gap-3">
+        {url ? (
+          <img src={url} alt="" className="h-20 w-20 rounded-lg object-cover" />
+        ) : (
+          <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-slate-800 text-2xl text-slate-600">
+            🍽
+          </div>
+        )}
+        <div className="min-w-0 flex-1 space-y-1">
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            disabled={busy}
+            onChange={(e) => void pick(e.target.files?.[0])}
+            className="block w-full text-xs text-slate-400 file:mr-2 file:rounded-lg file:border-0 file:bg-slate-800 file:px-3 file:py-1.5 file:text-slate-200"
+          />
+          {url && (
+            <Button variant="danger" disabled={busy} onClick={remove}>
+              ลบรูป
+            </Button>
+          )}
+        </div>
+      </div>
+      {busy && <p className="mt-2 text-xs text-slate-500">กำลังย่อและอัปโหลด…</p>}
+      {info && <p className="mt-2 text-xs text-emerald-400">{info}</p>}
+      {error && <p className="mt-2 text-sm text-rose-400">{error}</p>}
+      <p className="mt-2 text-xs text-slate-500">
+        ย่อให้เหลือกว้างสุด 800px อัตโนมัติ — ถ่ายจากมือถือได้เลย
+      </p>
     </div>
   )
 }

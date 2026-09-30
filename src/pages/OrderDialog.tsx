@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useSnapshot } from '../hooks/useData'
-import { db } from '../data'
+import { db, menuImageUrl } from '../data'
 import { formatBaht } from '../domain/pricing'
 import type { GuestPass, MenuItem } from '../domain/types'
 import { Button } from '../components/ui'
@@ -126,12 +126,22 @@ export default function OrderDialog({
                         item.available ? '' : 'opacity-40'
                       }`}
                     >
-                      <div className="min-w-0">
+                      <div className="flex min-w-0 items-center gap-2">
+                        {menuImageUrl(item.imagePath) && (
+                          <img
+                            src={menuImageUrl(item.imagePath)!}
+                            alt=""
+                            loading="lazy"
+                            className="h-10 w-10 shrink-0 rounded-lg object-cover"
+                          />
+                        )}
+                        <div className="min-w-0">
                         <div className="truncate text-sm">
                           {item.name}
                           {!item.available && <span className="ml-2 text-xs text-rose-400">ของหมด</span>}
                         </div>
                         <div className="tabular text-xs text-slate-500">฿{formatBaht(item.price)}</div>
+                        </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
                         <Button
