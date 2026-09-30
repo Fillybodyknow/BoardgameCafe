@@ -4,7 +4,12 @@
 
 **Demo:** https://fillybodyknow.github.io/BoardgameCafe/
 
-> ⚠️ ตอนนี้อยู่ใน **โหมดเดโม** — ข้อมูลเก็บใน `localStorage` ของเบราว์เซอร์ ยังไม่ได้ต่อฐานข้อมูลจริง
+แอปทำงานได้ 2 โหมด สลับอัตโนมัติตามตัวแปรแวดล้อม:
+
+- **โหมดเดโม** (ไม่ตั้งค่าอะไร) — ข้อมูลอยู่ใน `localStorage` เปิดดูได้เลยไม่ต้องล็อกอิน
+- **โหมดจริง** (ตั้ง `VITE_SUPABASE_*`) — Supabase + ล็อกอินพนักงาน + realtime
+
+ตั้งค่าโหมดจริง: [supabase/README.md](supabase/README.md)
 
 ---
 
@@ -33,8 +38,9 @@
 | UI | Tailwind CSS v4 |
 | Data | TanStack Query |
 | Router | HashRouter (GH Pages ไม่มี rewrite rule) |
-| Test | Vitest + Testing Library + happy-dom |
-| Backend | **ยังไม่มี** — วางแผนใช้ Supabase (Postgres + Realtime + RLS) |
+| Auth | Supabase Auth (ล็อกอินพนักงาน) |
+| Backend | Supabase — Postgres + Realtime + RLS + RPC |
+| Test | Vitest (client) + Postgres ใน Docker (SQL) |
 
 ---
 
@@ -43,7 +49,8 @@
 ```bash
 npm install
 npm run dev        # http://localhost:5173
-npm test           # 20 เทสต์ (ตรรกะคิดเงิน + smoke test ทุกหน้า)
+npm test           # 20 เทสต์ฝั่ง client (ตรรกะคิดเงิน + smoke test ทุกหน้า)
+npm run test:sql   # รัน migration + เทสต์ SQL บน Postgres ใน Docker
 npm run build
 ```
 
@@ -61,6 +68,9 @@ src/
     port.ts           ★ สัญญาระหว่างหน้าจอกับแหล่งข้อมูล
     index.ts          ★ จุดสลับ backend
     mock/             adapter จำลอง + ข้อมูลเดโม
+    supabase/         adapter จริง + realtime
+  auth/
+    AuthGate.tsx      ด่านล็อกอินพนักงาน
   pages/
     FloorMap.tsx      ผังโต๊ะ (หน้าหลักของพนักงาน)
     VisitDetail.tsx   ผู้เล่น + ตัวจับเวลา + ออเดอร์ + บิล + แยกบิล
@@ -68,36 +78,37 @@ src/
     Kitchen.tsx       จอครัว (KDS) พร้อม SLA
     Reservations.tsx  คิวจอง
     Games.tsx         คลังเกม
+
+supabase/
+  migrations/       schema + RPC + RLS
+  seed.sql          โต๊ะ เมนู เกม เรตราคา
+  tests/            เทสต์ SQL (รันบน Postgres จริงใน Docker)
 ```
 
 ---
 
-## 🔴 สิ่งที่ต้องทำก่อนใช้เงินจริง
+## ความปลอดภัย
 
-ระบบนี้ยัง **ไม่พร้อมรับเงินจริง** จนกว่าจะแก้ 4 ข้อนี้:
+เว็บ static = `anon key` อยู่ใน bundle ที่ทุกคนโหลดได้ ด่านจริงอยู่ในฐานข้อมูล:
 
-1. **ย้ายการคิดเงินไปฝั่งเซิร์ฟเวอร์**
-   ตอนนี้ `src/domain/pricing.ts` รันในเบราว์เซอร์ → ลูกค้าแก้ยอดได้จาก devtools
-   ต้องเป็น Postgres function `calculate_bill(visit_id)` แบบ `SECURITY DEFINER`
-   (ไฟล์ปัจจุบันใช้เป็นสเปกอ้างอิงตอนเขียน SQL ได้เลย)
+- เพิกถอนสิทธิ์ทั้งหมดจาก `anon`/`authenticated` ก่อน แล้วค่อยให้ `select` เฉพาะที่ตั้งใจ
+- ไม่มี policy `INSERT`/`UPDATE`/`DELETE` ให้ใครเลย — เขียนได้ทางเดียวคือผ่าน RPC ที่ตรวจสิทธิ์เอง
+- ราคาและยอดคำนวณในฐานข้อมูลเสมอ ไม่รับตัวเลขจาก client
 
-2. **เปิด RLS ทุกตาราง**
-   เว็บ static = `anon key` เปิดเผยต่อสาธารณะ RLS คือขอบเขตความปลอดภัยเดียวที่มี
-   ลูกค้า `SELECT` ได้เฉพาะ visit ตัวเอง, `INSERT/UPDATE` บน `bills`/`payments` ห้ามโดยสิ้นเชิง
+`npm run test:sql` พิสูจน์ข้อพวกนี้ด้วยการลองโจมตีจริง (แก้ยอดบิล, ปลอมการชำระเงิน,
+เรียก RPC โดยไม่ใช่พนักงาน) รายละเอียด: [supabase/README.md](supabase/README.md)
 
-3. **สั่งอาหารต้องผ่าน RPC**
-   `place_order()` ตรวจว่า pass ยัง active, โต๊ะตรงกัน, และดึงราคาจาก DB — ไม่รับราคาจาก client
-
-4. **QR โต๊ะใช้ token หมุนเวียน**
-   ไม่ใช่ `?table=A1` ธรรมดา ไม่งั้นคนนอกร้านสั่งอาหารได้
+### ยังทำไม่ได้
+ลูกค้าสั่งอาหารเองผ่าน QR — `place_order()` ยังบังคับว่าต้องเป็นพนักงาน
+ต้องเพิ่ม table token หมุนเวียนก่อน ไม่งั้นคนนอกร้านสั่งได้
 
 ---
 
 ## Roadmap
 
 - [x] **Phase 0** — scaffold + CI/CD ขึ้น GitHub Pages
-- [x] **Phase 1 (mock)** — ผังโต๊ะ, visit/pass, จับเวลา, ออเดอร์, บิล, แยกบิล, KDS
-- [ ] **Phase 1.5** — ต่อ Supabase: schema + RLS + RPC คิดเงิน
+- [x] **Phase 1** — ผังโต๊ะ, visit/pass, จับเวลา, ออเดอร์, บิล, แยกบิล, KDS
+- [x] **Phase 1.5** — Supabase: schema + RLS + RPC คิดเงิน + realtime + ล็อกอินพนักงาน
 - [ ] **Phase 2** — QR โต๊ะ + ลูกค้าสั่งเอง + จองออนไลน์ + PWA
 - [ ] **Phase 3** — ยืม-คืนเกม + ค่าปรับชิ้นส่วนหาย, รวมบิลข้ามกลุ่ม, offline queue
 - [ ] **Phase 4** — สมาชิก/แต้ม, โปรโมชัน, รายงาน, สต็อก

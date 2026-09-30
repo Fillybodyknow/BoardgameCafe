@@ -1,16 +1,18 @@
 import type { DataPort } from './port'
 import { mockAdapter } from './mock/mockAdapter'
+import { supabaseAdapter } from './supabase/supabaseAdapter'
+import { hasSupabase } from './supabase/client'
 
 /**
- * จุดสลับ backend — แก้ที่เดียว หน้าจอไม่ต้องรู้เรื่อง
+ * จุดสลับ backend — หน้าจอไม่รู้ว่าข้อมูลมาจากไหน
  *
- * เมื่อมี Supabase แล้ว:
- *   const hasSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL)
- *   export const db: DataPort = hasSupabase ? supabaseAdapter : mockAdapter
+ * ตั้งค่า VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY แล้วใช้ของจริง
+ * ไม่ตั้ง → ใช้ข้อมูลจำลองใน localStorage (โหมดเดโม)
  */
-export const db: DataPort = mockAdapter
+export const IS_MOCK = !hasSupabase
 
-export const IS_MOCK = true
+export const db: DataPort = hasSupabase ? supabaseAdapter : mockAdapter
 
 export { mockAdapter }
+export { hasSupabase, supabase } from './supabase/client'
 export type { DataPort, Snapshot } from './port'
