@@ -39,7 +39,7 @@ export default function BookingApp() {
     <div className="mx-auto flex min-h-screen max-w-lg flex-col">
       <header className="sticky top-0 z-30 border-b border-slate-800 bg-slate-950/95 px-4 py-3 backdrop-blur">
         <h1 className="text-xl font-bold">🎲 จองโต๊ะ</h1>
-        <p className="mt-0.5 text-xs text-slate-500">เปิด 11:00 – 23:00 ทุกวัน</p>
+        <ShopHoursLine />
         <div className="mt-3 flex gap-1">
           <Button
             className="flex-1"
@@ -63,8 +63,28 @@ export default function BookingApp() {
   )
 }
 
+/** เวลาทำการจริงจากฐานข้อมูล — เจ้าของร้านแก้ได้ จึงห้าม hardcode */
+function ShopHoursLine() {
+  const hours = useQuery({ queryKey: ['booking', 'hours'], queryFn: () => bookingDb.hours() })
+  if (!hours.data?.length) return null
+
+  const open = hours.data.filter((h) => !h.closed)
+  const same =
+    open.length === 7 &&
+    open.every((h) => h.openTime === open[0]!.openTime && h.closeTime === open[0]!.closeTime)
+
+  return (
+    <p className="mt-0.5 text-xs text-slate-500">
+      {same
+        ? `เปิด ${open[0]!.openTime} – ${open[0]!.closeTime} ทุกวัน`
+        : 'เวลาทำการต่างกันในแต่ละวัน — เลือกวันแล้วดูช่วงเวลาที่จองได้'}
+    </p>
+  )
+}
+
 function BookForm() {
   const cfg = useQuery({ queryKey: ['booking', 'config'], queryFn: () => bookingDb.config() })
+  const hours = useQuery({ queryKey: ['booking', 'hours'], queryFn: () => bookingDb.hours() })
 
   const [date, setDate] = useState(todayBangkok)
   const [time, setTime] = useState('18:00')
@@ -95,14 +115,28 @@ function BookForm() {
     return new Date(Date.now() + (days * 24 + 7) * 3600_000).toISOString().slice(0, 10)
   }, [cfg.data])
 
+  /** เวลาทำการของวันที่เลือก — 0 = อาทิตย์ ตรงกับ shop_hours ฝั่งฐานข้อมูล */
+  const today = useMemo(() => {
+    const weekday = new Date(`${date}T12:00:00+07:00`).getUTCDay()
+    return hours.data?.find((h) => h.weekday === weekday)
+  }, [hours.data, date])
+
   const slots = useMemo(() => {
+    if (!today || today.closed) return []
     const step = cfg.data?.slotMinutes ?? 30
+    const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5))
     const out: string[] = []
-    for (let m = 11 * 60; m + duration <= 23 * 60; m += step) {
+    // ต้องเล่นจบก่อนร้านปิด เหมือนกติกา assert_bookable ฝั่งเซิร์ฟเวอร์
+    for (let m = toMin(today.openTime); m + duration <= toMin(today.closeTime); m += step) {
       out.push(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`)
     }
     return out
-  }, [cfg.data, duration])
+  }, [cfg.data, duration, today])
+
+  // เปลี่ยนวันแล้วเวลาที่เลือกไว้อาจอยู่นอกเวลาทำการของวันใหม่
+  useEffect(() => {
+    if (slots.length > 0 && !slots.includes(time)) setTime(slots[0]!)
+  }, [slots, time])
 
   const seats = (tables.data ?? [])
     .filter((t) => picked.includes(t.id))
@@ -185,6 +219,19 @@ function BookForm() {
         </div>
       </Card>
 
+      {today?.closed && (
+        <Card className="border-rose-800/60 bg-rose-950/20 text-sm text-rose-300">
+          วันที่เลือกร้านปิด ลองเลือกวันอื่นครับ
+        </Card>
+      )}
+
+      {!today?.closed && slots.length === 0 && (
+        <Card className="border-amber-800/60 bg-amber-950/20 text-sm text-amber-300">
+          ระยะเวลาที่เลือกยาวเกินกว่าเวลาทำการของวันนี้ ({today?.openTime}–{today?.closeTime})
+          ลองลดจำนวนชั่วโมงลง
+        </Card>
+      )}
+
       <div>
         <div className="mb-2 flex items-baseline justify-between">
           <h2 className="text-sm font-semibold text-slate-400">เลือกโต๊ะ</h2>
@@ -241,7 +288,10 @@ function BookForm() {
       <Button
         variant="primary"
         className="w-full !py-3"
-        disabled={busy || picked.length === 0 || !name.trim() || !phone.trim() || seats < party}
+        disabled={
+          busy || picked.length === 0 || !name.trim() || !phone.trim() ||
+          seats < party || slots.length === 0
+        }
         onClick={submit}
       >
         {busy ? 'กำลังส่งคำขอ…' : 'ส่งคำขอจอง'}

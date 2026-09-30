@@ -1,35 +1,6 @@
 import type { AdminPort } from '../port'
-import type { ShopHours, TaxConfig } from '../../domain/types'
 import { mockAdapter } from './mockAdapter'
-
-const HOURS_KEY = 'bgcafe.mock.hours.v1'
-const TAX_KEY = 'bgcafe.mock.tax.v1'
-
-function load<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key)
-    return raw ? (JSON.parse(raw) as T) : fallback
-  } catch {
-    return fallback
-  }
-}
-
-function save(key: string, value: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    // โควตาเต็ม/โหมดส่วนตัว — เดโมยังทำงานได้ในหน่วยความจำ
-  }
-}
-
-const DEFAULT_HOURS: ShopHours[] = Array.from({ length: 7 }, (_, weekday) => ({
-  weekday,
-  openTime: '11:00',
-  closeTime: '23:00',
-  closed: false,
-}))
-
-const DEFAULT_TAX: TaxConfig = { serviceChargeRate: 0, vatRate: 0.07, vatIncluded: true }
+import { loadHours, loadTax, saveHours, saveTax } from './shopStore'
 
 /**
  * โหมดเดโม — ตรวจกติกาเดียวกับ RPC ฝั่ง SQL
@@ -52,10 +23,10 @@ export const mockAdminAdapter: AdminPort = {
     return await mockAdapter.ratePlansForAdmin()
   },
   async shopHours() {
-    return load(HOURS_KEY, DEFAULT_HOURS)
+    return loadHours()
   },
   async taxConfig() {
-    return load(TAX_KEY, DEFAULT_TAX)
+    return loadTax()
   },
 
   async saveMenuItem(input) {
@@ -96,10 +67,7 @@ export const mockAdminAdapter: AdminPort = {
     if (!input.closed && input.closeTime <= input.openTime) {
       throw new Error('เวลาปิดต้องหลังเวลาเปิด (ยังไม่รองรับร้านที่ปิดข้ามวัน)')
     }
-    const hours = load(HOURS_KEY, DEFAULT_HOURS).map((h) =>
-      h.weekday === input.weekday ? { ...input } : h,
-    )
-    save(HOURS_KEY, hours)
+    saveHours(loadHours().map((h) => (h.weekday === input.weekday ? { ...input } : h)))
   },
 
   async saveTaxConfig(input) {
@@ -109,6 +77,6 @@ export const mockAdminAdapter: AdminPort = {
     ) {
       throw new Error('อัตราต้องอยู่ระหว่าง 0 ถึง 1 (เช่น 0.07 = 7%)')
     }
-    save(TAX_KEY, input)
+    saveTax(input)
   },
 }

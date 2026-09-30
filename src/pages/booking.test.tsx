@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import App from '../App'
 import { mockAdapter, mockBookingAdapter } from '../data/mock/mockAdapter'
+import { mockAdminAdapter } from '../data/mock/adminAdapter'
 
 /** พรุ่งนี้ 18:00 เวลาไทย — ต้องเป็นอนาคตเสมอ ไม่งั้นติดกติกาจองล่วงหน้า */
 function tomorrowAt(hhmm: string): string {
@@ -135,6 +136,91 @@ describe('จองโต๊ะออนไลน์ (ระดับ adapter)',
     const after = await mockBookingAdapter.availableTables(startAt, 120)
     expect(after.find((x) => x.id === t.id)!.available).toBe(true)
     await expect(mockBookingAdapter.cancel(r.code, '081-111-2222')).rejects.toThrow()
+  })
+})
+
+// เคยเป็นบั๊ก: หน้าจอง hardcode 11:00–23:00 ไว้ ไม่ได้อ่าน shop_hours
+// พอเจ้าของแก้เวลาทำการ หน้าจองยังเสนอเวลาเดิมที่เซิร์ฟเวอร์จะปฏิเสธ
+describe('หน้าจองต้องเคารพเวลาทำการที่เจ้าของตั้งไว้', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    mockAdapter.reset()
+  })
+
+  it('เวลาทำการที่เจ้าของบันทึก ต้องเป็นชุดเดียวกับที่หน้าจองอ่าน', async () => {
+    await mockAdminAdapter.saveShopHours({
+      weekday: 3, openTime: '14:00', closeTime: '22:00', closed: false,
+    })
+    const hours = await mockBookingAdapter.hours()
+    expect(hours.find((h) => h.weekday === 3)).toEqual({
+      weekday: 3, openTime: '14:00', closeTime: '22:00', closed: false,
+    })
+  })
+
+  it('จองก่อนเวลาเปิดของวันนั้นไม่ได้', async () => {
+    const target = new Date(Date.now() + 3 * 24 * 3600_000 + 7 * 3600_000)
+    const weekday = target.getUTCDay()
+    const day = target.toISOString().slice(0, 10)
+
+    await mockAdminAdapter.saveShopHours({
+      weekday, openTime: '16:00', closeTime: '23:00', closed: false,
+    })
+
+    const early = new Date(`${day}T12:00:00+07:00`).toISOString()
+    const t = await freeTable(early)
+    await expect(
+      mockBookingAdapter.create({
+        customerName: 'ก', phone: '081-111-2222', partySize: 2,
+        startAt: early, durationMinutes: 120, tableIds: [t.id],
+      }),
+    ).rejects.toThrow(/16:00/)
+
+    // หลังเวลาเปิดแล้วจองได้
+    const ok = new Date(`${day}T17:00:00+07:00`).toISOString()
+    const t2 = await freeTable(ok)
+    const r = await mockBookingAdapter.create({
+      customerName: 'ข', phone: '082-222-3333', partySize: 2,
+      startAt: ok, durationMinutes: 120, tableIds: [t2.id],
+    })
+    expect(r.code).toHaveLength(6)
+  })
+
+  it('วันที่ร้านปิด จองไม่ได้', async () => {
+    const target = new Date(Date.now() + 4 * 24 * 3600_000 + 7 * 3600_000)
+    const weekday = target.getUTCDay()
+    const day = target.toISOString().slice(0, 10)
+
+    await mockAdminAdapter.saveShopHours({
+      weekday, openTime: '11:00', closeTime: '23:00', closed: true,
+    })
+
+    const when = new Date(`${day}T18:00:00+07:00`).toISOString()
+    const t = await freeTable(when)
+    await expect(
+      mockBookingAdapter.create({
+        customerName: 'ก', phone: '081-111-2222', partySize: 2,
+        startAt: when, durationMinutes: 120, tableIds: [t.id],
+      }),
+    ).rejects.toThrow(/ร้านปิด/)
+  })
+
+  it('ต้องเล่นจบก่อนร้านปิด', async () => {
+    const target = new Date(Date.now() + 5 * 24 * 3600_000 + 7 * 3600_000)
+    const weekday = target.getUTCDay()
+    const day = target.toISOString().slice(0, 10)
+
+    await mockAdminAdapter.saveShopHours({
+      weekday, openTime: '11:00', closeTime: '20:00', closed: false,
+    })
+
+    const when = new Date(`${day}T19:00:00+07:00`).toISOString()
+    const t = await freeTable(when)
+    await expect(
+      mockBookingAdapter.create({
+        customerName: 'ก', phone: '081-111-2222', partySize: 2,
+        startAt: when, durationMinutes: 180, tableIds: [t.id],
+      }),
+    ).rejects.toThrow(/20:00/)
   })
 })
 

@@ -6,6 +6,7 @@ import type {
 } from '../../domain/types'
 import { computeBill } from '../../domain/pricing'
 import { seed, businessDateOf } from './seed'
+import { bangkokParts, loadHours, toMinutes } from './shopStore'
 
 const STORAGE_KEY = 'bgcafe.mock.v1'
 
@@ -358,11 +359,40 @@ class MockAdapter implements DataPort {
     })
   }
 
+  /** ตรงกับ assert_bookable() ฝั่ง SQL */
+  private assertBookable(startAt: string, duration: number) {
+    const cfg = MOCK_BOOKING
+    if (duration < cfg.minDurationMinutes || duration > cfg.maxDurationMinutes) {
+      throw new Error(`จองได้ครั้งละ ${cfg.minDurationMinutes}–${cfg.maxDurationMinutes} นาที`)
+    }
+
+    const start = new Date(startAt).getTime()
+    if (start < Date.now() + cfg.minAdvanceMinutes * 60_000) {
+      throw new Error(`ต้องจองล่วงหน้าอย่างน้อย ${cfg.minAdvanceMinutes} นาที`)
+    }
+    if (start > Date.now() + cfg.maxAdvanceDays * 24 * 3600_000) {
+      throw new Error(`จองล่วงหน้าได้ไม่เกิน ${cfg.maxAdvanceDays} วัน`)
+    }
+
+    const { weekday, minutes } = bangkokParts(startAt)
+    const hours = loadHours().find((h) => h.weekday === weekday)
+    if (!hours || hours.closed) throw new Error('วันนั้นร้านปิด')
+
+    const open = toMinutes(hours.openTime)
+    const close = toMinutes(hours.closeTime)
+    if (minutes < open) throw new Error(`ร้านเปิด ${hours.openTime} น.`)
+    if (minutes + duration > close) {
+      throw new Error(`ต้องจบก่อนร้านปิด ${hours.closeTime} น.`)
+    }
+  }
+
   bookingCreate(input: Parameters<BookingPort['create']>[0]): BookingReceipt {
     const phone = input.phone.replace(/[^0-9]/g, '')
     if (phone.length < 9) throw new Error('เบอร์โทรไม่ถูกต้อง')
     if (!input.customerName.trim()) throw new Error('กรุณาใส่ชื่อผู้จอง')
     if (input.tableIds.length === 0) throw new Error('กรุณาเลือกโต๊ะ')
+
+    this.assertBookable(input.startAt, input.durationMinutes)
 
     const avail = this.bookingTables(input.startAt, input.durationMinutes)
     for (const id of input.tableIds) {
@@ -780,12 +810,9 @@ export const mockAdapter = new MockAdapter()
  */
 export const mockBookingAdapter: BookingPort = {
   async hours() {
-    return Array.from({ length: 7 }, (_, weekday) => ({
-      weekday,
-      openTime: '11:00',
-      closeTime: '23:00',
-      closed: false,
-    }))
+    // ต้องเป็นชุดเดียวกับที่หน้าตั้งค่าบันทึก ไม่งั้นแก้เวลาทำการแล้ว
+    // หน้าจองยังเสนอเวลาเดิม
+    return loadHours()
   },
   async config() {
     return {
