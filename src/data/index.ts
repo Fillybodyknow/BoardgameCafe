@@ -1,5 +1,7 @@
-import type { BookingPort, DataPort, GuestPort } from './port'
+import type { AdminPort, BookingPort, DataPort, GuestPort } from './port'
 import { mockAdapter, mockBookingAdapter, mockGuestAdapter } from './mock/mockAdapter'
+import { mockAdminAdapter } from './mock/adminAdapter'
+import { supabaseAdminAdapter } from './supabase/adminAdapter'
 import {
   supabaseAdapter,
   supabaseBookingAdapter,
@@ -23,6 +25,9 @@ export const guestDb: GuestPort = hasSupabase ? supabaseGuestAdapter : mockGuest
 /** จองโต๊ะออนไลน์ — ลูกค้ายังไม่ได้มาร้าน ไม่มีทั้งบัญชีและ QR token */
 export const bookingDb: BookingPort = hasSupabase ? supabaseBookingAdapter : mockBookingAdapter
 
+/** ตั้งค่าร้าน — ระดับผู้จัดการขึ้นไป */
+export const adminDb: AdminPort = hasSupabase ? supabaseAdminAdapter : mockAdminAdapter
+
 export { mockAdapter }
 export { hasSupabase, supabase } from './supabase/client'
-export type { BookingPort, DataPort, GuestPort, Snapshot } from './port'
+export type { AdminPort, BookingPort, DataPort, GuestPort, Snapshot } from './port'

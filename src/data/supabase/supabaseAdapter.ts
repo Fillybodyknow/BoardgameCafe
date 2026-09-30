@@ -31,13 +31,13 @@ class SupabaseAdapter implements DataPort {
       tables, visits, occupancies, passes, orders, orderLines,
       menu, games, loans, ratePlans, reservations,
     ] = await Promise.all([
-      sb.from('cafe_tables').select('*').order('sort_order'),
+      sb.from('cafe_tables').select('*').eq('archived', false).order('sort_order'),
       sb.from('visits').select('*').eq('status', 'open'),
       sb.from('occupancies').select('*'),
       sb.from('guest_passes').select('*'),
       sb.from('orders').select('*'),
       sb.from('order_lines').select('*'),
-      sb.from('menu_items').select('*').order('sort_order'),
+      sb.from('menu_items').select('*').eq('archived', false).order('sort_order'),
       sb.from('game_titles').select('*').order('name'),
       sb.from('game_loans').select('game_title_id').is('returned_at', null),
       sb.from('rate_plans').select('*').eq('active', true).order('sort_order'),
@@ -236,6 +236,7 @@ function toTable(r: Record<string, any>): CafeTable {
     id: r.id, code: r.code, zone: r.zone,
     seatMin: r.seat_min, seatMax: r.seat_max,
     allowShare: r.allow_share, status: r.status,
+    sortOrder: r.sort_order, archived: r.archived ?? false,
     qrToken: r.qr_token,
   }
 }
@@ -258,6 +259,13 @@ function toPass(r: Record<string, any>): GuestPass {
     ratePlanId: r.rate_plan_id, status: r.status,
     checkedInAt: r.checked_in_at, checkedOutAt: r.checked_out_at,
     pausedMinutes: r.paused_minutes, pausedAt: r.paused_at,
+    rate: {
+      name: r.rate_name ?? '',
+      pricePerHour: Number(r.rate_price_per_hour),
+      roundToMinutes: r.rate_round_to_minutes,
+      minimumMinutes: r.rate_minimum_minutes,
+      dayPassCap: r.rate_day_pass_cap === null ? null : Number(r.rate_day_pass_cap),
+    },
   }
 }
 
@@ -274,6 +282,7 @@ function toMenuItem(r: Record<string, any>): MenuItem {
   return {
     id: r.id, sku: r.sku, name: r.name, category: r.category,
     price: Number(r.price), available: r.available,
+    sortOrder: r.sort_order, archived: r.archived ?? false,
   }
 }
 
@@ -293,6 +302,7 @@ function toRatePlan(r: Record<string, any>): RatePlan {
     roundToMinutes: r.round_to_minutes,
     minimumMinutes: r.minimum_minutes,
     dayPassCap: r.day_pass_cap === null ? null : Number(r.day_pass_cap),
+    active: r.active ?? true, sortOrder: r.sort_order,
   }
 }
 

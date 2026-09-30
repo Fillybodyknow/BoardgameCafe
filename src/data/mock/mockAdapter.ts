@@ -1,7 +1,8 @@
 import type { BookingPort, DataPort, GuestPort, Snapshot } from '../port'
 import type {
   AvailableTable, BillPreview, BookingLookup, BookingReceipt, GuestOrder, GuestPass,
-  GuestSession, ID, Order, OrderStatus, PaymentInput, RatePlan, Reservation, Visit,
+  GuestSession, ID, MenuItem, Order, OrderStatus, PaymentInput, RatePlan, Reservation,
+  Visit,
 } from '../../domain/types'
 import { computeBill } from '../../domain/pricing'
 import { seed, businessDateOf } from './seed'
@@ -30,7 +31,24 @@ class MockAdapter implements DataPort {
   }
 
   async getSnapshot(): Promise<Snapshot> {
-    return structuredClone(this.state)
+    const snap = structuredClone(this.state)
+    // หน้าร้านต้องไม่เห็นของที่เก็บเข้ากรุ — หน้าตั้งค่าใช้ *ForAdmin() แทน
+    snap.menu = snap.menu.filter((m) => !m.archived)
+    snap.tables = snap.tables.filter((t) => !t.archived)
+    return snap
+  }
+
+  /** หน้าตั้งค่าต้องเห็นของที่เก็บเข้ากรุด้วย จึงไม่กรอง */
+  async menuForAdmin() {
+    return structuredClone(this.state.menu)
+  }
+
+  async tablesForAdmin() {
+    return structuredClone(this.state.tables)
+  }
+
+  async ratePlansForAdmin() {
+    return structuredClone(this.state.ratePlans)
   }
 
   subscribe(listener: () => void) {
@@ -63,7 +81,9 @@ class MockAdapter implements DataPort {
     }
 
     for (const guest of input.guests) {
-      this.state.passes.push(makePass(visit.id, guest.name, guest.ratePlanId, nowIso))
+      this.state.passes.push(
+        makePass(visit.id, guest.name, guest.ratePlanId, nowIso, this.mustPlan(guest.ratePlanId)),
+      )
     }
 
     this.commit()
@@ -71,8 +91,14 @@ class MockAdapter implements DataPort {
   }
 
   async addPass(visitId: ID, input: { name: string; ratePlanId: ID }) {
-    // เข้ากลางคัน — นาฬิกาเริ่มนับ ณ ตอนนี้ เฉพาะคนนี้
-    const pass = makePass(visitId, input.name, input.ratePlanId, new Date().toISOString())
+    // เข้ากลางคัน — นาฬิกาเริ่มนับ ณ ตอนนี้ เฉพาะคนนี้ และถือเรต ณ ตอนนี้ไปด้วย
+    const pass = makePass(
+      visitId,
+      input.name,
+      input.ratePlanId,
+      new Date().toISOString(),
+      this.mustPlan(input.ratePlanId),
+    )
     this.state.passes.push(pass)
     this.commit()
     return structuredClone(pass)
@@ -503,10 +529,152 @@ class MockAdapter implements DataPort {
     })
   }
 
+  private mustPlan(id: ID): RatePlan {
+    const plan = this.state.ratePlans.find((p) => p.id === id)
+    if (!plan) throw new Error(`ไม่พบเรตราคา ${id}`)
+    return plan
+  }
+
   private mustPass(passId: ID): GuestPass {
     const pass = this.state.passes.find((p) => p.id === passId)
     if (!pass) throw new Error(`ไม่พบ pass ${passId}`)
     return pass
+  }
+
+  // ---------- ตั้งค่าร้าน (ใช้โดย mockAdminAdapter) ----------
+
+  saveMenuItem(input: {
+    id: ID | null
+    sku: string
+    name: string
+    category: MenuItem['category']
+    price: number
+    available: boolean
+    sortOrder: number
+  }) {
+    if (input.id) {
+      const item = this.state.menu.find((m) => m.id === input.id)
+      if (!item) throw new Error('ไม่พบเมนู')
+      Object.assign(item, {
+        sku: input.sku,
+        name: input.name.trim(),
+        category: input.category,
+        price: input.price,
+        available: input.available,
+        sortOrder: input.sortOrder,
+      })
+    } else {
+      this.state.menu.push({
+        id: newId('m'),
+        sku: input.sku,
+        name: input.name.trim(),
+        category: input.category,
+        price: input.price,
+        available: input.available,
+        sortOrder: input.sortOrder,
+        archived: false,
+      })
+    }
+    this.state.menu.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+    this.commit()
+  }
+
+  archiveMenuItem(id: ID, archived: boolean) {
+    const item = this.state.menu.find((m) => m.id === id)
+    if (!item) throw new Error('ไม่พบเมนู')
+    item.archived = archived
+    // เก็บเข้ากรุแล้วต้องไม่ค้างสถานะพร้อมขาย
+    if (archived) item.available = false
+    this.commit()
+  }
+
+  saveTable(input: {
+    id: ID | null
+    code: string
+    zone: string
+    seatMin: number
+    seatMax: number
+    allowShare: boolean
+    sortOrder: number
+  }) {
+    if (input.id) {
+      const table = this.state.tables.find((t) => t.id === input.id)
+      if (!table) throw new Error('ไม่พบโต๊ะ')
+      // ตรงกับ upsert_table ฝั่ง SQL — occupancies.exclusive คัดลอกไปตอนเปิดโต๊ะ
+      // ถ้าเปลี่ยนตอนมีคนนั่ง ค่าจะไม่ตรงกันจนกติกาโต๊ะซ้อนเพี้ยน
+      const occupied = this.state.occupancies.some(
+        (o) => o.tableId === table.id && o.toAt === null,
+      )
+      if (occupied && table.allowShare !== input.allowShare) {
+        throw new Error('เปลี่ยนการนั่งร่วมตอนมีลูกค้าอยู่ไม่ได้ ปิดบิลก่อน')
+      }
+      Object.assign(table, {
+        code: input.code,
+        zone: input.zone.trim(),
+        seatMin: input.seatMin,
+        seatMax: input.seatMax,
+        allowShare: input.allowShare,
+        sortOrder: input.sortOrder,
+      })
+    } else {
+      this.state.tables.push({
+        id: newId('t'),
+        code: input.code,
+        zone: input.zone.trim(),
+        seatMin: input.seatMin,
+        seatMax: input.seatMax,
+        allowShare: input.allowShare,
+        status: 'free',
+        sortOrder: input.sortOrder,
+        archived: false,
+        qrToken: newId('qr'),
+      })
+    }
+    this.state.tables.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+    this.commit()
+  }
+
+  archiveTable(id: ID, archived: boolean) {
+    const table = this.state.tables.find((t) => t.id === id)
+    if (!table) throw new Error('ไม่พบโต๊ะ')
+
+    if (archived) {
+      if (this.state.occupancies.some((o) => o.tableId === id && o.toAt === null)) {
+        throw new Error('โต๊ะนี้มีลูกค้านั่งอยู่ ปิดบิลก่อน')
+      }
+      const queued = this.state.reservations.filter(
+        (r) => ['pending', 'confirmed'].includes(r.status) && r.tableIds.includes(id),
+      ).length
+      if (queued > 0) {
+        throw new Error(`โต๊ะนี้มีคิวจองค้างอยู่ ${queued} รายการ จัดการคิวก่อน`)
+      }
+    }
+
+    table.archived = archived
+    if (!archived) table.status = 'free'
+    this.commit()
+  }
+
+  saveRatePlan(input: {
+    id: ID | null
+    name: string
+    pricePerHour: number
+    roundToMinutes: number
+    minimumMinutes: number
+    dayPassCap: number | null
+    active: boolean
+    sortOrder: number
+  }) {
+    if (input.id) {
+      const plan = this.state.ratePlans.find((p) => p.id === input.id)
+      if (!plan) throw new Error('ไม่พบเรตราคา')
+      // ไม่แตะ pass ที่เปิดไปแล้ว เพราะแต่ละใบถือ snapshot ของตัวเอง
+      Object.assign(plan, { ...input, name: input.name.trim() })
+    } else {
+      this.state.ratePlans.push({ ...input, id: newId('rp'), name: input.name.trim() })
+    }
+    this.state.ratePlans.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+    this.commit()
   }
 
   /** ปุ่มรีเซ็ตในเดโม */
@@ -531,7 +699,17 @@ function canTransition(from: OrderStatus, to: OrderStatus): boolean {
   return ALLOWED[from].includes(to)
 }
 
-function makePass(visitId: ID, name: string, ratePlanId: ID, at: string): GuestPass {
+/**
+ * ตรงกับ trigger guest_passes_rate_snapshot ฝั่ง SQL — pass ถือเรตติดตัวไป
+ * เจ้าของขึ้นราคาทีหลังจึงไม่กระทบคนที่นั่งอยู่แล้ว
+ */
+function makePass(
+  visitId: ID,
+  name: string,
+  ratePlanId: ID,
+  at: string,
+  plan: RatePlan,
+): GuestPass {
   return {
     id: newId('p'),
     visitId,
@@ -542,6 +720,13 @@ function makePass(visitId: ID, name: string, ratePlanId: ID, at: string): GuestP
     checkedOutAt: null,
     pausedMinutes: 0,
     pausedAt: null,
+    rate: {
+      name: plan.name,
+      pricePerHour: plan.pricePerHour,
+      roundToMinutes: plan.roundToMinutes,
+      minimumMinutes: plan.minimumMinutes,
+      dayPassCap: plan.dayPassCap,
+    },
   }
 }
 

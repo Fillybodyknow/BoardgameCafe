@@ -40,6 +40,7 @@ run supabase/seed.sql
 echo "--- apply patch ทีละเฟส ตามลำดับที่ผู้ใช้จริงจะรัน ---"
 run supabase/patch-phase2.sql
 run supabase/patch-booking.sql
+run supabase/patch-owner.sql
 
 echo "--- เทสต์ชุดเดียวกับการติดตั้งใหม่ ---"
 run supabase/tests/05_test_grants.sql
@@ -47,6 +48,7 @@ run supabase/tests/10_pricing_test.sql
 run supabase/tests/20_operations_test.sql
 run supabase/tests/30_guest_test.sql
 run supabase/tests/40_reservation_test.sql
+run supabase/tests/50_owner_test.sql
 
 echo
 echo "เส้นทางอัปเกรดผ่านทั้งหมด"

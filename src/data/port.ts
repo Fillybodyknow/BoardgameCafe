@@ -1,7 +1,8 @@
 import type {
   AvailableTable, BillPreview, BookingConfig, BookingLookup, BookingReceipt,
-  CafeTable, GameTitle, GuestOrder, GuestPass, GuestSession, ID, MenuItem,
-  Occupancy, Order, OrderStatus, PaymentInput, RatePlan, Reservation, ShopHours, Visit,
+  CafeTable, GameTitle, GuestOrder, GuestPass, GuestSession, ID, MenuCategory,
+  MenuItem, Occupancy, Order, OrderStatus, PaymentInput, RatePlan, Reservation,
+  ShopHours, StaffRole, TaxConfig, Visit,
 } from '../domain/types'
 
 /**
@@ -100,6 +101,66 @@ export interface BookingPort {
   }): Promise<BookingReceipt>
   lookup(code: string, phone: string): Promise<BookingLookup>
   cancel(code: string, phone: string): Promise<void>
+}
+
+/**
+ * ตั้งค่าร้าน — ระดับผู้จัดการขึ้นไป
+ *
+ * แยกจาก DataPort เพราะเป็นคนละสิทธิ์ และหน้าจอที่เรียกก็คนละหน้า
+ * ทุก method ยังผ่าน assert_manager() ฝั่งฐานข้อมูลอีกชั้น
+ */
+export interface AdminPort {
+  /** บอกว่าผู้ใช้ปัจจุบันเป็นระดับไหน — null = ไม่ได้อยู่ในทะเบียนพนักงาน */
+  myRole(): Promise<StaffRole | null>
+
+  /** รวมของที่เก็บเข้ากรุแล้วด้วย ต่างจาก snapshot ที่หน้าร้านใช้ */
+  allMenuItems(): Promise<MenuItem[]>
+  allTables(): Promise<CafeTable[]>
+  allRatePlans(): Promise<RatePlan[]>
+  shopHours(): Promise<ShopHours[]>
+  taxConfig(): Promise<TaxConfig>
+
+  saveMenuItem(input: {
+    id: ID | null
+    sku: string
+    name: string
+    category: MenuCategory
+    price: number
+    available: boolean
+    sortOrder: number
+  }): Promise<void>
+  /** ไม่ลบจริง เพราะใบเสร็จเก่าอ้างถึงอยู่ */
+  archiveMenuItem(id: ID, archived: boolean): Promise<void>
+
+  saveTable(input: {
+    id: ID | null
+    code: string
+    zone: string
+    seatMin: number
+    seatMax: number
+    allowShare: boolean
+    sortOrder: number
+  }): Promise<void>
+  archiveTable(id: ID, archived: boolean): Promise<void>
+
+  saveRatePlan(input: {
+    id: ID | null
+    name: string
+    pricePerHour: number
+    roundToMinutes: number
+    minimumMinutes: number
+    dayPassCap: number | null
+    active: boolean
+    sortOrder: number
+  }): Promise<void>
+
+  saveShopHours(input: {
+    weekday: number
+    openTime: string
+    closeTime: string
+    closed: boolean
+  }): Promise<void>
+  saveTaxConfig(input: TaxConfig): Promise<void>
 }
 
 export interface GuestPort {

@@ -1,5 +1,5 @@
 import type {
-  BillLine, BillPreview, GuestPass, Order, RatePlan, Timestamp,
+  BillLine, BillPreview, GuestPass, Order, RatePlan, RateSnapshot, Timestamp,
 } from './types'
 
 /**
@@ -33,8 +33,13 @@ export function billableMinutes(pass: GuestPass, now: Date): number {
   return Math.max(0, Math.floor((end - start) / MS_PER_MIN) - paused)
 }
 
-/** ค่าเล่นของ pass หนึ่งใบ — ปัดขึ้นตามช่วง, คิดขั้นต่ำ, แล้วเทียบเพดานเหมาวัน */
-export function playTimeCharge(minutes: number, plan: RatePlan): number {
+/**
+ * ค่าเล่นของ pass หนึ่งใบ — ปัดขึ้นตามช่วง, คิดขั้นต่ำ, แล้วเทียบเพดานเหมาวัน
+ *
+ * รับได้ทั้ง RatePlan (เรตปัจจุบัน) และ RateSnapshot (เรตที่ pass ถือติดตัว)
+ * เพราะสองอย่างนี้มีฟิลด์ที่ใช้คิดเงินเหมือนกัน
+ */
+export function playTimeCharge(minutes: number, plan: RatePlan | RateSnapshot): number {
   const charged = Math.max(minutes, plan.minimumMinutes)
   const blocks = Math.ceil(charged / plan.roundToMinutes)
   const raw = (blocks * plan.roundToMinutes / 60) * plan.pricePerHour
@@ -50,7 +55,8 @@ export interface BillInput {
   visitId: string
   passes: GuestPass[]
   orders: Order[]
-  ratePlans: Record<string, RatePlan>
+  /** เผื่อไว้สำหรับ pass เก่าที่ยังไม่มี snapshot — ปกติไม่ได้ใช้แล้ว */
+  ratePlans?: Record<string, RatePlan>
   now: Date
 }
 
@@ -58,9 +64,9 @@ export function computeBill(input: BillInput): BillPreview {
   const { visitId, passes, orders, ratePlans, now } = input
   const lines: BillLine[] = []
 
-  // 1) ค่าเล่นรายคน
+  // 1) ค่าเล่นรายคน — ใช้เรตที่ pass ถือติดตัวมา ไม่ใช่เรตปัจจุบันของร้าน
   for (const pass of passes) {
-    const plan = ratePlans[pass.ratePlanId]
+    const plan = pass.rate ?? ratePlans?.[pass.ratePlanId]
     if (!plan) continue
     const mins = billableMinutes(pass, now)
     const amount = playTimeCharge(mins, plan)

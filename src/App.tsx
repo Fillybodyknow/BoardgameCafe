@@ -6,6 +6,7 @@ import Kitchen from './pages/Kitchen'
 import Games from './pages/Games'
 import Reservations from './pages/Reservations'
 import TableQR from './pages/TableQR'
+import Owner from './pages/Owner'
 import GuestApp from './pages/guest/GuestApp'
 import BookingApp from './pages/guest/BookingApp'
 import { IS_MOCK, mockAdapter } from './data'
@@ -22,6 +23,7 @@ const NAV = [
   { to: '/reservations', label: 'การจอง' },
   { to: '/games', label: 'คลังเกม' },
   { to: '/qr', label: 'QR โต๊ะ' },
+  { to: '/owner', label: 'ตั้งค่าร้าน' },
 ]
 
 export default function App() {
@@ -107,6 +109,7 @@ function StaffShell() {
           <Route path="/reservations" element={<Reservations />} />
           <Route path="/games" element={<Games />} />
           <Route path="/qr" element={<TableQR />} />
+          <Route path="/owner" element={<Owner />} />
           <Route path="*" element={<p className="text-slate-400">ไม่พบหน้านี้</p>} />
         </Routes>
       </main>

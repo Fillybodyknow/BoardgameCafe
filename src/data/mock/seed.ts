@@ -49,15 +49,15 @@ export function seed(): Snapshot {
 
     passes: [
       // กลุ่มที่เข้าไม่พร้อมกัน + มีคนกลับไปแล้ว + มีคนออกไปข้างนอก
-      { id: 'p-1', visitId: 'v-1', displayName: 'ต้น', ratePlanId: '11111111-0000-4000-8000-000000000002', status: 'active', checkedInAt: ago(135), checkedOutAt: null, pausedMinutes: 0, pausedAt: null },
-      { id: 'p-2', visitId: 'v-1', displayName: 'เมย์', ratePlanId: '11111111-0000-4000-8000-000000000001', status: 'active', checkedInAt: ago(135), checkedOutAt: null, pausedMinutes: 12, pausedAt: null },
-      { id: 'p-3', visitId: 'v-1', displayName: 'บอส', ratePlanId: '11111111-0000-4000-8000-000000000001', status: 'checked_out', checkedInAt: ago(135), checkedOutAt: ago(25), pausedMinutes: 0, pausedAt: null },
-      { id: 'p-4', visitId: 'v-1', displayName: 'ปาล์ม (มาสาย)', ratePlanId: '11111111-0000-4000-8000-000000000003', status: 'paused', checkedInAt: ago(64), checkedOutAt: null, pausedMinutes: 0, pausedAt: ago(9) },
+      { id: 'p-1', visitId: 'v-1', displayName: 'ต้น', ratePlanId: '11111111-0000-4000-8000-000000000002', status: 'active', checkedInAt: ago(135), checkedOutAt: null, pausedMinutes: 0, pausedAt: null , rate: { name: 'สมาชิก', pricePerHour: 48, roundToMinutes: 30, minimumMinutes: 60, dayPassCap: 159 } },
+      { id: 'p-2', visitId: 'v-1', displayName: 'เมย์', ratePlanId: '11111111-0000-4000-8000-000000000001', status: 'active', checkedInAt: ago(135), checkedOutAt: null, pausedMinutes: 12, pausedAt: null , rate: { name: 'ทั่วไป', pricePerHour: 60, roundToMinutes: 30, minimumMinutes: 60, dayPassCap: 199 } },
+      { id: 'p-3', visitId: 'v-1', displayName: 'บอส', ratePlanId: '11111111-0000-4000-8000-000000000001', status: 'checked_out', checkedInAt: ago(135), checkedOutAt: ago(25), pausedMinutes: 0, pausedAt: null , rate: { name: 'ทั่วไป', pricePerHour: 60, roundToMinutes: 30, minimumMinutes: 60, dayPassCap: 199 } },
+      { id: 'p-4', visitId: 'v-1', displayName: 'ปาล์ม (มาสาย)', ratePlanId: '11111111-0000-4000-8000-000000000003', status: 'paused', checkedInAt: ago(64), checkedOutAt: null, pausedMinutes: 0, pausedAt: ago(9) , rate: { name: 'นักเรียน/นักศึกษา', pricePerHour: 40, roundToMinutes: 30, minimumMinutes: 60, dayPassCap: 129 } },
 
-      { id: 'p-5', visitId: 'v-2', displayName: 'ฟ้า', ratePlanId: '11111111-0000-4000-8000-000000000001', status: 'active', checkedInAt: ago(52), checkedOutAt: null, pausedMinutes: 0, pausedAt: null },
-      { id: 'p-6', visitId: 'v-2', displayName: 'กัน', ratePlanId: '11111111-0000-4000-8000-000000000001', status: 'active', checkedInAt: ago(52), checkedOutAt: null, pausedMinutes: 0, pausedAt: null },
+      { id: 'p-5', visitId: 'v-2', displayName: 'ฟ้า', ratePlanId: '11111111-0000-4000-8000-000000000001', status: 'active', checkedInAt: ago(52), checkedOutAt: null, pausedMinutes: 0, pausedAt: null , rate: { name: 'ทั่วไป', pricePerHour: 60, roundToMinutes: 30, minimumMinutes: 60, dayPassCap: 199 } },
+      { id: 'p-6', visitId: 'v-2', displayName: 'กัน', ratePlanId: '11111111-0000-4000-8000-000000000001', status: 'active', checkedInAt: ago(52), checkedOutAt: null, pausedMinutes: 0, pausedAt: null , rate: { name: 'ทั่วไป', pricePerHour: 60, roundToMinutes: 30, minimumMinutes: 60, dayPassCap: 199 } },
 
-      { id: 'p-7', visitId: 'v-3', displayName: 'นัท (มาคนเดียว)', ratePlanId: '11111111-0000-4000-8000-000000000002', status: 'active', checkedInAt: ago(18), checkedOutAt: null, pausedMinutes: 0, pausedAt: null },
+      { id: 'p-7', visitId: 'v-3', displayName: 'นัท (มาคนเดียว)', ratePlanId: '11111111-0000-4000-8000-000000000002', status: 'active', checkedInAt: ago(18), checkedOutAt: null, pausedMinutes: 0, pausedAt: null , rate: { name: 'สมาชิก', pricePerHour: 48, roundToMinutes: 30, minimumMinutes: 60, dayPassCap: 159 } },
     ],
 
     menu: [

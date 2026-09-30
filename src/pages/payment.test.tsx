@@ -20,6 +20,11 @@ const passes: GuestPass[] = ['A', 'B', 'C'].map((n) => ({
   id: `p-${n}`, visitId: 'v-1', displayName: n, ratePlanId: 'rp',
   status: 'active', checkedInAt: ago(60), checkedOutAt: null,
   pausedMinutes: 0, pausedAt: null,
+  rate: {
+    name: plan.name, pricePerHour: plan.pricePerHour,
+    roundToMinutes: plan.roundToMinutes, minimumMinutes: plan.minimumMinutes,
+    dayPassCap: plan.dayPassCap,
+  },
 }))
 
 function buildBill(): BillPreview {

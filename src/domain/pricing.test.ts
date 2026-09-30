@@ -10,9 +10,18 @@ const std: RatePlan = {
   roundToMinutes: 30, minimumMinutes: 60, dayPassCap: 199,
 }
 
+/** เรตที่ pass ถือติดตัวตอนเช็คอิน — คิดเงินจากตัวนี้ ไม่ใช่เรตปัจจุบันของร้าน */
+const snapshot = {
+  name: std.name, pricePerHour: std.pricePerHour,
+  roundToMinutes: std.roundToMinutes, minimumMinutes: std.minimumMinutes,
+  dayPassCap: std.dayPassCap,
+}
+
 const pass = (o: Partial<GuestPass> = {}): GuestPass => ({
   id: 'p', visitId: 'v', displayName: 'x', ratePlanId: 'rp-std', status: 'active',
-  checkedInAt: ago(60), checkedOutAt: null, pausedMinutes: 0, pausedAt: null, ...o,
+  checkedInAt: ago(60), checkedOutAt: null, pausedMinutes: 0, pausedAt: null,
+  ...o,
+  rate: o.rate ?? snapshot,
 })
 
 describe('billableMinutes', () => {
@@ -108,6 +117,31 @@ describe('computeBill', () => {
       const sum = parts.reduce((s, p) => s + p.total, 0)
       expect(sum).toBe(bill.total)
     })
+  })
+})
+
+describe('เปลี่ยนเรตราคาระหว่างที่ลูกค้ายังนั่งอยู่', () => {
+  it('คิดจากเรตที่ pass ถือติดตัว ไม่ใช่เรตปัจจุบันของร้าน', () => {
+    const p = pass({ id: 'p1', checkedInAt: ago(60) })
+    const before = computeBill({
+      visitId: 'v', passes: [p], orders: [], ratePlans: { 'rp-std': std }, now: NOW,
+    })
+
+    // เจ้าของร้านขึ้นราคาเป็นสองเท่า
+    const raised: RatePlan = { ...std, pricePerHour: 120 }
+    const after = computeBill({
+      visitId: 'v', passes: [p], orders: [], ratePlans: { 'rp-std': raised }, now: NOW,
+    })
+
+    expect(before.total).toBe(60)
+    expect(after.total).toBe(before.total)
+  })
+
+  it('คนที่เช็คอินหลังขึ้นราคา ได้เรตใหม่', () => {
+    const raisedSnapshot = { ...snapshot, pricePerHour: 120 }
+    const p = pass({ id: 'p2', checkedInAt: ago(60), rate: raisedSnapshot })
+    const bill = computeBill({ visitId: 'v', passes: [p], orders: [], now: NOW })
+    expect(bill.total).toBe(120)
   })
 })
 

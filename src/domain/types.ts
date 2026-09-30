@@ -24,6 +24,9 @@ export interface CafeTable {
   /** อนุญาตให้ 2 กลุ่มที่ไม่รู้จักกันนั่งโต๊ะเดียวกัน (โต๊ะยาว/เคาน์เตอร์) */
   allowShare: boolean
   status: TableStatus
+  sortOrder?: number
+  /** เก็บเข้ากรุ — ไม่ลบจริงเพราะ occupancies/orders อ้างถึงอยู่ */
+  archived?: boolean
   /** token ใน QR ที่ติดโต๊ะ — พนักงานเท่านั้นที่อ่านได้ */
   qrToken?: string
 }
@@ -69,17 +72,38 @@ export interface GuestPass {
   pausedMinutes: number
   /** เวลาที่เริ่ม pause ครั้งล่าสุด — null ถ้าไม่ได้ pause อยู่ */
   pausedAt: Timestamp | null
+  /**
+   * เรตค่าเล่น ณ เวลาเช็คอิน
+   *
+   * คัดลอกมาเก็บไว้เหมือนที่ order_lines ทำกับราคาอาหาร ไม่งั้นเจ้าของร้าน
+   * ขึ้นราคาตอนบ่าย บิลของทุกคนที่กำลังนั่งอยู่จะเปลี่ยนย้อนหลังทั้งเซสชัน
+   */
+  rate: RateSnapshot
+}
+
+/** ค่าที่ใช้คิดค่าเล่นจริง คัดลอกจาก RatePlan ตอนเช็คอิน */
+export interface RateSnapshot {
+  name: string
+  pricePerHour: number
+  roundToMinutes: number
+  minimumMinutes: number
+  dayPassCap: number | null
 }
 
 // ---------- เมนู / ออเดอร์ ----------
+
+export type MenuCategory = 'drink' | 'snack' | 'food' | 'dessert'
 
 export interface MenuItem {
   id: ID
   sku: string
   name: string
-  category: 'drink' | 'snack' | 'food' | 'dessert'
+  category: MenuCategory
   price: number
   available: boolean
+  sortOrder?: number
+  /** เก็บเข้ากรุ — ไม่ลบจริงเพราะ order_lines อ้างถึงอยู่ */
+  archived?: boolean
 }
 
 export type OrderStatus =
@@ -145,6 +169,8 @@ export interface RatePlan {
   minimumMinutes: number
   /** เพดานเหมาจ่ายทั้งวัน — ระบบเลือกราคาที่ถูกกว่าให้ลูกค้าเอง */
   dayPassCap: number | null
+  active?: boolean
+  sortOrder?: number
 }
 
 // ---------- บิล ----------
@@ -275,4 +301,15 @@ export interface GuestOrder {
   orderedByPassId: ID | null
   splitMode: 'owner' | 'shared'
   lines: GuestOrderLine[]
+}
+
+// ---------- ตั้งค่าร้าน (เจ้าของ/ผู้จัดการ) ----------
+
+export type StaffRole = 'staff' | 'manager' | 'owner'
+
+export interface TaxConfig {
+  serviceChargeRate: number
+  vatRate: number
+  /** true = ราคาที่แสดงรวม VAT แล้ว */
+  vatIncluded: boolean
 }
