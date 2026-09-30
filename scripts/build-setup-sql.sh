@@ -41,4 +41,4 @@ make_patch() {
 
 make_patch supabase/patch-phase2.sql "patch Phase 2 (ลูกค้าสั่งผ่าน QR + อุดสิทธิ์ EXECUTE)"   supabase/migrations/20260930000500_guest_ordering.sql   supabase/migrations/20260930000600_harden_execute.sql
 
-make_patch supabase/patch-booking.sql "patch จองโต๊ะออนไลน์"   supabase/migrations/20260930000700_reservations.sql
+make_patch supabase/patch-booking.sql "patch จองโต๊ะออนไลน์ + เลิกใช้สถานะกำลังเก็บ"   supabase/migrations/20260930000700_reservations.sql   supabase/migrations/20260930000800_drop_cleaning_status.sql

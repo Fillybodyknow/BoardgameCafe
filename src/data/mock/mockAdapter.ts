@@ -115,8 +115,9 @@ class MockAdapter implements DataPort {
     for (const occ of this.state.occupancies) {
       if (occ.visitId === visitId && occ.toAt === null) {
         occ.toAt = nowIso
+        // โต๊ะกลับมาว่างทันที — ไม่มีสถานะ "กำลังเก็บ" แล้ว (ดู migration 800)
         const old = this.state.tables.find((t) => t.id === occ.tableId)
-        if (old) old.status = 'cleaning'
+        if (old) old.status = 'free'
       }
     }
     for (const tableId of tableIds) {
@@ -154,7 +155,7 @@ class MockAdapter implements DataPort {
       if (occ.visitId === visitId && occ.toAt === null) {
         occ.toAt = nowIso
         const table = this.state.tables.find((t) => t.id === occ.tableId)
-        if (table) table.status = 'cleaning'
+        if (table) table.status = 'free'
       }
     }
     this.commit()

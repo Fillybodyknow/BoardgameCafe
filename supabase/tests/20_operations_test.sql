@@ -105,8 +105,8 @@ begin
 
   -- ย้ายโต๊ะ
   perform move_visit_to_tables(v_visit.id, array[v_table2]);
-  perform assert_eq('โต๊ะเดิมถูกปล่อย',
-    (select status from cafe_tables where id = v_table), 'cleaning'::table_status);
+  perform assert_eq('โต๊ะเดิมกลับมาว่างทันที',
+    (select status from cafe_tables where id = v_table), 'free'::table_status);
   perform assert_eq('โต๊ะใหม่ถูกจอง',
     (select status from cafe_tables where id = v_table2), 'occupied'::table_status);
   perform assert_eq('ประวัติโต๊ะเดิมยังอยู่',
@@ -162,8 +162,11 @@ begin
     (select status from visits where id = v_visit.id), 'paid'::visit_status);
   perform assert_eq('ผู้เล่นถูกปิดบิลหมด',
     (select count(*) from guest_passes where visit_id = v_visit.id and status <> 'billed'), 0::bigint);
-  perform assert_eq('โต๊ะถูกคืน',
-    (select status from cafe_tables where id = v_table2), 'cleaning'::table_status);
+  perform assert_eq('ปิดบิลแล้วโต๊ะกลับมาว่างทันที',
+    (select status from cafe_tables where id = v_table2), 'free'::table_status);
+  -- โต๊ะที่ปล่อยแล้วต้องรับลูกค้าใหม่ได้เลย ไม่ค้างสถานะ (เคยเป็นบั๊ก)
+  perform assert_eq('ไม่มีโต๊ะไหนค้างสถานะกำลังเก็บ',
+    (select count(*) from cafe_tables where status = 'cleaning'), 0::bigint);
   perform assert_eq('มี audit log',
     (select count(*) from audit_log where entity_id = v_visit.id), 1::bigint);
 

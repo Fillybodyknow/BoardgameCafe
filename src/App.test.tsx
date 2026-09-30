@@ -82,6 +82,41 @@ describe('แอปเปิดได้', () => {
     })
   })
 
+  // เคยเป็นบั๊ก: ปิดบิลแล้วโต๊ะติดสถานะ 'cleaning' ค้างถาวร เพราะไม่มีโค้ดไหน
+  // ตั้งกลับเป็น 'free' เลย ทำให้เปิดโต๊ะนั้นใหม่ไม่ได้อีก
+  it('ปิดบิลแล้วโต๊ะกลับมาว่าง และเปิดใหม่ได้ทันที', async () => {
+    const before = await mockAdapter.getSnapshot()
+    const visit = before.visits.find((v) => v.status === 'open')!
+    const tableId = before.occupancies.find((o) => o.visitId === visit.id && o.toAt === null)!.tableId
+
+    await mockAdapter.closeVisit(visit.id)
+
+    const after = await mockAdapter.getSnapshot()
+    expect(after.tables.find((t) => t.id === tableId)!.status).toBe('free')
+    expect(after.tables.some((t) => t.status === 'cleaning')).toBe(false)
+
+    // เปิดโต๊ะเดิมใหม่ได้เลย ไม่ต้องรอใครกดเก็บโต๊ะ
+    const plan = after.ratePlans[0]!.id
+    const reopened = await mockAdapter.openVisit({
+      tableIds: [tableId],
+      guests: [{ name: 'กลุ่มใหม่', ratePlanId: plan }],
+    })
+    expect(reopened.id).toBeTruthy()
+  })
+
+  it('ย้ายโต๊ะแล้วโต๊ะเดิมกลับมาว่าง', async () => {
+    const before = await mockAdapter.getSnapshot()
+    const visit = before.visits.find((v) => v.status === 'open')!
+    const from = before.occupancies.find((o) => o.visitId === visit.id && o.toAt === null)!.tableId
+    const to = before.tables.find((t) => t.status === 'free' && !t.allowShare)!.id
+
+    await mockAdapter.moveVisitToTables(visit.id, [to])
+
+    const after = await mockAdapter.getSnapshot()
+    expect(after.tables.find((t) => t.id === from)!.status).toBe('free')
+    expect(after.tables.find((t) => t.id === to)!.status).toBe('occupied')
+  })
+
   it('หน้าการจองเตือนเมื่อลูกค้าเลยเวลานัด', async () => {
     window.location.hash = '#/reservations'
     render(<App />)
