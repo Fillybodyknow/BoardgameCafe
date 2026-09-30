@@ -24,6 +24,8 @@ export interface CafeTable {
   /** อนุญาตให้ 2 กลุ่มที่ไม่รู้จักกันนั่งโต๊ะเดียวกัน (โต๊ะยาว/เคาน์เตอร์) */
   allowShare: boolean
   status: TableStatus
+  /** token ใน QR ที่ติดโต๊ะ — พนักงานเท่านั้นที่อ่านได้ */
+  qrToken?: string
 }
 
 // ---------- Visit = กลุ่มที่มาด้วยกัน ----------
@@ -186,4 +188,43 @@ export interface Reservation {
   status: ReservationStatus
   tableIds: ID[]
   note?: string
+}
+
+// ---------- การชำระเงิน ----------
+
+export type PaymentMethod = 'cash' | 'transfer'
+
+export interface PaymentInput {
+  method: PaymentMethod
+  amount: number
+  /** จ่ายแทน pass ไหนบ้าง — ว่าง = จ่ายรวมทั้งโต๊ะ */
+  paidFor?: ID[]
+}
+
+// ---------- มุมมองฝั่งลูกค้า (สแกน QR) ----------
+
+/** ลูกค้าเห็นเท่านี้ ไม่มีข้อมูลโต๊ะอื่นและไม่มี token หลุดกลับมา */
+export interface GuestSession {
+  tableCode: string
+  zone: string
+  /** null = โต๊ะยังไม่ได้เปิด ต้องแจ้งพนักงานก่อน */
+  visitId: ID | null
+  passes: { id: ID; displayName: string }[]
+  menu: MenuItem[]
+}
+
+export interface GuestOrderLine {
+  id: ID
+  name: string
+  qty: number
+  amount: number
+}
+
+export interface GuestOrder {
+  id: ID
+  status: OrderStatus
+  placedAt: Timestamp
+  orderedByPassId: ID | null
+  splitMode: 'owner' | 'shared'
+  lines: GuestOrderLine[]
 }

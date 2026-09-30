@@ -1,8 +1,8 @@
 import type { RealtimeChannel } from '@supabase/supabase-js'
-import type { DataPort, Snapshot } from '../port'
+import type { DataPort, GuestPort, Snapshot } from '../port'
 import type {
-  BillPreview, CafeTable, GameTitle, GuestPass, ID, MenuItem,
-  Occupancy, Order, OrderStatus, RatePlan, Reservation, Visit,
+  BillPreview, CafeTable, GameTitle, GuestOrder, GuestPass, GuestSession, ID,
+  MenuItem, Occupancy, Order, OrderStatus, PaymentInput, RatePlan, Reservation, Visit,
 } from '../../domain/types'
 import { requireClient } from './client'
 
@@ -142,8 +142,19 @@ class SupabaseAdapter implements DataPort {
     await rpc('move_visit_to_tables', { p_visit_id: visitId, p_table_ids: tableIds })
   }
 
-  async closeVisit(visitId: ID) {
-    await rpc('close_visit', { p_visit_id: visitId, p_payments: [] })
+  async closeVisit(visitId: ID, payments: PaymentInput[] = []) {
+    await rpc('close_visit', {
+      p_visit_id: visitId,
+      p_payments: payments.map((p) => ({
+        method: p.method,
+        amount: p.amount,
+        paidFor: p.paidFor ?? [],
+      })),
+    })
+  }
+
+  async rotateTableToken(tableId: ID) {
+    return await rpc<string>('rotate_table_token', { p_table_id: tableId })
   }
 
   // ------------------------------------------------------------- Order ----
@@ -201,6 +212,7 @@ function toTable(r: Record<string, any>): CafeTable {
     id: r.id, code: r.code, zone: r.zone,
     seatMin: r.seat_min, seatMax: r.seat_max,
     allowShare: r.allow_share, status: r.status,
+    qrToken: r.qr_token,
   }
 }
 
@@ -270,3 +282,30 @@ function toReservation(r: Record<string, any>): Reservation {
 }
 
 export const supabaseAdapter = new SupabaseAdapter()
+
+/**
+ * ฝั่งลูกค้า — ไม่ต้องล็อกอิน ใช้ token จาก QR แทน
+ *
+ * ทุกตัวเป็น RPC ที่แปลง token เป็น visit เองฝั่งเซิร์ฟเวอร์
+ * ลูกค้าไม่เคยส่ง visitId หรือ tableId มา จึงอ้างถึงโต๊ะอื่นไม่ได้
+ */
+export const supabaseGuestAdapter: GuestPort = {
+  async session(token) {
+    return await rpc<GuestSession>('guest_session', { p_token: token })
+  },
+  async orders(token) {
+    return await rpc<GuestOrder[]>('guest_orders', { p_token: token })
+  },
+  async bill(token) {
+    return await rpc<BillPreview>('guest_bill', { p_token: token })
+  },
+  async placeOrder(input) {
+    return await rpc('guest_place_order', {
+      p_token: input.token,
+      p_ordered_by_pass_id: input.orderedByPassId,
+      p_split_mode: input.splitMode,
+      p_items: input.items.map((i) => ({ menuItemId: i.menuItemId, qty: i.qty, note: i.note ?? null })),
+      p_idempotency_key: input.idempotencyKey,
+    })
+  },
+}

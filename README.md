@@ -50,7 +50,8 @@
 npm install
 npm run dev        # http://localhost:5173
 npm test           # 20 เทสต์ฝั่ง client (ตรรกะคิดเงิน + smoke test ทุกหน้า)
-npm run test:sql   # รัน migration + เทสต์ SQL บน Postgres ใน Docker
+npm run test:sql          # รัน migration + เทสต์ SQL บน Postgres ใน Docker
+npm run test:sql:upgrade  # ทดสอบเส้นทางอัปเกรดจากฐานข้อมูลเวอร์ชันก่อน
 npm run build
 ```
 
@@ -73,6 +74,9 @@ src/
     AuthGate.tsx      ด่านล็อกอินพนักงาน
   pages/
     FloorMap.tsx      ผังโต๊ะ (หน้าหลักของพนักงาน)
+    PaymentDialog.tsx รับชำระเงิน (สด/โอน, จ่ายรวม/แยก/หาร)
+    TableQR.tsx       สร้างและพิมพ์ QR ประจำโต๊ะ
+    guest/GuestApp.tsx หน้าลูกค้าที่สแกน QR (ไม่ต้องล็อกอิน)
     VisitDetail.tsx   ผู้เล่น + ตัวจับเวลา + ออเดอร์ + บิล + แยกบิล
     OrderDialog.tsx   รับออเดอร์
     Kitchen.tsx       จอครัว (KDS) พร้อม SLA
@@ -98,9 +102,13 @@ supabase/
 `npm run test:sql` พิสูจน์ข้อพวกนี้ด้วยการลองโจมตีจริง (แก้ยอดบิล, ปลอมการชำระเงิน,
 เรียก RPC โดยไม่ใช่พนักงาน) รายละเอียด: [supabase/README.md](supabase/README.md)
 
-### ยังทำไม่ได้
-ลูกค้าสั่งอาหารเองผ่าน QR — `place_order()` ยังบังคับว่าต้องเป็นพนักงาน
-ต้องเพิ่ม table token หมุนเวียนก่อน ไม่งั้นคนนอกร้านสั่งได้
+### ลูกค้าสั่งเองผ่าน QR
+สิทธิ์มาจาก token ใน QR ไม่ใช่บัญชีผู้ใช้ ทุก RPC ฝั่งลูกค้ารับ token แล้วแปลง
+เป็นโต๊ะเองฝั่งเซิร์ฟเวอร์ — ลูกค้าไม่เคยส่ง `visitId` หรือ `tableId` มา
+จึงอ้างถึงโต๊ะอื่นไม่ได้แม้จะแก้ค่าที่ส่งไป
+
+token ใช้สั่งของได้เฉพาะตอนที่โต๊ะนั้นเปิดบิลอยู่ และเปลี่ยนได้จากหน้า QR โต๊ะ
+ถ้าสงสัยว่าใบที่พิมพ์หลุดออกนอกร้าน
 
 ---
 
@@ -109,7 +117,8 @@ supabase/
 - [x] **Phase 0** — scaffold + CI/CD ขึ้น GitHub Pages
 - [x] **Phase 1** — ผังโต๊ะ, visit/pass, จับเวลา, ออเดอร์, บิล, แยกบิล, KDS
 - [x] **Phase 1.5** — Supabase: schema + RLS + RPC คิดเงิน + realtime + ล็อกอินพนักงาน
-- [ ] **Phase 2** — QR โต๊ะ + ลูกค้าสั่งเอง + จองออนไลน์ + PWA
+- [x] **Phase 2** — หน้ารับชำระเงิน + QR โต๊ะ + ลูกค้าสั่งเองจากมือถือ
+- [ ] **Phase 2.5** — จองออนไลน์ + PWA
 - [ ] **Phase 3** — ยืม-คืนเกม + ค่าปรับชิ้นส่วนหาย, รวมบิลข้ามกลุ่ม, offline queue
 - [ ] **Phase 4** — สมาชิก/แต้ม, โปรโมชัน, รายงาน, สต็อก
 

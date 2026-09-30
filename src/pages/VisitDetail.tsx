@@ -9,6 +9,7 @@ import type { GuestPass, Order, RatePlan } from '../domain/types'
 import { Badge, Button, Card, Empty, SectionTitle } from '../components/ui'
 import type { Tone } from '../components/ui'
 import OrderDialog from './OrderDialog'
+import PaymentDialog from './PaymentDialog'
 
 const PASS_TONE: Record<GuestPass['status'], Tone> = {
   active: 'emerald',
@@ -44,6 +45,7 @@ export default function VisitDetail() {
   const [showAddPass, setShowAddPass] = useState(false)
   const [showMove, setShowMove] = useState(false)
   const [splitMode, setSplitMode] = useState<'together' | 'by_owner'>('together')
+  const [showPayment, setShowPayment] = useState(false)
 
   const ratePlans = useMemo<Record<string, RatePlan>>(
     () => Object.fromEntries((data?.ratePlans ?? []).map((p) => [p.id, p])),
@@ -111,13 +113,9 @@ export default function VisitDetail() {
           <Button
             variant="danger"
             disabled={visit.status !== 'open'}
-            onClick={async () => {
-              if (!confirm(`ปิดบิล ${visit.code} ยอด ฿${formatBaht(bill.total)} ?`)) return
-              await db.closeVisit(visit.id)
-              navigate('/')
-            }}
+            onClick={() => setShowPayment(true)}
           >
-            ปิดบิล
+            เช็คบิล
           </Button>
         </div>
       </Card>
@@ -306,6 +304,15 @@ export default function VisitDetail() {
       {showOrder && <OrderDialog visitId={visit.id} passes={passes} onClose={() => setShowOrder(false)} />}
       {showAddPass && <AddPassDialog visitId={visit.id} onClose={() => setShowAddPass(false)} />}
       {showMove && <MoveTableDialog visitId={visit.id} onClose={() => setShowMove(false)} />}
+      {showPayment && (
+        <PaymentDialog
+          visitCode={visit.code}
+          bill={bill}
+          passes={passes}
+          onClose={() => setShowPayment(false)}
+          onPaid={() => navigate('/')}
+        />
+      )}
     </div>
   )
 }

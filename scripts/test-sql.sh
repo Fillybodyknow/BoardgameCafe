@@ -41,8 +41,10 @@ run() {
 run supabase/tests/00_harness.sql
 for f in supabase/migrations/*.sql; do run "$f"; done
 run supabase/seed.sql
+run supabase/tests/05_test_grants.sql
 run supabase/tests/10_pricing_test.sql
 run supabase/tests/20_operations_test.sql
+run supabase/tests/30_guest_test.sql
 
 echo
 echo "เทสต์ SQL ผ่านทั้งหมด"

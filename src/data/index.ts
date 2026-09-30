@@ -1,6 +1,6 @@
-import type { DataPort } from './port'
-import { mockAdapter } from './mock/mockAdapter'
-import { supabaseAdapter } from './supabase/supabaseAdapter'
+import type { DataPort, GuestPort } from './port'
+import { mockAdapter, mockGuestAdapter } from './mock/mockAdapter'
+import { supabaseAdapter, supabaseGuestAdapter } from './supabase/supabaseAdapter'
 import { hasSupabase } from './supabase/client'
 
 /**
@@ -13,6 +13,9 @@ export const IS_MOCK = !hasSupabase
 
 export const db: DataPort = hasSupabase ? supabaseAdapter : mockAdapter
 
+/** ฝั่งลูกค้าที่สแกน QR — ไม่ต้องล็อกอิน */
+export const guestDb: GuestPort = hasSupabase ? supabaseGuestAdapter : mockGuestAdapter
+
 export { mockAdapter }
 export { hasSupabase, supabase } from './supabase/client'
-export type { DataPort, Snapshot } from './port'
+export type { DataPort, GuestPort, Snapshot } from './port'

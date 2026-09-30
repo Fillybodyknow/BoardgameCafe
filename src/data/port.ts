@@ -1,6 +1,6 @@
 import type {
-  BillPreview, CafeTable, GameTitle, GuestPass, ID, MenuItem,
-  Occupancy, Order, OrderStatus, RatePlan, Reservation, Visit,
+  BillPreview, CafeTable, GameTitle, GuestOrder, GuestPass, GuestSession, ID,
+  MenuItem, Occupancy, Order, OrderStatus, PaymentInput, RatePlan, Reservation, Visit,
 } from '../domain/types'
 
 /**
@@ -38,7 +38,10 @@ export interface DataPort {
   resumePass(passId: ID): Promise<void>
   checkOutPass(passId: ID): Promise<void>
   moveVisitToTables(visitId: ID, tableIds: ID[]): Promise<void>
-  closeVisit(visitId: ID): Promise<void>
+  /** ปิดบิล พร้อมบันทึกการชำระเงิน (ว่าง = ปิดโดยยังไม่เก็บเงิน) */
+  closeVisit(visitId: ID, payments?: PaymentInput[]): Promise<void>
+  /** เปลี่ยน token ของโต๊ะ ใช้เมื่อสงสัยว่า QR หลุดออกนอกร้าน */
+  rotateTableToken(tableId: ID): Promise<string>
 
   // --- Order ---
   placeOrder(input: {
@@ -54,4 +57,24 @@ export interface DataPort {
   // --- Bill ---
   /** ยอดเรียลไทม์ ไม่ commit — ของจริงต้องเป็น RPC ฝั่งเซิร์ฟเวอร์ */
   previewBill(visitId: ID, now?: Date): Promise<BillPreview>
+}
+
+/**
+ * สิ่งที่ลูกค้าเรียกได้หลังสแกน QR — ไม่ต้องล็อกอิน
+ *
+ * แยกจาก DataPort โดยตั้งใจ เพราะเป็นคนละผู้ใช้และคนละระดับสิทธิ์
+ * ทุก method รับ token แทน visitId — ลูกค้าจึงอ้างถึงโต๊ะอื่นไม่ได้เลย
+ * แม้จะแก้ค่าที่ส่งไปก็ตาม
+ */
+export interface GuestPort {
+  session(token: string): Promise<GuestSession>
+  orders(token: string): Promise<GuestOrder[]>
+  bill(token: string): Promise<BillPreview>
+  placeOrder(input: {
+    token: string
+    idempotencyKey: string
+    orderedByPassId: ID | null
+    splitMode: 'owner' | 'shared'
+    items: { menuItemId: ID; qty: number; note?: string }[]
+  }): Promise<{ orderId: ID; status: OrderStatus }>
 }

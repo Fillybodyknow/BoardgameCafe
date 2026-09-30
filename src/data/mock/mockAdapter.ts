@@ -1,6 +1,7 @@
-import type { DataPort, Snapshot } from '../port'
+import type { DataPort, GuestPort, Snapshot } from '../port'
 import type {
-  BillPreview, GuestPass, ID, Order, OrderStatus, RatePlan, Visit,
+  BillPreview, GuestOrder, GuestPass, GuestSession, ID, Order, OrderStatus,
+  PaymentInput, RatePlan, Visit,
 } from '../../domain/types'
 import { computeBill } from '../../domain/pricing'
 import { seed, businessDateOf } from './seed'
@@ -126,7 +127,16 @@ class MockAdapter implements DataPort {
     this.commit()
   }
 
-  async closeVisit(visitId: ID) {
+  async rotateTableToken(tableId: ID) {
+    const table = this.state.tables.find((t) => t.id === tableId)
+    if (!table) throw new Error(`ไม่พบโต๊ะ ${tableId}`)
+    table.qrToken = newId('qr')
+    this.commit()
+    return table.qrToken
+  }
+
+  async closeVisit(visitId: ID, payments: PaymentInput[] = []) {
+    void payments // โหมดจำลองไม่เก็บประวัติการชำระเงิน ของจริงบันทึกใน close_visit()
     const visit = this.state.visits.find((v) => v.id === visitId)
     if (!visit) throw new Error(`ไม่พบ visit ${visitId}`)
     const nowIso = new Date().toISOString()
@@ -155,6 +165,23 @@ class MockAdapter implements DataPort {
   async placeOrder(input: Parameters<DataPort['placeOrder']>[0]) {
     const cached = this.seenKeys.get(input.idempotencyKey)
     if (cached) return structuredClone(cached)
+
+    const visit = this.state.visits.find((v) => v.id === input.visitId)
+    if (!visit || visit.status !== 'open') {
+      throw new Error('visit นี้ปิดแล้ว สั่งเพิ่มไม่ได้')
+    }
+
+    // ต้องตรวจให้ตรงกับ place_order_core() ฝั่ง SQL ไม่งั้นโหมดเดโมจะหละหลวมกว่า
+    // ของจริง แล้วบั๊กจะไม่โผล่จนกว่าจะขึ้นฐานข้อมูลจริง
+    if (input.splitMode === 'owner') {
+      const owner = this.state.passes.find((p) => p.id === input.orderedByPassId)
+      if (!owner || owner.visitId !== input.visitId) {
+        throw new Error('ผู้สั่งไม่ได้อยู่ในกลุ่มนี้')
+      }
+      if (owner.status !== 'active' && owner.status !== 'paused') {
+        throw new Error('ผู้สั่งไม่ได้อยู่ในกลุ่มนี้แล้ว')
+      }
+    }
 
     const occ = this.state.occupancies.find((o) => o.visitId === input.visitId && o.toAt === null)
     const order: Order = {
@@ -196,6 +223,69 @@ class MockAdapter implements DataPort {
     }
     order.status = status
     this.commit()
+  }
+
+  // ---------- ฝั่งลูกค้า (สแกน QR) ----------
+
+  /** แปลง token เป็น visit ที่เปิดอยู่ — ตรรกะเดียวกับ visit_for_token() ใน SQL */
+  private visitForToken(token: string): { tableId: ID; visitId: ID | null; code: string; zone: string } {
+    const table = this.state.tables.find((t) => t.qrToken === token)
+    if (!table) throw new Error('QR นี้ใช้ไม่ได้')
+    const occ = this.state.occupancies.find((o) => o.tableId === table.id && o.toAt === null)
+    const visit = occ && this.state.visits.find((v) => v.id === occ.visitId && v.status === 'open')
+    return { tableId: table.id, visitId: visit ? visit.id : null, code: table.code, zone: table.zone }
+  }
+
+  async guestSession(token: string): Promise<GuestSession> {
+    const { visitId, code, zone } = this.visitForToken(token)
+    return {
+      tableCode: code,
+      zone,
+      visitId,
+      passes: this.state.passes
+        .filter((p) => p.visitId === visitId && (p.status === 'active' || p.status === 'paused'))
+        .map((p) => ({ id: p.id, displayName: p.displayName })),
+      menu: structuredClone(this.state.menu),
+    }
+  }
+
+  async guestOrders(token: string): Promise<GuestOrder[]> {
+    const { visitId } = this.visitForToken(token)
+    if (!visitId) return []
+    return this.state.orders
+      .filter((o) => o.visitId === visitId)
+      .sort((a, b) => b.placedAt.localeCompare(a.placedAt))
+      .map((o) => ({
+        id: o.id,
+        status: o.status,
+        placedAt: o.placedAt,
+        orderedByPassId: o.orderedByPassId,
+        splitMode: o.splitMode,
+        lines: o.lines.map((l) => ({
+          id: l.id, name: l.nameSnapshot, qty: l.qty,
+          amount: Math.round(l.unitPriceSnapshot * l.qty * 100) / 100,
+        })),
+      }))
+  }
+
+  async guestBill(token: string): Promise<BillPreview> {
+    const { visitId } = this.visitForToken(token)
+    if (!visitId) throw new Error('โต๊ะนี้ยังไม่ได้เปิด')
+    return this.previewBill(visitId)
+  }
+
+  async guestPlaceOrder(input: Parameters<GuestPort['placeOrder']>[0]) {
+    const { visitId } = this.visitForToken(input.token)
+    if (!visitId) throw new Error('โต๊ะนี้ยังไม่ได้เปิด กรุณาแจ้งพนักงาน')
+    const order = await this.placeOrder({
+      idempotencyKey: input.idempotencyKey,
+      visitId,
+      orderedByPassId: input.orderedByPassId,
+      splitMode: input.splitMode,
+      placedBy: 'guest',
+      items: input.items,
+    })
+    return { orderId: order.id, status: order.status }
   }
 
   // ---------- Bill ----------
@@ -277,3 +367,15 @@ function save(state: Snapshot) {
 }
 
 export const mockAdapter = new MockAdapter()
+
+/**
+ * ฝั่งลูกค้าแยกเป็นคนละ adapter โดยตั้งใจ — คนละผู้ใช้ คนละสิทธิ์
+ * และ placeOrder ของสองฝั่งรับพารามิเตอร์ไม่เหมือนกัน (ลูกค้าส่ง token
+ * ไม่ใช่ visitId) จึงอยู่ในอินเทอร์เฟซเดียวกันไม่ได้
+ */
+export const mockGuestAdapter: GuestPort = {
+  session: (token) => mockAdapter.guestSession(token),
+  orders: (token) => mockAdapter.guestOrders(token),
+  bill: (token) => mockAdapter.guestBill(token),
+  placeOrder: (input) => mockAdapter.guestPlaceOrder(input),
+}

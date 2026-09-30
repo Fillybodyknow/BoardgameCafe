@@ -193,8 +193,10 @@ begin
   select count(*) into v_count from menu_items;
   perform assert_eq('anon อ่านเมนูได้', v_count > 0, true);
 
-  select count(*) into v_count from cafe_tables;
-  perform assert_eq('anon อ่านผังโต๊ะได้', v_count > 0, true);
+  -- อ่านผ่าน view เท่านั้น ตารางจริงมี qr_token อยู่จึงปิดไว้
+  -- (ดู 30_guest_test.sql)
+  select count(*) into v_count from public_tables;
+  perform assert_eq('anon อ่านผังโต๊ะผ่าน view ได้', v_count > 0, true);
 end;
 $$;
 
@@ -206,7 +208,8 @@ declare
   v_n     bigint;
 begin
   foreach v_table in array array['visits', 'guest_passes', 'occupancies',
-                                 'orders', 'bills', 'payments', 'audit_log'] loop
+                                 'orders', 'bills', 'payments', 'audit_log',
+                                 'cafe_tables'] loop
     begin
       execute format('select count(*) from %I', v_table) into v_n;
       raise exception 'FAIL  anon ไม่ควรอ่าน % ได้', v_table;
@@ -249,16 +252,68 @@ end;
 $$;
 
 -- ลูกค้าเรียก RPC ที่เปลี่ยนข้อมูลไม่ได้
+--
+-- ต้องแยกให้ออกว่าถูกปฏิเสธเพราะอะไร: assert_staff() ก็ raise 42501 เหมือนกัน
+-- ถ้าไม่ตรวจข้อความ เทสต์จะผ่านทั้งที่ EXECUTE ยังเปิดอยู่ (เคยพลาดมาแล้ว)
 do $$
+declare v_msg text;
 begin
-  perform close_visit((select id from visits limit 1));
+  -- ใช้ uuid ตายตัว ไม่ใช่ subquery เพราะ anon อ่านตาราง visits ไม่ได้
+  -- แล้วจะพังก่อนถึงตัวฟังก์ชัน ทำให้ทดสอบผิดเรื่อง
+  perform close_visit('00000000-0000-0000-0000-000000000000');
   raise exception 'FAIL  anon ไม่ควรเรียก close_visit ได้';
 exception when insufficient_privilege then
-  raise notice 'PASS  anon เรียก close_visit ไม่ได้';
+  get stacked diagnostics v_msg = message_text;
+  if v_msg not like 'permission denied for function%' then
+    raise exception 'FAIL  ถูกปฏิเสธผิดชั้น (ควรเป็นระดับสิทธิ์ ไม่ใช่ assert_staff): %', v_msg;
+  end if;
+  raise notice 'PASS  anon เรียก close_visit ไม่ได้ตั้งแต่ระดับสิทธิ์';
 end;
 $$;
 
 reset role;
+
+
+-- ==========================================================================
+-- ตรวจสิทธิ์ EXECUTE ทุกฟังก์ชันใน schema public แบบครอบคลุม
+--
+-- ไม่เลือกมาตรวจทีละตัว เพราะฟังก์ชันที่เพิ่มในอนาคตจะหลุดการตรวจ
+-- ค่าปริยายของ Postgres คือให้ EXECUTE กับ PUBLIC ฟังก์ชันใหม่จึงเปิดเองเงียบ ๆ
+-- ==========================================================================
+
+do $$
+declare
+  r          record;
+  v_allowed  text[] := array['guest_session', 'guest_orders', 'guest_bill',
+                             'guest_place_order', 'assert_eq'];
+  v_leaked   text[] := '{}';
+  v_missing  text[] := '{}';
+begin
+  for r in
+    select p.oid, p.oid::regprocedure::text as sig, p.proname
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public' and p.prokind = 'f'
+  loop
+    if has_function_privilege('anon', r.oid, 'EXECUTE') then
+      if not (r.proname = any(v_allowed)) then
+        v_leaked := v_leaked || r.sig;
+      end if;
+    elsif r.proname = any(v_allowed) then
+      v_missing := v_missing || r.sig;
+    end if;
+  end loop;
+
+  if array_length(v_leaked, 1) is not null then
+    raise exception 'FAIL  anon เรียกฟังก์ชันที่ไม่ควรเรียกได้: %', array_to_string(v_leaked, ', ');
+  end if;
+  if array_length(v_missing, 1) is not null then
+    raise exception 'FAIL  ฟังก์ชันฝั่งลูกค้าถูกปิดเกินไป: %', array_to_string(v_missing, ', ');
+  end if;
+
+  raise notice 'PASS  anon เรียกได้เฉพาะ 4 ฟังก์ชันฝั่งลูกค้าเท่านั้น';
+end;
+$$;
 
 -- ==========================================================================
 -- สวมบทคนที่ล็อกอินแล้วแต่ไม่ใช่พนักงาน (เช่นลูกค้าที่สมัครสมาชิก)
