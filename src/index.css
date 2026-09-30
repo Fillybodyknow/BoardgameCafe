@@ -1,0 +1,28 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'IBM Plex Sans Thai', ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-slate-950);
+  color: var(--color-slate-100);
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ตัวเลขเวลา/เงิน ต้องความกว้างคงที่ ไม่งั้นนาฬิกาเด้งทุกวินาที */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
