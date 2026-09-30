@@ -1,8 +1,9 @@
 import type { RealtimeChannel } from '@supabase/supabase-js'
-import type { DataPort, GuestPort, Snapshot } from '../port'
+import type { BookingPort, DataPort, GuestPort, Snapshot } from '../port'
 import type {
-  BillPreview, CafeTable, GameTitle, GuestOrder, GuestPass, GuestSession, ID,
-  MenuItem, Occupancy, Order, OrderStatus, PaymentInput, RatePlan, Reservation, Visit,
+  AvailableTable, BillPreview, BookingConfig, BookingLookup, BookingReceipt,
+  CafeTable, GameTitle, GuestOrder, GuestPass, GuestSession, ID, MenuItem,
+  Occupancy, Order, OrderStatus, PaymentInput, RatePlan, Reservation, ShopHours, Visit,
 } from '../../domain/types'
 import { requireClient } from './client'
 
@@ -188,6 +189,29 @@ class SupabaseAdapter implements DataPort {
     await rpc('update_order_status', { p_order_id: orderId, p_status: status })
   }
 
+  // ------------------------------------------------------------- การจอง ----
+
+  async confirmReservation(id: ID) {
+    await rpc('confirm_reservation', { p_id: id })
+  }
+
+  async rejectReservation(id: ID, reason?: string) {
+    await rpc('reject_reservation', { p_id: id, p_reason: reason ?? null })
+  }
+
+  async markNoShow(id: ID) {
+    await rpc('mark_no_show', { p_id: id })
+  }
+
+  async seatReservation(id: ID, guests: { name: string; ratePlanId: ID }[], tableIds?: ID[]) {
+    const row = await rpc<Record<string, unknown>>('seat_reservation', {
+      p_id: id,
+      p_guests: guests.map((g) => ({ name: g.name, ratePlanId: g.ratePlanId })),
+      p_table_ids: tableIds ?? null,
+    })
+    return toVisit(row)
+  }
+
   // -------------------------------------------------------------- Bill ----
 
   async previewBill(visitId: ID): Promise<BillPreview> {
@@ -277,7 +301,10 @@ function toReservation(r: Record<string, any>): Reservation {
     id: r.id, customerName: r.customer_name, phone: r.phone,
     partySize: r.party_size, startAt: r.start_at,
     durationMinutes: r.duration_minutes, zonePreference: r.zone_preference,
-    status: r.status, tableIds: r.table_ids ?? [], note: r.note ?? undefined,
+    status: r.status, tableIds: r.table_ids ?? [],
+    code: r.code ?? null, source: r.source ?? 'staff',
+    visitId: r.visit_id ?? null,
+    note: r.note ?? undefined, staffNote: r.staff_note ?? undefined,
   }
 }
 
@@ -289,6 +316,65 @@ export const supabaseAdapter = new SupabaseAdapter()
  * ทุกตัวเป็น RPC ที่แปลง token เป็น visit เองฝั่งเซิร์ฟเวอร์
  * ลูกค้าไม่เคยส่ง visitId หรือ tableId มา จึงอ้างถึงโต๊ะอื่นไม่ได้
  */
+/**
+ * จองโต๊ะออนไลน์ — ลูกค้ายังไม่ได้มาร้าน จึงไม่มี QR token
+ * ยืนยันตัวด้วยรหัสจอง + เบอร์โทรแทน (รหัสอย่างเดียวไม่พอ)
+ */
+export const supabaseBookingAdapter: BookingPort = {
+  async hours() {
+    const sb = requireClient()
+    const { data, error } = await sb.from('shop_hours').select('*').order('weekday')
+    if (error) throw new Error(error.message)
+    return (data ?? []).map((r) => ({
+      weekday: r.weekday,
+      openTime: String(r.open_time).slice(0, 5),
+      closeTime: String(r.close_time).slice(0, 5),
+      closed: r.closed,
+    })) as ShopHours[]
+  },
+
+  async config() {
+    const sb = requireClient()
+    const { data, error } = await sb.from('reservation_config').select('*').eq('id', 1).single()
+    if (error) throw new Error(error.message)
+    return {
+      slotMinutes: data.slot_minutes,
+      defaultDurationMinutes: data.default_duration_minutes,
+      minDurationMinutes: data.min_duration_minutes,
+      maxDurationMinutes: data.max_duration_minutes,
+      maxAdvanceDays: data.max_advance_days,
+      minAdvanceMinutes: data.min_advance_minutes,
+    } as BookingConfig
+  },
+
+  async availableTables(startAt, durationMinutes) {
+    return await rpc<AvailableTable[]>('available_tables', {
+      p_start: startAt,
+      p_duration: durationMinutes,
+    })
+  },
+
+  async create(input) {
+    return await rpc<BookingReceipt>('create_reservation', {
+      p_customer_name: input.customerName,
+      p_phone: input.phone,
+      p_party_size: input.partySize,
+      p_start_at: input.startAt,
+      p_duration: input.durationMinutes,
+      p_table_ids: input.tableIds,
+      p_note: input.note ?? null,
+    })
+  },
+
+  async lookup(code, phone) {
+    return await rpc<BookingLookup>('reservation_by_code', { p_code: code, p_phone: phone })
+  },
+
+  async cancel(code, phone) {
+    await rpc('cancel_reservation_by_code', { p_code: code, p_phone: phone })
+  },
+}
+
 export const supabaseGuestAdapter: GuestPort = {
   async session(token) {
     return await rpc<GuestSession>('guest_session', { p_token: token })

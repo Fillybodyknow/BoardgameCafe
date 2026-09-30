@@ -1,7 +1,7 @@
-import type { DataPort, GuestPort, Snapshot } from '../port'
+import type { BookingPort, DataPort, GuestPort, Snapshot } from '../port'
 import type {
-  BillPreview, GuestOrder, GuestPass, GuestSession, ID, Order, OrderStatus,
-  PaymentInput, RatePlan, Visit,
+  AvailableTable, BillPreview, BookingLookup, BookingReceipt, GuestOrder, GuestPass,
+  GuestSession, ID, Order, OrderStatus, PaymentInput, RatePlan, Reservation, Visit,
 } from '../../domain/types'
 import { computeBill } from '../../domain/pricing'
 import { seed, businessDateOf } from './seed'
@@ -225,6 +225,205 @@ class MockAdapter implements DataPort {
     this.commit()
   }
 
+  // ---------- การจอง (ฝั่งพนักงาน) ----------
+
+  private mustReservation(id: ID): Reservation {
+    const r = this.state.reservations.find((x) => x.id === id)
+    if (!r) throw new Error('ไม่พบรายการจอง')
+    return r
+  }
+
+  async confirmReservation(id: ID) {
+    const r = this.mustReservation(id)
+    if (r.status !== 'pending') throw new Error('ยืนยันได้เฉพาะรายการที่รอยืนยัน')
+    r.status = 'confirmed'
+    this.commit()
+  }
+
+  async rejectReservation(id: ID, reason?: string) {
+    const r = this.mustReservation(id)
+    if (r.status !== 'pending' && r.status !== 'confirmed') throw new Error('รายการนี้ปิดไปแล้ว')
+    r.status = 'cancelled'
+    r.staffNote = reason
+    this.commit()
+  }
+
+  async markNoShow(id: ID) {
+    const r = this.mustReservation(id)
+    if (r.status !== 'pending' && r.status !== 'confirmed') throw new Error('รายการนี้ปิดไปแล้ว')
+    r.status = 'no_show'
+    this.commit()
+  }
+
+  async seatReservation(id: ID, guests: { name: string; ratePlanId: ID }[], tableIds?: ID[]) {
+    const r = this.mustReservation(id)
+    if (r.status !== 'pending' && r.status !== 'confirmed') {
+      throw new Error('รายการนี้เช็คอินไม่ได้แล้ว')
+    }
+    const tables = tableIds ?? r.tableIds
+
+    // ตรวจให้ตรงกับ seat_reservation() ฝั่ง SQL — โต๊ะที่จองไว้อาจมีกลุ่มก่อนหน้า
+    // นั่งเลยเวลาอยู่ ต้องบอกให้ชัดว่าโต๊ะไหนติด
+    const busy = tables
+      .map((tid) => this.state.tables.find((t) => t.id === tid))
+      .filter(
+        (t) =>
+          t &&
+          !t.allowShare &&
+          this.state.occupancies.some((o) => o.tableId === t.id && o.toAt === null),
+      )
+      .map((t) => t!.code)
+    if (busy.length > 0) {
+      throw new Error(
+        'โต๊ะ ' + busy.join(', ') + ' ยังมีลูกค้าอยู่ ปิดบิลโต๊ะเดิมก่อน หรือเลือกโต๊ะอื่นให้',
+      )
+    }
+
+    const visit = await this.openVisit({ tableIds: tables, guests })
+    const stored = this.state.visits.find((v) => v.id === visit.id)
+    if (stored) stored.source = 'reservation'
+    visit.source = 'reservation'
+
+    r.status = 'seated'
+    r.visitId = visit.id
+    r.tableIds = tables
+    this.commit()
+    return visit
+  }
+
+  // ---------- จองออนไลน์ (ฝั่งลูกค้า) ----------
+
+  /** ช่วงเวลาชนกันไหม เมื่อขยายหัวท้ายด้วยเวลาเก็บโต๊ะ */
+  private overlaps(r: Reservation, start: number, end: number, bufferMin: number): boolean {
+    const rs = new Date(r.startAt).getTime() - bufferMin * 60_000
+    const re = rs + (r.durationMinutes + bufferMin * 2) * 60_000
+    return rs < end && start < re
+  }
+
+  bookingTables(startAt: string, durationMinutes: number): AvailableTable[] {
+    const start = new Date(startAt).getTime()
+    const end = start + durationMinutes * 60_000
+    const now = Date.now()
+
+    return this.state.tables.map((t) => {
+      let available = true
+      if (!t.allowShare) {
+        const clash = this.state.reservations.some(
+          (r) =>
+            ['pending', 'confirmed', 'seated'].includes(r.status) &&
+            r.tableIds.includes(t.id) &&
+            this.overlaps(r, start, end, MOCK_BOOKING.bufferMinutes),
+        )
+        const occupied =
+          start < now + MOCK_BOOKING.occupiedHoldMinutes * 60_000 &&
+          this.state.occupancies.some((o) => o.tableId === t.id && o.toAt === null)
+        available = !clash && !occupied
+      }
+      return {
+        id: t.id,
+        code: t.code,
+        zone: t.zone,
+        seatMin: t.seatMin,
+        seatMax: t.seatMax,
+        allowShare: t.allowShare,
+        available,
+      }
+    })
+  }
+
+  bookingCreate(input: Parameters<BookingPort['create']>[0]): BookingReceipt {
+    const phone = input.phone.replace(/[^0-9]/g, '')
+    if (phone.length < 9) throw new Error('เบอร์โทรไม่ถูกต้อง')
+    if (!input.customerName.trim()) throw new Error('กรุณาใส่ชื่อผู้จอง')
+    if (input.tableIds.length === 0) throw new Error('กรุณาเลือกโต๊ะ')
+
+    const avail = this.bookingTables(input.startAt, input.durationMinutes)
+    for (const id of input.tableIds) {
+      const t = avail.find((x) => x.id === id)
+      if (!t || !t.available) {
+        throw new Error('โต๊ะ ' + (t ? t.code : '') + ' ไม่ว่างในช่วงเวลานี้แล้ว')
+      }
+    }
+
+    const seats = input.tableIds.reduce(
+      (n, id) => n + (this.state.tables.find((t) => t.id === id)?.seatMax ?? 0),
+      0,
+    )
+    if (input.partySize > seats) {
+      throw new Error(
+        'โต๊ะที่เลือกนั่งได้ ' + seats + ' คน แต่จอง ' + input.partySize + ' คน',
+      )
+    }
+
+    const code = randomCode()
+    const reservation: Reservation = {
+      id: newId('r'),
+      code,
+      source: 'online',
+      customerName: input.customerName.trim(),
+      phone: input.phone,
+      partySize: input.partySize,
+      startAt: input.startAt,
+      durationMinutes: input.durationMinutes,
+      zonePreference: null,
+      status: 'pending',
+      tableIds: input.tableIds,
+      visitId: null,
+      note: input.note?.trim() || undefined,
+    }
+    this.state.reservations.push(reservation)
+    this.commit()
+
+    return {
+      code,
+      status: 'pending',
+      startAt: input.startAt,
+      durationMinutes: input.durationMinutes,
+      tables: this.codesOf(input.tableIds),
+    }
+  }
+
+  private codesOf(ids: ID[]): string[] {
+    return ids
+      .map((id) => this.state.tables.find((t) => t.id === id)?.code ?? '')
+      .sort()
+  }
+
+  /** ต้องมีทั้งรหัสและเบอร์ กันคนสุ่มรหัสไล่ดูข้อมูลคนอื่น */
+  private findByCode(code: string, phone: string): Reservation {
+    const digits = phone.replace(/[^0-9]/g, '')
+    const r = this.state.reservations.find(
+      (x) =>
+        x.code?.toUpperCase() === code.trim().toUpperCase() &&
+        x.phone.replace(/[^0-9]/g, '') === digits,
+    )
+    if (!r) throw new Error('ไม่พบรายการจอง ตรวจรหัสและเบอร์โทรอีกครั้ง')
+    return r
+  }
+
+  bookingLookup(code: string, phone: string): BookingLookup {
+    const r = this.findByCode(code, phone)
+    return {
+      code: r.code!,
+      status: r.status,
+      startAt: r.startAt,
+      durationMinutes: r.durationMinutes,
+      customerName: r.customerName,
+      partySize: r.partySize,
+      note: r.note ?? null,
+      tables: this.codesOf(r.tableIds),
+    }
+  }
+
+  bookingCancel(code: string, phone: string) {
+    const r = this.findByCode(code, phone)
+    if (r.status !== 'pending' && r.status !== 'confirmed') {
+      throw new Error('รายการนี้ยกเลิกไม่ได้แล้ว')
+    }
+    r.status = 'cancelled'
+    this.commit()
+  }
+
   // ---------- ฝั่งลูกค้า (สแกน QR) ----------
 
   /** แปลง token เป็น visit ที่เปิดอยู่ — ตรรกะเดียวกับ visit_for_token() ใน SQL */
@@ -345,6 +544,26 @@ function makePass(visitId: ID, name: string, ratePlanId: ID, at: string): GuestP
   }
 }
 
+/** ต้องตรงกับ reservation_config ฝั่ง SQL ไม่งั้นโหมดเดโมให้ผลต่างจากของจริง */
+const MOCK_BOOKING = {
+  bufferMinutes: 15,
+  occupiedHoldMinutes: 90,
+  slotMinutes: 30,
+  defaultDurationMinutes: 120,
+  minDurationMinutes: 60,
+  maxDurationMinutes: 300,
+  maxAdvanceDays: 30,
+  minAdvanceMinutes: 30,
+}
+
+/** รหัสจอง ไม่มีตัวที่สับสน (0/O, 1/I) เหมือน new_reservation_code() ฝั่ง SQL */
+function randomCode(): string {
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'
+  let out = ''
+  for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)]
+  return out
+}
+
 function newId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`
 }
@@ -373,6 +592,39 @@ export const mockAdapter = new MockAdapter()
  * และ placeOrder ของสองฝั่งรับพารามิเตอร์ไม่เหมือนกัน (ลูกค้าส่ง token
  * ไม่ใช่ visitId) จึงอยู่ในอินเทอร์เฟซเดียวกันไม่ได้
  */
+export const mockBookingAdapter: BookingPort = {
+  async hours() {
+    return Array.from({ length: 7 }, (_, weekday) => ({
+      weekday,
+      openTime: '11:00',
+      closeTime: '23:00',
+      closed: false,
+    }))
+  },
+  async config() {
+    return {
+      slotMinutes: MOCK_BOOKING.slotMinutes,
+      defaultDurationMinutes: MOCK_BOOKING.defaultDurationMinutes,
+      minDurationMinutes: MOCK_BOOKING.minDurationMinutes,
+      maxDurationMinutes: MOCK_BOOKING.maxDurationMinutes,
+      maxAdvanceDays: MOCK_BOOKING.maxAdvanceDays,
+      minAdvanceMinutes: MOCK_BOOKING.minAdvanceMinutes,
+    }
+  },
+  async availableTables(startAt, durationMinutes) {
+    return mockAdapter.bookingTables(startAt, durationMinutes)
+  },
+  async create(input) {
+    return mockAdapter.bookingCreate(input)
+  },
+  async lookup(code, phone) {
+    return mockAdapter.bookingLookup(code, phone)
+  },
+  async cancel(code, phone) {
+    mockAdapter.bookingCancel(code, phone)
+  },
+}
+
 export const mockGuestAdapter: GuestPort = {
   session: (token) => mockAdapter.guestSession(token),
   orders: (token) => mockAdapter.guestOrders(token),

@@ -285,7 +285,9 @@ do $$
 declare
   r          record;
   v_allowed  text[] := array['guest_session', 'guest_orders', 'guest_bill',
-                             'guest_place_order', 'assert_eq'];
+                             'guest_place_order', 'available_tables',
+                             'create_reservation', 'reservation_by_code',
+                             'cancel_reservation_by_code', 'assert_eq'];
   v_leaked   text[] := '{}';
   v_missing  text[] := '{}';
 begin

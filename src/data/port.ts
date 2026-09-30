@@ -1,6 +1,7 @@
 import type {
-  BillPreview, CafeTable, GameTitle, GuestOrder, GuestPass, GuestSession, ID,
-  MenuItem, Occupancy, Order, OrderStatus, PaymentInput, RatePlan, Reservation, Visit,
+  AvailableTable, BillPreview, BookingConfig, BookingLookup, BookingReceipt,
+  CafeTable, GameTitle, GuestOrder, GuestPass, GuestSession, ID, MenuItem,
+  Occupancy, Order, OrderStatus, PaymentInput, RatePlan, Reservation, ShopHours, Visit,
 } from '../domain/types'
 
 /**
@@ -43,6 +44,17 @@ export interface DataPort {
   /** เปลี่ยน token ของโต๊ะ ใช้เมื่อสงสัยว่า QR หลุดออกนอกร้าน */
   rotateTableToken(tableId: ID): Promise<string>
 
+  // --- การจอง (ฝั่งพนักงาน) ---
+  confirmReservation(id: ID): Promise<void>
+  rejectReservation(id: ID, reason?: string): Promise<void>
+  markNoShow(id: ID): Promise<void>
+  /** เช็คอินลูกค้าที่จอง — tableIds ใส่มาเพื่อย้ายโต๊ะตอนเช็คอิน */
+  seatReservation(
+    id: ID,
+    guests: { name: string; ratePlanId: ID }[],
+    tableIds?: ID[],
+  ): Promise<Visit>
+
   // --- Order ---
   placeOrder(input: {
     idempotencyKey: string
@@ -66,6 +78,30 @@ export interface DataPort {
  * ทุก method รับ token แทน visitId — ลูกค้าจึงอ้างถึงโต๊ะอื่นไม่ได้เลย
  * แม้จะแก้ค่าที่ส่งไปก็ตาม
  */
+/**
+ * จองโต๊ะออนไลน์ — ลูกค้าไม่ได้ล็อกอิน
+ *
+ * ต่างจาก GuestPort ตรงที่ยังไม่มี token ของโต๊ะ (ยังไม่ได้มาร้าน)
+ * จึงยืนยันตัวด้วยรหัสจอง + เบอร์โทรแทน
+ */
+export interface BookingPort {
+  hours(): Promise<ShopHours[]>
+  config(): Promise<BookingConfig>
+  /** ผังโต๊ะพร้อมสถานะว่างของช่วงเวลาที่เลือก */
+  availableTables(startAt: string, durationMinutes: number): Promise<AvailableTable[]>
+  create(input: {
+    customerName: string
+    phone: string
+    partySize: number
+    startAt: string
+    durationMinutes: number
+    tableIds: ID[]
+    note?: string
+  }): Promise<BookingReceipt>
+  lookup(code: string, phone: string): Promise<BookingLookup>
+  cancel(code: string, phone: string): Promise<void>
+}
+
 export interface GuestPort {
   session(token: string): Promise<GuestSession>
   orders(token: string): Promise<GuestOrder[]>

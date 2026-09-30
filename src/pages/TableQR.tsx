@@ -11,10 +11,22 @@ function guestUrl(token: string): string {
   return `${origin}${pathname}#/t/${token}`
 }
 
+function bookingUrl(): string {
+  const { origin, pathname } = window.location
+  return `${origin}${pathname}#/book`
+}
+
 export default function TableQR() {
   const { data } = useSnapshot()
   const [codes, setCodes] = useState<Record<string, string>>({})
+  const [bookingQR, setBookingQR] = useState<string>('')
   const [busy, setBusy] = useState<string | null>(null)
+
+  useEffect(() => {
+    void QRCode.toDataURL(bookingUrl(), {
+      width: 320, margin: 1, color: { dark: '#0f172a', light: '#ffffff' },
+    }).then(setBookingQR)
+  }, [])
 
   const tables = data?.tables ?? []
 
@@ -56,6 +68,32 @@ export default function TableQR() {
         <span className="text-amber-400">
           ถ้าสงสัยว่า QR หลุดออกนอกร้าน ให้กด "เปลี่ยน QR" แล้วพิมพ์ใบใหม่ — ใบเก่าจะใช้ไม่ได้ทันที
         </span>
+      </Card>
+
+      <Card>
+        <div className="flex flex-wrap items-center gap-4">
+          {bookingQR && (
+            <img
+              src={bookingQR}
+              alt="QR จองโต๊ะ"
+              className="w-28 shrink-0 rounded-lg bg-white p-1.5"
+            />
+          )}
+          <div className="min-w-0 flex-1">
+            <h3 className="font-semibold">QR จองโต๊ะล่วงหน้า</h3>
+            <p className="mt-1 text-sm text-slate-400">
+              คนละใบกับ QR ประจำโต๊ะ — ใบนี้ไม่ผูกกับโต๊ะไหน เอาไปติดหน้าร้าน
+              โพสต์เพจ หรือส่งให้ลูกค้าทางแชตได้เลย
+            </p>
+            <code className="mt-2 block truncate text-xs text-slate-500">{bookingUrl()}</code>
+            <div className="mt-2 flex gap-1">
+              <Button onClick={() => void navigator.clipboard?.writeText(bookingUrl())}>
+                คัดลอกลิงก์
+              </Button>
+              <Button onClick={() => printBooking(bookingQR)}>พิมพ์</Button>
+            </div>
+          </div>
+        </div>
       </Card>
 
       {missing && (
@@ -109,23 +147,31 @@ export default function TableQR() {
   )
 }
 
+function printBooking(dataUrl: string) {
+  printSheet('จองโต๊ะล่วงหน้า', '', dataUrl, 'สแกนเพื่อจองโต๊ะ')
+}
+
 function printOne(table: CafeTable, dataUrl?: string) {
   if (!dataUrl) return
+  printSheet(table.code, table.zone, dataUrl, 'สแกนเพื่อสั่งอาหารและเครื่องดื่ม')
+}
+
+function printSheet(title: string, subtitle: string, dataUrl: string, hint: string) {
   const w = window.open('', '_blank', 'width=480,height=640')
   if (!w) return
   w.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8">
-    <title>QR โต๊ะ ${table.code}</title>
+    <title>${title}</title>
     <style>
       body { font-family: system-ui, sans-serif; text-align: center; padding: 32px; }
-      h1 { font-size: 64px; margin: 0 0 8px; }
+      h1 { font-size: 56px; margin: 0 0 8px; }
       p { color: #475569; margin: 4px 0 24px; }
       img { width: 320px; }
       .hint { margin-top: 24px; font-size: 18px; }
     </style></head><body>
-    <h1>${table.code}</h1>
-    <p>${table.zone}</p>
+    <h1>${title}</h1>
+    <p>${subtitle}</p>
     <img src="${dataUrl}" alt="QR">
-    <p class="hint">สแกนเพื่อสั่งอาหารและเครื่องดื่ม</p>
+    <p class="hint">${hint}</p>
     </body></html>`)
   w.document.close()
   w.focus()

@@ -23,3 +23,22 @@ HDR
   done
 } > supabase/setup-all.sql
 echo "เขียน supabase/setup-all.sql แล้ว ($(wc -l < supabase/setup-all.sql) บรรทัด)"
+
+# patch รายเฟส สำหรับฐานข้อมูลที่ติดตั้งไปแล้ว
+make_patch() {
+  local out="$1" title="$2"; shift 2
+  {
+    echo "-- ============================================================================"
+    echo "-- Boardgame Cafe — $title"
+    echo "--"
+    echo "-- สำหรับฐานข้อมูลที่ติดตั้งเวอร์ชันก่อนหน้าไปแล้ว"
+    echo "-- ถ้าเป็นการติดตั้งใหม่ ใช้ setup-all.sql แทน (รวมไฟล์นี้ไว้แล้ว)"
+    echo "-- ============================================================================"
+    for f in "$@"; do echo; echo "-- ###### $f"; echo; cat "$f"; done
+  } > "$out"
+  echo "เขียน $out แล้ว ($(wc -l < "$out") บรรทัด)"
+}
+
+make_patch supabase/patch-phase2.sql "patch Phase 2 (ลูกค้าสั่งผ่าน QR + อุดสิทธิ์ EXECUTE)"   supabase/migrations/20260930000500_guest_ordering.sql   supabase/migrations/20260930000600_harden_execute.sql
+
+make_patch supabase/patch-booking.sql "patch จองโต๊ะออนไลน์"   supabase/migrations/20260930000700_reservations.sql

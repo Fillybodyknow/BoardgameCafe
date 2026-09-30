@@ -104,8 +104,8 @@ export function seed(): Snapshot {
     ],
 
     reservations: [
-      { id: 'r-1', customerName: 'คุณแนน', phone: '081-234-5678', partySize: 6, startAt: new Date(now + 45 * 60_000).toISOString(), durationMinutes: 180, zonePreference: 'โต๊ะยาว', status: 'confirmed', tableIds: ['t-c1'] },
-      { id: 'r-2', customerName: 'คุณโอ๊ต', phone: '089-876-5432', partySize: 4, startAt: new Date(now + 150 * 60_000).toISOString(), durationMinutes: 120, zonePreference: null, status: 'pending', tableIds: [] },
+      { id: 'r-1', code: 'K7M2XQ', source: 'online', customerName: 'คุณแนน', phone: '081-234-5678', partySize: 6, startAt: new Date(now + 45 * 60_000).toISOString(), durationMinutes: 180, zonePreference: 'โต๊ะยาว', status: 'confirmed', tableIds: ['t-c1'], visitId: null },
+      { id: 'r-2', code: 'B4WPRT', source: 'online', customerName: 'คุณโอ๊ต', phone: '089-876-5432', partySize: 4, startAt: new Date(now + 150 * 60_000).toISOString(), durationMinutes: 120, zonePreference: null, status: 'pending', tableIds: ['t-b2'], visitId: null },
     ],
   }
 }

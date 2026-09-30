@@ -7,6 +7,7 @@ import Games from './pages/Games'
 import Reservations from './pages/Reservations'
 import TableQR from './pages/TableQR'
 import GuestApp from './pages/guest/GuestApp'
+import BookingApp from './pages/guest/BookingApp'
 import { IS_MOCK, mockAdapter } from './data'
 import AuthGate, { SignOutButton } from './auth/AuthGate'
 import { Button } from './components/ui'
@@ -35,6 +36,9 @@ export default function App() {
             ที่แปลง token เป็นโต๊ะเองเท่านั้น
           */}
           <Route path="/t/:token" element={<GuestApp />} />
+
+          {/* หน้าจองโต๊ะ — ลูกค้ายังไม่ได้มาร้าน ไม่มีทั้งบัญชีและ QR token */}
+          <Route path="/book" element={<BookingApp />} />
 
           <Route
             path="*"

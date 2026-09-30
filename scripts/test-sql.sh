@@ -21,14 +21,20 @@ docker run -d --name "$CONTAINER" \
   "$IMAGE" >/dev/null
 
 echo -n "รอฐานข้อมูลพร้อม"
-for _ in $(seq 1 60); do
+# Postgres เปิดพอร์ตชั่วคราวระหว่าง init แล้วรีสตาร์ต — ต้องเจอ ready ติดกันหลายครั้ง
+# ไม่งั้นจะยิง SQL ใส่ตอนมันกำลังจะปิดตัว
+ok=0
+for _ in $(seq 1 90); do
   if docker exec "$CONTAINER" pg_isready -U postgres -d bgcafe >/dev/null 2>&1; then
-    echo " ok"
-    break
+    ok=$((ok + 1))
+    [ "$ok" -ge 3 ] && { echo " ok"; break; }
+  else
+    ok=0
   fi
   echo -n "."
   sleep 1
 done
+[ "$ok" -ge 3 ] || { echo " ฐานข้อมูลไม่พร้อม"; exit 1; }
 
 run() {
   echo
@@ -45,6 +51,7 @@ run supabase/tests/05_test_grants.sql
 run supabase/tests/10_pricing_test.sql
 run supabase/tests/20_operations_test.sql
 run supabase/tests/30_guest_test.sql
+run supabase/tests/40_reservation_test.sql
 
 echo
 echo "เทสต์ SQL ผ่านทั้งหมด"

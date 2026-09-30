@@ -179,6 +179,9 @@ export type ReservationStatus = 'pending' | 'confirmed' | 'seated' | 'no_show' |
 
 export interface Reservation {
   id: ID
+  /** รหัสที่ลูกค้าใช้เปิดดู/ยกเลิกเอง (คู่กับเบอร์โทร) */
+  code: string | null
+  source: 'staff' | 'online'
   customerName: string
   phone: string
   partySize: number
@@ -187,7 +190,52 @@ export interface Reservation {
   zonePreference: string | null
   status: ReservationStatus
   tableIds: ID[]
+  visitId: ID | null
   note?: string
+  staffNote?: string
+}
+
+// ---------- จองออนไลน์ (ฝั่งลูกค้า) ----------
+
+export interface AvailableTable {
+  id: ID
+  code: string
+  zone: string
+  seatMin: number
+  seatMax: number
+  allowShare: boolean
+  available: boolean
+}
+
+export interface ShopHours {
+  weekday: number
+  openTime: string
+  closeTime: string
+  closed: boolean
+}
+
+export interface BookingConfig {
+  slotMinutes: number
+  defaultDurationMinutes: number
+  minDurationMinutes: number
+  maxDurationMinutes: number
+  maxAdvanceDays: number
+  minAdvanceMinutes: number
+}
+
+/** ใบยืนยันที่ลูกค้าได้หลังจอง */
+export interface BookingReceipt {
+  code: string
+  status: ReservationStatus
+  startAt: Timestamp
+  durationMinutes: number
+  tables: string[]
+}
+
+export interface BookingLookup extends BookingReceipt {
+  customerName: string
+  partySize: number
+  note?: string | null
 }
 
 // ---------- การชำระเงิน ----------
