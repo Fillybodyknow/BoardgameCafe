@@ -7,7 +7,23 @@ Supabase → New project → เลือก region **Southeast Asia (Singapore)
 
 ## 2. รัน migration
 
-Dashboard → **SQL Editor** → วางทีละไฟล์ **ตามลำดับนี้** แล้วกด Run:
+Dashboard → **SQL Editor** → New query → วาง **`setup-all.sql`** ทั้งไฟล์ → Run
+
+ไฟล์เดียวจบ (รวม migration ทั้ง 4 + seed ไว้แล้ว ตามลำดับที่ถูกต้อง)
+เสร็จแล้วต้องได้ 17 ตาราง เปิด RLS ครบทุกตาราง
+
+ตรวจว่าสำเร็จ — รันต่อใน SQL Editor:
+
+```sql
+select
+  (select count(*) from information_schema.tables where table_schema = 'public') as tables,   -- 17
+  (select count(*) from pg_tables where schemaname = 'public' and rowsecurity) as rls_on,     -- 17
+  (select count(*) from menu_items)  as menu,        -- 10
+  (select count(*) from cafe_tables) as cafe_tables; -- 8
+```
+
+<details>
+<summary>หรือวางทีละไฟล์ (ถ้าอยากเห็นทีละขั้น)</summary>
 
 1. `migrations/20260930000100_init.sql` — ตาราง
 2. `migrations/20260930000200_pricing.sql` — เครื่องคิดเงิน
@@ -15,7 +31,10 @@ Dashboard → **SQL Editor** → วางทีละไฟล์ **ตาม�
 4. `migrations/20260930000400_rls.sql` — สิทธิ์ (**ห้ามข้าม**)
 5. `seed.sql` — โต๊ะ เมนู เกม เรตราคา
 
-> ถ้ามี Supabase CLI: `supabase link --project-ref <ref> && supabase db push`
+ถ้ามี Supabase CLI: `supabase link --project-ref <ref> && supabase db push`
+
+`setup-all.sql` สร้างใหม่ได้ด้วย `bash scripts/build-setup-sql.sh`
+</details>
 
 ## 3. สร้างบัญชีพนักงาน
 
