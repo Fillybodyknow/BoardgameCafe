@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import App from '../App'
 import { mockAdapter, mockBookingAdapter } from '../data/mock/mockAdapter'
 import { mockAdminAdapter } from '../data/mock/adminAdapter'
+import { forgetBooking, myBookings, rememberBooking } from '../lib/myBookings'
 
 /** พรุ่งนี้ 18:00 เวลาไทย — ต้องเป็นอนาคตเสมอ ไม่งั้นติดกติกาจองล่วงหน้า */
 function tomorrowAt(hhmm: string): string {
@@ -341,5 +342,123 @@ describe('หน้าจองของลูกค้า', () => {
 
     expect(await screen.findByText('คุณแนน')).toBeTruthy()
     expect(screen.getByText('ยืนยันแล้ว')).toBeTruthy()
+  })
+})
+
+/**
+ * จำการจองไว้บนเครื่องที่กดจอง
+ *
+ * ลูกค้าบ่นว่าจองเสร็จแล้วยังต้องกรอกรหัส + เบอร์โทรใหม่เพื่อกลับมาดู
+ * ทั้งที่เพิ่งจองจากเครื่องนี้เอง — จำให้เฉพาะเครื่องที่จอง เครื่องอื่น
+ * ยังต้องกรอกเหมือนเดิม จึงไม่ได้ลดความปลอดภัยลง
+ */
+describe('จำการจองไว้บนเครื่องนี้', () => {
+  beforeEach(() => {
+    cleanup()
+    localStorage.clear()
+    mockAdapter.reset()
+    window.location.hash = ''
+  })
+
+  it('หน้าจองไม่มีช่องเลือกจำนวนชั่วโมงแล้ว', async () => {
+    window.location.hash = '#/book'
+    render(<App />)
+    await screen.findByText(/กี่คน/)
+    expect(screen.queryByText('เล่นกี่ชั่วโมง')).toBeNull()
+  })
+
+  it('ยังไม่เคยจอง ต้องเห็นฟอร์มกรอกรหัสตามเดิม', async () => {
+    window.location.hash = '#/book?m=find'
+    render(<App />)
+
+    expect(await screen.findByText(/กรอกรหัสจองและเบอร์โทร/)).toBeTruthy()
+    expect(screen.queryByText('การจองที่ทำจากเครื่องนี้')).toBeNull()
+  })
+
+  // ★ ต้องจองผ่านหน้าจอจริง ไม่ใช่เรียก rememberBooking เอง ไม่งั้นเทสต์จะ
+  // ผ่านแม้หน้าจองลืมเรียกมัน
+  it('จองผ่านหน้าจอแล้วถูกจำไว้เอง', async () => {
+    window.location.hash = '#/book'
+    render(<App />)
+
+    fireEvent.click(await screen.findByText('A1'))
+    fireEvent.change(screen.getByPlaceholderText('ชื่อ-นามสกุล หรือชื่อเล่น'), {
+      target: { value: 'คุณจองจากเครื่องนี้' },
+    })
+    fireEvent.change(screen.getByPlaceholderText('08x-xxx-xxxx'), {
+      target: { value: '081-555-0000' },
+    })
+
+    const send = (await screen.findByText('ส่งคำขอจอง')) as HTMLButtonElement
+    await waitFor(() => expect(send.disabled).toBe(false))
+    fireEvent.click(send)
+
+    const codeEl = await screen.findByText(/^[A-Z0-9]{6}$/)
+    await waitFor(() => {
+      expect(myBookings().map((b) => b.code)).toContain(codeEl.textContent)
+    })
+  })
+
+  it('จองแล้วเปิดดูได้โดยไม่ต้องกรอกอะไรเลย', async () => {
+    const startAt = tomorrowAt('18:00')
+    const t = await freeTable(startAt)
+    const made = await mockBookingAdapter.create({
+      customerName: 'คุณจำได้', phone: '081-999-0000', partySize: 2,
+      startAt, durationMinutes: 120, tableIds: [t.id],
+    })
+    rememberBooking({ code: made.code, phone: '081-999-0000', startAt: made.startAt })
+
+    window.location.hash = '#/book?m=find'
+    render(<App />)
+
+    fireEvent.click(await screen.findByText(made.code))
+
+    expect(await screen.findByText('คุณจำได้')).toBeTruthy()
+  })
+
+  it('ยกเลิกแล้วต้องเลิกจำ', async () => {
+    const startAt = tomorrowAt('19:00')
+    const t = await freeTable(startAt)
+    const made = await mockBookingAdapter.create({
+      customerName: 'คุณยกเลิก', phone: '081-888-0000', partySize: 2,
+      startAt, durationMinutes: 120, tableIds: [t.id],
+    })
+    rememberBooking({ code: made.code, phone: '081-888-0000', startAt: made.startAt })
+
+    await mockBookingAdapter.cancel(made.code, '081-888-0000')
+    forgetBooking(made.code)
+
+    expect(myBookings().map((b) => b.code)).not.toContain(made.code)
+  })
+
+  it('ของเก่าเกินไปหลุดออกจากรายการเอง', () => {
+    const old = new Date(Date.now() - 3 * 24 * 3600_000).toISOString()
+    rememberBooking({ code: 'OLD123', phone: '081-000-0000', startAt: old })
+    rememberBooking({ code: 'NEW123', phone: '081-000-0000', startAt: tomorrowAt('18:00') })
+
+    const codes = myBookings().map((b) => b.code)
+    expect(codes).toContain('NEW123')
+    expect(codes).not.toContain('OLD123')
+  })
+
+  it('จำได้สูงสุด 5 รายการ อันเก่าสุดหลุดก่อน', () => {
+    for (let i = 0; i < 7; i++) {
+      rememberBooking({ code: `C0000${i}`, phone: '081', startAt: tomorrowAt('18:00') })
+    }
+    expect(myBookings()).toHaveLength(5)
+  })
+
+  it('localStorage ใช้ไม่ได้ก็ต้องไม่พัง', () => {
+    const real = Storage.prototype.setItem
+    Storage.prototype.setItem = () => {
+      throw new Error('quota')
+    }
+    try {
+      expect(() =>
+        rememberBooking({ code: 'X00001', phone: '081', startAt: tomorrowAt('18:00') }),
+      ).not.toThrow()
+    } finally {
+      Storage.prototype.setItem = real
+    }
   })
 })

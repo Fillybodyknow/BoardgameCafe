@@ -5,6 +5,12 @@ import { bookingDb } from '../../data'
 import type { AvailableTable, BookingLookup, BookingReceipt, ShopHours } from '../../domain/types'
 import { Badge, Button, Card, Empty, Field, INPUT, Segmented } from '../../components/ui'
 import type { Tone } from '../../components/ui'
+import {
+  forgetBooking,
+  myBookings,
+  rememberBooking,
+  type RememberedBooking,
+} from '../../lib/myBookings'
 
 const STATUS: Record<string, { label: string; tone: Tone; hint: string }> = {
   pending: { label: 'รอร้านยืนยัน', tone: 'ember', hint: 'ร้านจะติดต่อกลับเพื่อยืนยัน' },
@@ -41,8 +47,12 @@ function weekdayOf(date: string): number {
 
 function fmtDateTime(iso: string): string {
   return new Date(iso).toLocaleString('th-TH', {
-    weekday: 'short', day: 'numeric', month: 'short',
-    hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok',
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Bangkok',
   })
 }
 
@@ -97,7 +107,17 @@ function ShopHoursLine() {
 }
 
 /** หัวข้อแต่ละขั้นของฟอร์ม — เลขโรมันในตรา */
-function Step({ n, title, aside, children }: { n: string; title: string; aside?: ReactNode; children: ReactNode }) {
+function Step({
+  n,
+  title,
+  aside,
+  children,
+}: {
+  n: string
+  title: string
+  aside?: ReactNode
+  children: ReactNode
+}) {
   return (
     <section>
       <div className="mb-3 flex items-center gap-3">
@@ -116,7 +136,6 @@ function BookForm() {
 
   const [date, setDate] = useState(todayBangkok)
   const [time, setTime] = useState('18:00')
-  const [duration, setDuration] = useState(120)
   const [party, setParty] = useState(2)
   const [picked, setPicked] = useState<string[]>([])
   const [name, setName] = useState('')
@@ -127,6 +146,10 @@ function BookForm() {
   const [receipt, setReceipt] = useState<BookingReceipt | null>(null)
 
   const startAt = useMemo(() => bangkokToISO(date, time), [date, time])
+
+  // ใช้รอบเล่นมาตรฐานของร้าน ไม่ให้ลูกค้าเลือกเอง — ร้านคุมความยาวรอบ
+  // ได้จากหน้าตั้งค่า และหน้าจองก็สั้นลงหนึ่งช่อง
+  const duration = cfg.data?.defaultDurationMinutes ?? 120
 
   const tables = useQuery({
     queryKey: ['booking', 'tables', startAt, duration],
@@ -188,17 +211,18 @@ function BookForm() {
     setBusy(true)
     setError(null)
     try {
-      setReceipt(
-        await bookingDb.create({
-          customerName: name,
-          phone,
-          partySize: party,
-          startAt,
-          durationMinutes: duration,
-          tableIds: picked,
-          note: note || undefined,
-        }),
-      )
+      const made = await bookingDb.create({
+        customerName: name,
+        phone,
+        partySize: party,
+        startAt,
+        durationMinutes: duration,
+        tableIds: picked,
+        note: note || undefined,
+      })
+      // จำไว้บนเครื่องนี้ จะได้ไม่ต้องกรอกรหัสตอนกลับมาดู
+      rememberBooking({ code: made.code, phone, startAt: made.startAt })
+      setReceipt(made)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'จองไม่สำเร็จ')
       void tables.refetch()
@@ -207,7 +231,8 @@ function BookForm() {
     }
   }
 
-  const ready = picked.length > 0 && name.trim() && phone.trim() && seats >= party && slots.length > 0
+  const ready =
+    picked.length > 0 && name.trim() && phone.trim() && seats >= party && slots.length > 0
 
   return (
     <div className="space-y-8">
@@ -229,13 +254,21 @@ function BookForm() {
                     className="pick flex w-14 shrink-0 flex-col items-center py-2"
                   >
                     <span className="text-[0.65rem] text-ink-faint">
-                      {dt.toLocaleDateString('th-TH', { weekday: 'short', timeZone: 'Asia/Bangkok' })}
+                      {dt.toLocaleDateString('th-TH', {
+                        weekday: 'short',
+                        timeZone: 'Asia/Bangkok',
+                      })}
                     </span>
                     <span className="tabular text-lg leading-tight font-bold">
                       {dt.toLocaleDateString('th-TH', { day: 'numeric', timeZone: 'Asia/Bangkok' })}
                     </span>
                     <span className="text-[0.6rem] text-ink-faint">
-                      {closed ? 'ปิด' : dt.toLocaleDateString('th-TH', { month: 'short', timeZone: 'Asia/Bangkok' })}
+                      {closed
+                        ? 'ปิด'
+                        : dt.toLocaleDateString('th-TH', {
+                            month: 'short',
+                            timeZone: 'Asia/Bangkok',
+                          })}
                     </span>
                   </button>
                 )
@@ -254,39 +287,28 @@ function BookForm() {
             </label>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="เล่นกี่ชั่วโมง">
-              <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} className={INPUT}>
-                {[60, 90, 120, 180, 240, 300].map((m) => (
-                  <option key={m} value={m}>
-                    {m / 60} ชม.
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <div>
-              <span className="text-xs font-medium tracking-wide text-ink-soft">กี่คน</span>
-              <div className="mt-1 flex items-center justify-between rounded-lg border border-line-strong bg-[#fffdf7] p-1">
-                <button
-                  type="button"
-                  aria-label="ลดจำนวนคน"
-                  onClick={() => setParty((p) => Math.max(1, p - 1))}
-                  className="grid h-8 w-8 place-items-center rounded-md text-lg text-ink-soft hover:bg-parchment-deep"
-                >
-                  −
-                </button>
-                <span key={party} className="tabular animate-bump font-bold">
-                  {party} คน
-                </span>
-                <button
-                  type="button"
-                  aria-label="เพิ่มจำนวนคน"
-                  onClick={() => setParty((p) => Math.min(20, p + 1))}
-                  className="grid h-8 w-8 place-items-center rounded-md text-lg text-gold-deep hover:bg-parchment-deep"
-                >
-                  +
-                </button>
-              </div>
+          <div>
+            <span className="text-xs font-medium tracking-wide text-ink-soft">กี่คน</span>
+            <div className="mt-1 flex items-center justify-between rounded-lg border border-line-strong bg-[#fffdf7] p-1">
+              <button
+                type="button"
+                aria-label="ลดจำนวนคน"
+                onClick={() => setParty((p) => Math.max(1, p - 1))}
+                className="grid h-8 w-8 place-items-center rounded-md text-lg text-ink-soft hover:bg-parchment-deep"
+              >
+                −
+              </button>
+              <span key={party} className="tabular animate-bump font-bold">
+                {party} คน
+              </span>
+              <button
+                type="button"
+                aria-label="เพิ่มจำนวนคน"
+                onClick={() => setParty((p) => Math.min(20, p + 1))}
+                className="grid h-8 w-8 place-items-center rounded-md text-lg text-gold-deep hover:bg-parchment-deep"
+              >
+                +
+              </button>
             </div>
           </div>
 
@@ -318,8 +340,8 @@ function BookForm() {
 
         {!today?.closed && slots.length === 0 && (
           <Card className="mt-3 !border-ember/40 !bg-ember/5 text-sm text-ember-deep">
-            ระยะเวลาที่เลือกยาวเกินกว่าเวลาทำการของวันนี้ ({today?.openTime}–{today?.closeTime})
-            ลองลดจำนวนชั่วโมงลง
+            เวลาทำการของวันนี้ ({today?.openTime}–{today?.closeTime}) สั้นกว่ารอบเล่น{' '}
+            {duration / 60} ชม. จึงยังไม่มีรอบให้จอง ลองเลือกวันอื่นดู
           </Card>
         )}
       </Step>
@@ -341,7 +363,9 @@ function BookForm() {
           <TablePicker
             tables={tables.data ?? []}
             picked={picked}
-            onToggle={(id) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))}
+            onToggle={(id) =>
+              setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
+            }
           />
         )}
       </Step>
@@ -393,7 +417,12 @@ function BookForm() {
 
         {error && <p className="mb-2 animate-shake text-sm text-crimson">{error}</p>}
 
-        <Button variant="primary" className="w-full !py-3 !text-base" disabled={busy || !ready} onClick={submit}>
+        <Button
+          variant="primary"
+          className="w-full !py-3 !text-base"
+          disabled={busy || !ready}
+          onClick={submit}
+        >
           {busy ? 'กำลังส่งคำขอ…' : 'ส่งคำขอจอง'}
         </Button>
 
@@ -451,7 +480,10 @@ function TablePicker({
                   </div>
                   {!t.available && <div className="text-xs text-crimson">ไม่ว่าง</div>}
                   {on && (
-                    <span className="wax-seal seal-stamp absolute top-2 right-2 h-5 w-5 text-[0.55rem]" aria-hidden>
+                    <span
+                      className="wax-seal seal-stamp absolute top-2 right-2 h-5 w-5 text-[0.55rem]"
+                      aria-hidden
+                    >
                       ✓
                     </span>
                   )}
@@ -474,8 +506,12 @@ function Receipt({ receipt }: { receipt: BookingReceipt }) {
 
       <Card ornate>
         <p className="text-sm text-ink-soft">รหัสจองของคุณ</p>
-        <p className="tabular my-3 text-4xl font-bold tracking-[0.3em] text-gold-deep">{receipt.code}</p>
-        <p className="text-xs text-ink-faint">จดไว้ให้ดี ใช้คู่กับเบอร์โทรเพื่อเปิดดูหรือยกเลิกรายการ</p>
+        <p className="tabular my-3 text-4xl font-bold tracking-[0.3em] text-gold-deep">
+          {receipt.code}
+        </p>
+        <p className="text-xs text-ink-faint">
+          จดไว้ให้ดี ใช้คู่กับเบอร์โทรเพื่อเปิดดูหรือยกเลิกรายการ
+        </p>
       </Card>
 
       <Card className="space-y-1.5 text-left text-sm">
@@ -486,7 +522,10 @@ function Receipt({ receipt }: { receipt: BookingReceipt }) {
       </Card>
 
       <p className="text-sm text-ember-deep">{st?.hint}</p>
-      <Link to="/book?m=find" className="inline-block text-sm text-ink-soft underline underline-offset-2">
+      <Link
+        to="/book?m=find"
+        className="inline-block text-sm text-ink-soft underline underline-offset-2"
+      >
         ไปหน้าดูรายการที่จองไว้
       </Link>
     </div>
@@ -496,6 +535,9 @@ function Receipt({ receipt }: { receipt: BookingReceipt }) {
 function FindBooking() {
   const [code, setCode] = useState('')
   const [phone, setPhone] = useState('')
+  const [mine, setMine] = useState<RememberedBooking[]>(() => myBookings())
+  // เปิดฟอร์มกรอกรหัสเองเมื่อไม่มีของที่จำไว้ หรือกดขอเอง
+  const [manual, setManual] = useState(() => myBookings().length === 0)
   const [result, setResult] = useState<BookingLookup | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -517,35 +559,73 @@ function FindBooking() {
 
   return (
     <div className="space-y-4 pt-2">
-      <Card ornate className="space-y-3">
-        <p className="text-center text-sm text-ink-soft">กรอกรหัสจองและเบอร์โทรที่ใช้ตอนจอง</p>
-        <Field label="รหัสจอง">
-          <input
-            value={code}
-            onChange={(e) => setCode(e.target.value.toUpperCase())}
-            placeholder="เช่น K7M2XQ"
-            maxLength={6}
-            className={`${INPUT} tabular !py-3 text-center !text-xl tracking-[0.35em]`}
-          />
-        </Field>
-        <Field label="เบอร์โทรที่ใช้จอง">
-          <input
-            inputMode="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="08x-xxx-xxxx"
-            className={INPUT}
-          />
-        </Field>
-        <Button
-          variant="primary"
-          className="w-full !py-2.5"
-          disabled={busy || code.length < 6 || !phone.trim()}
-          onClick={() => run(async () => setResult(await bookingDb.lookup(code, phone)))}
-        >
-          ค้นหา
-        </Button>
-      </Card>
+      {mine.length > 0 && (
+        <Card ornate className="space-y-2">
+          <p className="text-sm font-medium">การจองที่ทำจากเครื่องนี้</p>
+          {mine.map((b) => (
+            <button
+              key={b.code}
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setCode(b.code)
+                setPhone(b.phone)
+                void run(async () => setResult(await bookingDb.lookup(b.code, b.phone)))
+              }}
+              className="pick flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left disabled:opacity-50"
+            >
+              <span>
+                <span className="tabular font-semibold tracking-[0.2em]">{b.code}</span>
+                <span className="mt-0.5 block text-xs text-ink-faint">
+                  {fmtDateTime(b.startAt)}
+                </span>
+              </span>
+              <span className="text-sm text-ink-soft">เปิดดู →</span>
+            </button>
+          ))}
+          {!manual && (
+            <button
+              type="button"
+              onClick={() => setManual(true)}
+              className="w-full pt-1 text-xs text-ink-faint underline underline-offset-2"
+            >
+              จองไว้จากเครื่องอื่น? กรอกรหัสเอง
+            </button>
+          )}
+        </Card>
+      )}
+
+      {manual && (
+        <Card ornate className="space-y-3">
+          <p className="text-center text-sm text-ink-soft">กรอกรหัสจองและเบอร์โทรที่ใช้ตอนจอง</p>
+          <Field label="รหัสจอง">
+            <input
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              placeholder="เช่น K7M2XQ"
+              maxLength={6}
+              className={`${INPUT} tabular !py-3 text-center !text-xl tracking-[0.35em]`}
+            />
+          </Field>
+          <Field label="เบอร์โทรที่ใช้จอง">
+            <input
+              inputMode="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="08x-xxx-xxxx"
+              className={INPUT}
+            />
+          </Field>
+          <Button
+            variant="primary"
+            className="w-full !py-2.5"
+            disabled={busy || code.length < 6 || !phone.trim()}
+            onClick={() => run(async () => setResult(await bookingDb.lookup(code, phone)))}
+          >
+            ค้นหา
+          </Button>
+        </Card>
+      )}
 
       {error && <p className="animate-shake text-center text-sm text-crimson">{error}</p>}
 
@@ -572,6 +652,8 @@ function FindBooking() {
                 run(async () => {
                   if (!confirm('ยกเลิกรายการจองนี้?')) return
                   await bookingDb.cancel(code, phone)
+                  forgetBooking(code)
+                  setMine(myBookings())
                   setResult(await bookingDb.lookup(code, phone))
                 })
               }
