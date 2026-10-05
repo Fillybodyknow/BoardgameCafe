@@ -1,4 +1,4 @@
-import { useEffect, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { useEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
 
 // ============================================================== พื้นผิว ====
 
@@ -202,6 +202,9 @@ export function Field({
  * หน้าต่างลอยแบบม้วนกระดาษคลี่ออก
  * มือถือเลื่อนขึ้นจากขอบล่าง จอใหญ่อยู่กลางจอ — กด Esc หรือคลิกพื้นหลังเพื่อปิด
  */
+/** ลำดับหน้าต่างที่เปิดอยู่ ใบท้ายสุดคือใบที่รับคีย์ */
+const modalStack: symbol[] = []
+
 export function Modal({
   title,
   hint,
@@ -220,9 +223,24 @@ export function Modal({
   /** false ระหว่างกำลังบันทึก — กันปิดหน้าต่างกลางคัน */
   dismissible?: boolean
 }) {
+  // เก็บลำดับของหน้าต่างที่เปิดอยู่ — กด Escape ควรปิดแค่ใบบนสุด ไม่ใช่ปิดรวดเดียวหมด
+  const idRef = useRef<symbol>(undefined)
+  idRef.current ??= Symbol('modal')
+
+  useEffect(() => {
+    const id = idRef.current!
+    modalStack.push(id)
+    return () => {
+      const at = modalStack.lastIndexOf(id)
+      if (at >= 0) modalStack.splice(at, 1)
+    }
+  }, [])
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape' && dismissible) onClose()
+      if (e.key !== 'Escape' || !dismissible) return
+      if (modalStack[modalStack.length - 1] !== idRef.current) return
+      onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

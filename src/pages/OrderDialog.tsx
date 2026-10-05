@@ -4,7 +4,8 @@ import { db, menuImageUrl } from '../data'
 import { cartItems, setCartQty, type Cart } from '../lib/cart'
 import { formatBaht } from '../domain/pricing'
 import type { GuestPass, MenuItem } from '../domain/types'
-import { Button, INPUT, Modal, Segmented } from '../components/ui'
+import { Button, Modal } from '../components/ui'
+import OrdererModal from '../components/OrdererModal'
 
 const CATEGORY_LABEL: Record<MenuItem['category'], string> = {
   drink: 'เครื่องดื่ม',
@@ -24,8 +25,7 @@ export default function OrderDialog({
 }) {
   const { data } = useSnapshot()
   const [cart, setCart] = useState<Cart>({})
-  const [splitMode, setSplitMode] = useState<'owner' | 'shared'>('owner')
-  const [ownerId, setOwnerId] = useState<string>(passes[0]?.id ?? '')
+  const [picking, setPicking] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -50,27 +50,30 @@ export default function OrderDialog({
   const count = Object.values(cart).reduce((a, b) => a + b, 0)
   const activePasses = passes.filter((p) => p.status === 'active' || p.status === 'paused')
 
-  async function submit() {
+  async function submit(ordererId: string | null) {
     setBusy(true)
     setError(null)
     try {
       await db.placeOrder({
         idempotencyKey,
         visitId,
-        orderedByPassId: splitMode === 'owner' ? ownerId : null,
-        splitMode,
+        orderedByPassId: ordererId,
+        splitMode: ordererId ? 'owner' : 'shared',
         placedBy: 'staff',
         items: cartItems(cart),
       })
       onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'สั่งไม่สำเร็จ')
+      // กลับไปหน้ารายการเพื่อให้เห็นข้อความผิดพลาด แล้วแก้ของในตะกร้าได้
+      setPicking(false)
     } finally {
       setBusy(false)
     }
   }
 
   return (
+    <>
     <Modal
       title="รับออเดอร์"
       size="lg"
@@ -92,8 +95,8 @@ export default function OrderDialog({
             <Button
               className="flex-1"
               variant="primary"
-              disabled={count === 0 || busy || (splitMode === 'owner' && !ownerId)}
-              onClick={submit}
+              disabled={count === 0 || busy}
+              onClick={() => setPicking(true)}
             >
               ส่งเข้าครัว
             </Button>
@@ -101,32 +104,6 @@ export default function OrderDialog({
         </>
       }
     >
-      <div className="panel mb-5 rounded-lg bg-parchment-deep/50 p-3">
-        <Segmented
-          className="w-full"
-          value={splitMode}
-          onChange={setSplitMode}
-          options={[
-            { value: 'owner', label: 'ลงชื่อคนสั่ง' },
-            { value: 'shared', label: 'แชร์ทั้งโต๊ะ' },
-          ]}
-        />
-        {splitMode === 'owner' && (
-          <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className={`${INPUT} mt-2`}>
-            {activePasses.map((pass) => (
-              <option key={pass.id} value={pass.id}>
-                {pass.displayName}
-              </option>
-            ))}
-          </select>
-        )}
-        {splitMode === 'shared' && (
-          <p className="mt-2 text-xs text-ink-faint">
-            ตอนแยกบิลจะหารเท่ากันในกลุ่ม {activePasses.length} คน
-          </p>
-        )}
-      </div>
-
       <div className="space-y-5">
         {groups.map(([category, items]) => (
           <div key={category}>
@@ -169,6 +146,18 @@ export default function OrderDialog({
         ))}
       </div>
     </Modal>
+
+      {picking && (
+        <OrdererModal
+          people={activePasses.map((p) => ({ id: p.id, displayName: p.displayName }))}
+          count={count}
+          total={total}
+          busy={busy}
+          onPick={submit}
+          onClose={() => setPicking(false)}
+        />
+      )}
+    </>
   )
 }
 

@@ -5,7 +5,8 @@ import { guestDb, menuImageUrl } from '../../data'
 import { cartItems, setCartQty, type Cart } from '../../lib/cart'
 import { formatBaht } from '../../domain/pricing'
 import type { GuestOrder, MenuItem, OrderStatus } from '../../domain/types'
-import { Badge, Button, Card, Empty, INPUT } from '../../components/ui'
+import { Badge, Button, Card, Empty } from '../../components/ui'
+import OrdererModal from '../../components/OrdererModal'
 import type { Tone } from '../../components/ui'
 import { Stepper } from '../OrderDialog'
 
@@ -50,7 +51,7 @@ export default function GuestApp() {
   const { token = '' } = useParams()
   const qc = useQueryClient()
   const [tab, setTab] = useState<Tab>('menu')
-  const [passId, setPassId] = useState<string>('')
+  const [picking, setPicking] = useState(false)
   const [cart, setCart] = useState<Cart>({})
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -141,7 +142,7 @@ export default function GuestApp() {
     setCoins((c) => [...c, { id: Date.now() + Math.random(), x, y, dx: tx - x, dy: ty - y }])
   }
 
-  async function send() {
+  async function send(ordererId: string | null) {
     setSending(true)
     setError(null)
     try {
@@ -149,17 +150,20 @@ export default function GuestApp() {
         token,
         // สร้างใหม่ทุกครั้งที่กดส่ง — กดรัวจะได้ไม่เกิดออเดอร์ซ้ำ
         idempotencyKey: `g-${token}-${Date.now()}`,
-        orderedByPassId: passId || null,
-        splitMode: passId ? 'owner' : 'shared',
+        orderedByPassId: ordererId,
+        splitMode: ordererId ? 'owner' : 'shared',
         items: cartItems(cart),
       })
       setCart({})
+      setPicking(false)
       setJustSent(true)
       setTab('orders')
       void qc.invalidateQueries({ queryKey: ['guest', token] })
       setTimeout(() => setJustSent(false), 4000)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'สั่งไม่สำเร็จ')
+      // ปิดหน้าต่างเลือกคน เพื่อให้เห็นข้อความผิดพลาดบนแถบตะกร้า
+      setPicking(false)
     } finally {
       setSending(false)
     }
@@ -206,21 +210,6 @@ export default function GuestApp() {
         <div key={tab} className="animate-page">
           {tab === 'menu' && (
             <>
-              <Card className="mb-4 !p-3">
-                <label className="text-xs font-medium text-ink-soft">สั่งในชื่อ</label>
-                <select value={passId} onChange={(e) => setPassId(e.target.value)} className={`${INPUT} mt-1`}>
-                  <option value="">แชร์ทั้งโต๊ะ (หารกัน)</option>
-                  {s.passes.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.displayName}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1.5 text-xs text-ink-faint">
-                  เลือกชื่อตัวเองไว้ ตอนเช็คบิลจะแยกได้ว่าใครสั่งอะไร
-                </p>
-              </Card>
-
               {/* ทางลัดไปแต่ละหมวด */}
               <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1">
                 {groups.map(([category]) => (
@@ -330,11 +319,27 @@ export default function GuestApp() {
               <div className="text-xs text-[#f3e6c8]/70">{cartCount} รายการ</div>
               <div className="tabular font-bold text-gold-light">฿{formatBaht(cartTotal)}</div>
             </div>
-            <Button variant="primary" className="!px-5 !py-2.5" onClick={send} disabled={sending}>
+            <Button
+              variant="primary"
+              className="!px-5 !py-2.5"
+              onClick={() => setPicking(true)}
+              disabled={sending}
+            >
               {sending ? 'กำลังส่ง…' : 'ส่งเข้าครัว'}
             </Button>
           </div>
         </div>
+      )}
+
+      {picking && (
+        <OrdererModal
+          people={s.passes}
+          count={cartCount}
+          total={cartTotal}
+          busy={sending}
+          onPick={send}
+          onClose={() => setPicking(false)}
+        />
       )}
 
       {coins.map((c) => (

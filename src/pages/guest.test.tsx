@@ -25,11 +25,14 @@ describe('ลูกค้าสแกน QR', () => {
     expect(await screen.findByText('โต๊ะ B1')).toBeTruthy()
     expect(await screen.findByText('อเมริกาโน่เย็น')).toBeTruthy()
 
-    const select = document.querySelector('select') as HTMLSelectElement
-    const names = [...select.options].map((o) => o.textContent)
-    expect(names).toContain('ต้น')
+    // รายชื่อคนในโต๊ะอยู่ในหน้าต่างที่ถามตอนกดส่ง ไม่ได้ลอยอยู่หัวเมนูแล้ว
+    fireEvent.click(screen.getAllByRole('button', { name: 'เพิ่ม' })[0]!)
+    fireEvent.click(await screen.findByText('ส่งเข้าครัว'))
+
+    expect(await screen.findByText('ใครเป็นคนสั่ง')).toBeTruthy()
+    expect(screen.getByText('ต้น')).toBeTruthy()
     // คนที่กลับไปแล้วต้องไม่อยู่ในรายการให้เลือก
-    expect(names).not.toContain('บอส')
+    expect(screen.queryByText('บอส')).toBeNull()
   })
 
   it('ไม่ต้องล็อกอิน — ไม่เจอหน้าเข้าสู่ระบบ', async () => {
@@ -73,6 +76,7 @@ describe('ลูกค้าสแกน QR', () => {
     fireEvent.click(minus[2]!) // เอาเมนู 3 ออกจนเหลือ 0
 
     fireEvent.click(await screen.findByText('ส่งเข้าครัว'))
+    fireEvent.click(await screen.findByText('แชร์ทั้งโต๊ะ'))
 
     await waitFor(async () => {
       const snap = await mockAdapter.getSnapshot()
@@ -92,6 +96,7 @@ describe('ลูกค้าสแกน QR', () => {
     const before = (await mockAdapter.getSnapshot()).orders.length
     fireEvent.click(screen.getAllByText('+')[0]!)
     fireEvent.click(await screen.findByText('ส่งเข้าครัว'))
+    fireEvent.click(await screen.findByText('ต้น'))
 
     await waitFor(async () => {
       const snap = await mockAdapter.getSnapshot()
@@ -100,6 +105,29 @@ describe('ลูกค้าสแกน QR', () => {
       expect(created.placedBy).toBe('guest')
       expect(created.visitId).toBe('v-1') // visit ของโต๊ะ B1
       expect(created.status).toBe('placed')
+    })
+  })
+
+  // ★ เหตุผลที่ย้ายมาถามตอนกดส่ง: ของเดิมเป็น dropdown ที่ลูกค้าเลื่อนผ่าน
+  // ออเดอร์เลยไปลงชื่อคนแรกของกลุ่มทั้งที่ไม่ใช่คนสั่ง
+  it('ออเดอร์ลงชื่อคนที่เลือกจริง ไม่ใช่คนแรกของกลุ่ม', async () => {
+    window.location.hash = '#/t/qr-b1'
+    render(<App />)
+    await screen.findByText('โต๊ะ B1')
+
+    const session = await mockGuestAdapter.session('qr-b1')
+    const second = session.passes[1]!
+    expect(second.id).not.toBe(session.passes[0]!.id)
+
+    fireEvent.click(screen.getAllByText('+')[0]!)
+    fireEvent.click(await screen.findByText('ส่งเข้าครัว'))
+    fireEvent.click(await screen.findByText(second.displayName))
+
+    await waitFor(async () => {
+      const snap = await mockAdapter.getSnapshot()
+      const created = snap.orders[snap.orders.length - 1]!
+      expect(created.orderedByPassId).toBe(second.id)
+      expect(created.splitMode).toBe('owner')
     })
   })
 })
