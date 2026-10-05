@@ -1,5 +1,5 @@
 import type { AdminPort } from '../port'
-import type { StaffMember, StaffRole } from '../../domain/types'
+import type { Capability, StaffMember, StaffRole } from '../../domain/types'
 import { loadStaff, saveStaff } from './shopStore'
 import { mockAdapter } from './mockAdapter'
 import { loadHours, loadTax, saveHours, saveTax } from './shopStore'
@@ -13,6 +13,10 @@ import { loadHours, loadTax, saveHours, saveTax } from './shopStore'
 export const mockAdminAdapter: AdminPort = {
   async myRole() {
     return 'owner'
+  },
+
+  async myCapabilities() {
+    return CAPABILITIES.owner
   },
 
   async allMenuItems() {
@@ -127,7 +131,7 @@ export const mockAdminAdapter: AdminPort = {
     if (target.isSelf && target.role !== role) {
       throw new Error('เปลี่ยนระดับสิทธิ์ของตัวเองไม่ได้ ให้คนอื่นเปลี่ยนให้')
     }
-    if (role !== 'owner') assertOwnerRemains(list, target)
+    if (!CAPABILITIES[role].includes('accounts')) assertOwnerRemains(list, target)
 
     saveStaff(list.map((s) => (s.userId === userId ? { ...s, role } : s)))
   },
@@ -160,17 +164,35 @@ export const mockAdminAdapter: AdminPort = {
   },
 }
 
+/** ต้องตรงกับตาราง role_capabilities ฝั่ง SQL */
+export const CAPABILITIES: Record<StaffRole, Capability[]> = {
+  floor: ['floor'],
+  kitchen: ['kitchen'],
+  staff: ['floor', 'kitchen'],
+  manager: ['floor', 'kitchen', 'settings'],
+  owner: ['floor', 'kitchen', 'settings', 'accounts'],
+}
+
 function mustStaff(list: StaffMember[], userId: string): StaffMember {
   const found = list.find((s) => s.userId === userId)
   if (!found) throw new Error('ไม่พบพนักงานคนนี้')
   return found
 }
 
-/** ตรงกับ assert_owner_remains() ฝั่ง SQL — กันร้านล็อกตัวเองจนแก้อะไรไม่ได้ */
+/**
+ * ตรงกับ assert_admin_remains() ฝั่ง SQL
+ *
+ * ผูกกับ "สิทธิ์จัดการบัญชี" ไม่ใช่ชื่อระดับ เพราะระดับที่ถือสิทธิ์นั้น
+ * อาจมีมากกว่าหนึ่งชื่อ
+ */
+function canManageAccounts(m: StaffMember): boolean {
+  return CAPABILITIES[m.role].includes('accounts')
+}
+
 function assertOwnerRemains(list: StaffMember[], target: StaffMember) {
-  const activeOwners = list.filter((s) => s.role === 'owner' && s.active)
-  if (target.role === 'owner' && target.active && activeOwners.length <= 1) {
-    throw new Error('ต้องเหลือเจ้าของร้านที่ใช้งานได้อย่างน้อย 1 คน')
+  const admins = list.filter((s) => s.active && canManageAccounts(s))
+  if (target.active && canManageAccounts(target) && admins.length <= 1) {
+    throw new Error('ต้องเหลือคนที่จัดการบัญชีพนักงานได้อย่างน้อย 1 คน')
   }
 }
 

@@ -311,7 +311,14 @@ export interface GuestOrder {
 
 // ---------- ตั้งค่าร้าน (เจ้าของ/ผู้จัดการ) ----------
 
-export type StaffRole = 'staff' | 'manager' | 'owner'
+/**
+ * สิทธิ์ย่อย — ระดับพนักงานคือชุดสำเร็จของสิทธิ์เหล่านี้
+ *
+ * เก็บชุดไว้ในตาราง role_capabilities ฝั่งฐานข้อมูล ปรับได้โดยไม่ต้องแก้โค้ด
+ */
+export type Capability = 'floor' | 'kitchen' | 'settings' | 'accounts'
+
+export type StaffRole = 'floor' | 'kitchen' | 'staff' | 'manager' | 'owner'
 
 export interface StaffMember {
   userId: ID

@@ -29,10 +29,14 @@ const TABS: { key: Tab; label: string }[] = [
 export default function Owner() {
   const [tab, setTab] = useState<Tab>('menu')
   const role = useQuery({ queryKey: ['admin', 'role'], queryFn: () => adminDb.myRole() })
+  const caps = useQuery({
+    queryKey: ['admin', 'capabilities'],
+    queryFn: () => adminDb.myCapabilities(),
+  })
 
-  if (role.isPending) return <Empty>กำลังตรวจสิทธิ์…</Empty>
+  if (role.isPending || caps.isPending) return <Empty>กำลังตรวจสิทธิ์…</Empty>
 
-  if (role.data !== 'manager' && role.data !== 'owner') {
+  if (!caps.data?.includes('settings')) {
     return (
       <Empty>
         หน้านี้เปิดให้เฉพาะผู้จัดการและเจ้าของร้าน
@@ -56,7 +60,10 @@ export default function Owner() {
         <Segmented
           value={tab}
           onChange={setTab}
-          options={TABS.map((t) => ({ value: t.key, label: t.label }))}
+          options={TABS
+            // จัดการบัญชีเป็นสิทธิ์แยกจากการตั้งค่าร้าน
+            .filter((t) => t.key !== 'staff' || caps.data?.includes('accounts'))
+            .map((t) => ({ value: t.key, label: t.label }))}
           className="min-w-full sm:min-w-0"
         />
       </div>
@@ -66,7 +73,9 @@ export default function Owner() {
       {tab === 'tables' && <TablesTab />}
       {tab === 'rates' && <RatesTab />}
       {tab === 'hours' && <HoursTab />}
-      {tab === 'staff' && <StaffTab myRole={role.data} />}
+      {tab === 'staff' && caps.data?.includes('accounts') && (
+        <StaffTab myRole={role.data ?? 'staff'} />
+      )}
       </div>
     </div>
   )

@@ -10,7 +10,9 @@ import TableQR from './pages/TableQR'
 import Owner from './pages/Owner'
 import GuestApp from './pages/guest/GuestApp'
 import BookingApp from './pages/guest/BookingApp'
-import { IS_MOCK, mockAdapter } from './data'
+import { IS_MOCK, adminDb, mockAdapter } from './data'
+import { useQuery } from '@tanstack/react-query'
+import type { Capability } from './domain/types'
 import AuthGate, { SignOutButton } from './auth/AuthGate'
 import { Button, Empty, Icon, SealStamp, onCelebrate } from './components/ui'
 import type { IconName } from './components/ui'
@@ -21,13 +23,16 @@ const qc = new QueryClient({
 })
 
 // ชื่อเมนูต้องไม่ซ้ำกับหัวหน้าเพจ — เทสต์หาหัวหน้าเพจด้วยข้อความตรงตัว
-const NAV: { to: string; label: string; icon: IconName; end?: boolean }[] = [
-  { to: '/', label: 'ผังโต๊ะ', icon: 'castle', end: true },
-  { to: '/kitchen', label: 'ครัว', icon: 'cauldron' },
-  { to: '/reservations', label: 'การจอง', icon: 'scroll' },
-  { to: '/games', label: 'คลังเกม', icon: 'dice' },
-  { to: '/qr', label: 'QR โต๊ะ', icon: 'qr' },
-  { to: '/owner', label: 'ตั้งค่า', icon: 'crown' },
+//
+// cap = สิทธิ์ที่ต้องมีถึงจะเห็นเมนูนี้ การซ่อนเมนูเป็นเรื่องความสะดวก
+// ไม่ใช่กำแพง — ด่านจริงคือ RPC ฝั่งฐานข้อมูลที่ตรวจซ้ำอีกชั้นอยู่แล้ว
+const NAV: { to: string; label: string; icon: IconName; cap: Capability; end?: boolean }[] = [
+  { to: '/', label: 'ผังโต๊ะ', icon: 'castle', cap: 'floor', end: true },
+  { to: '/kitchen', label: 'ครัว', icon: 'cauldron', cap: 'kitchen' },
+  { to: '/reservations', label: 'การจอง', icon: 'scroll', cap: 'floor' },
+  { to: '/games', label: 'คลังเกม', icon: 'dice', cap: 'floor' },
+  { to: '/qr', label: 'QR โต๊ะ', icon: 'qr', cap: 'floor' },
+  { to: '/owner', label: 'ตั้งค่า', icon: 'crown', cap: 'settings' },
 ]
 
 export default function App() {
@@ -71,6 +76,13 @@ function StaffShell() {
   const location = useLocation()
   const [stamp, setStamp] = useState<string | null>(null)
 
+  const caps = useQuery({
+    queryKey: ['admin', 'capabilities'],
+    queryFn: () => adminDb.myCapabilities(),
+  })
+  const can = (c: Capability) => caps.data?.includes(c) ?? false
+  const nav = NAV.filter((item) => can(item.cap))
+
   useEffect(
     () =>
       onCelebrate((message) => {
@@ -96,7 +108,7 @@ function StaffShell() {
         <div className="mx-6 hidden border-t border-gold-light/15 lg:block" />
 
         <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-gold-light/20 bg-wine/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:static lg:flex-1 lg:flex-col lg:gap-1 lg:border-0 lg:bg-transparent lg:px-3 lg:py-4 lg:backdrop-blur-none">
-          {NAV.map((item) => (
+          {nav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -141,13 +153,17 @@ function StaffShell() {
         {/* key ตาม path ให้แอนิเมชันเข้าหน้าเล่นใหม่ทุกครั้งที่เปลี่ยนหน้า */}
         <div key={location.pathname} className="animate-page">
           <Routes>
-            <Route path="/" element={<FloorMap />} />
-            <Route path="/visit/:visitId" element={<VisitDetail />} />
-            <Route path="/kitchen" element={<Kitchen />} />
-            <Route path="/reservations" element={<Reservations />} />
-            <Route path="/games" element={<Games />} />
-            <Route path="/qr" element={<TableQR />} />
-            <Route path="/owner" element={<Owner />} />
+            {/*
+              ยังไม่รู้สิทธิ์ก็ยังไม่ตัดสิน ไม่งั้นจะขึ้น "ไม่มีสิทธิ์" วาบหนึ่ง
+              ทุกครั้งที่เปิดแอป
+            */}
+            <Route path="/" element={<Guard ok={can('floor')} loading={caps.isPending}><FloorMap /></Guard>} />
+            <Route path="/visit/:visitId" element={<Guard ok={can('floor')} loading={caps.isPending}><VisitDetail /></Guard>} />
+            <Route path="/kitchen" element={<Guard ok={can('kitchen')} loading={caps.isPending}><Kitchen /></Guard>} />
+            <Route path="/reservations" element={<Guard ok={can('floor')} loading={caps.isPending}><Reservations /></Guard>} />
+            <Route path="/games" element={<Guard ok={can('floor')} loading={caps.isPending}><Games /></Guard>} />
+            <Route path="/qr" element={<Guard ok={can('floor')} loading={caps.isPending}><TableQR /></Guard>} />
+            <Route path="/owner" element={<Guard ok={can('settings')} loading={caps.isPending}><Owner /></Guard>} />
             <Route path="*" element={<Empty icon="⚔">ไม่พบหน้านี้ — ทางนี้ไม่มีปราสาท</Empty>} />
           </Routes>
         </div>
@@ -156,6 +172,34 @@ function StaffShell() {
       {stamp && <SealStamp message={stamp} />}
     </div>
   )
+}
+
+/**
+ * กันคนพิมพ์ URL เข้าหน้าที่ไม่มีสิทธิ์
+ *
+ * เป็นแค่การกันความสับสน ไม่ใช่ความปลอดภัย — ต่อให้ข้ามมาได้ ทุก RPC
+ * ก็ยังตรวจสิทธิ์ฝั่งฐานข้อมูลอยู่ดี
+ */
+function Guard({
+  ok,
+  loading,
+  children,
+}: {
+  ok: boolean
+  loading: boolean
+  children: React.ReactNode
+}) {
+  if (loading) return null
+  if (!ok) {
+    return (
+      <Empty icon="🔒">
+        บัญชีของคุณไม่มีสิทธิ์เข้าหน้านี้
+        <br />
+        <span className="text-xs">ถ้าคิดว่าผิด แจ้งเจ้าของร้านให้ปรับระดับสิทธิ์ให้</span>
+      </Empty>
+    )
+  }
+  return <>{children}</>
 }
 
 /** นาฬิกาประจำร้าน — แยก component ไว้ ไม่ให้ทั้งหน้า render ใหม่ทุกนาที */

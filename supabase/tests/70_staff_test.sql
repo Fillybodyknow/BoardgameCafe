@@ -5,7 +5,14 @@
 -- "มีทางไหนที่ร้านจะล็อกตัวเองจนไม่มีใครเข้าไปแก้อะไรได้อีก"
 -- ============================================================================
 
-set "test.user_id" = '99999999-0000-4000-8000-000000000001';  -- manager
+-- การจัดการบัญชีพนักงานเป็นสิทธิ์ของตัวเอง (accounts) ไม่ได้ติดมากับการตั้งค่าร้าน
+-- ผู้จัดการจึงทำส่วนนี้ไม่ได้แล้ว ต้องใช้คนที่ถือสิทธิ์นั้น
+insert into auth.users (id, email)
+values ('99999999-0000-4000-8000-000000000004', 'admin@cafe.test');
+insert into staff (user_id, username, display_name, role)
+values ('99999999-0000-4000-8000-000000000004', 'admin', 'ผู้ดูแลบัญชี', 'owner');
+
+set "test.user_id" = '99999999-0000-4000-8000-000000000004';  -- มีสิทธิ์ accounts
 
 -- ============================ ล็อกอินด้วย username ============================
 
@@ -50,12 +57,12 @@ begin
   -- register_staff ถูกเรียกจาก Edge Function ด้วย service_role ซึ่ง auth.uid()
   -- เป็น null จึงต้องบอกว่าใครเป็นคนสั่งผ่าน p_actor
   v_row := register_staff(v_new, 'somchai', 'สมชาย', 'staff',
-                          '99999999-0000-4000-8000-000000000001');
+                          '99999999-0000-4000-8000-000000000004');
   perform assert_eq('เพิ่มพนักงานได้', v_row.display_name, 'สมชาย');
   perform assert_eq('เก็บ username', v_row.username, 'somchai');
   perform assert_eq('บันทึกว่าใครเป็นคนเพิ่ม',
     (select actor from audit_log where action = 'register_staff' and entity_id = v_new),
-    '99999999-0000-4000-8000-000000000001'::uuid);
+    '99999999-0000-4000-8000-000000000004'::uuid);
 
   perform assert_eq('ล็อกอินด้วย username ใหม่ได้',
     login_email_for('somchai'), 'somchai@staff.local');
@@ -67,7 +74,7 @@ $$;
 do $$
 declare
   v_tmp uuid := '99999999-0000-4000-8000-00000000000b';
-  v_mgr uuid := '99999999-0000-4000-8000-000000000001';
+  v_mgr uuid := '99999999-0000-4000-8000-000000000004';  -- ผู้สั่ง ต้องมีสิทธิ์ accounts
   v_row staff;
 begin
   insert into auth.users (id, email) values (v_tmp, 'tmp@staff.local');
@@ -109,12 +116,12 @@ begin
     raise notice 'PASS  ต้องใส่ชื่อพนักงาน';
   end;
 
-  -- ผู้จัดการตั้งคนเป็นเจ้าของร้านไม่ได้ ไม่งั้นจะวางหมากยกอำนาจให้ตัวเองได้
+  -- ระดับที่ไม่มีอยู่จริงต้องถูกปฏิเสธ
   begin
-    perform register_staff(v_tmp, 'nobody', 'ลองเป็นเจ้าของ', 'owner', v_mgr);
-    raise exception 'FAIL  ผู้จัดการไม่ควรตั้งเจ้าของร้านได้';
-  exception when sqlstate '42501' then
-    raise notice 'PASS  ผู้จัดการตั้งเจ้าของร้านคนใหม่ไม่ได้';
+    perform register_staff(v_tmp, 'nobody', 'ระดับมั่ว', 'superuser', v_mgr);
+    raise exception 'FAIL  ระดับที่ไม่มีอยู่ไม่ควรผ่าน';
+  exception when sqlstate '22023' then
+    raise notice 'PASS  ตั้งระดับที่ไม่มีอยู่ไม่ได้';
   end;
 
   -- พนักงานหน้าร้านเพิ่มคนไม่ได้เลย
@@ -147,17 +154,10 @@ begin
     raise notice 'PASS  ตั้งระดับสิทธิ์ที่ไม่มีอยู่ไม่ได้';
   end;
 
-  -- ผู้จัดการเลื่อนคนขึ้นเป็นเจ้าของร้านไม่ได้
-  begin
-    perform set_staff_role(v_new, 'owner');
-    raise exception 'FAIL  ผู้จัดการไม่ควรตั้งเจ้าของร้านได้';
-  exception when sqlstate '42501' then
-    raise notice 'PASS  ผู้จัดการเลื่อนใครเป็นเจ้าของร้านไม่ได้';
-  end;
 
-  -- เปลี่ยนสิทธิ์ตัวเองไม่ได้
+  -- เปลี่ยนสิทธิ์ตัวเองไม่ได้ (ผู้สั่งตอนนี้คือ ...0004)
   begin
-    perform set_staff_role('99999999-0000-4000-8000-000000000001', 'staff');
+    perform set_staff_role('99999999-0000-4000-8000-000000000004', 'staff');
     raise exception 'FAIL  เปลี่ยนสิทธิ์ตัวเองไม่ควรได้';
   exception when sqlstate '22023' then
     raise notice 'PASS  เปลี่ยนระดับสิทธิ์ของตัวเองไม่ได้';
@@ -165,7 +165,7 @@ begin
 
   -- ปิดบัญชีตัวเองไม่ได้
   begin
-    perform set_staff_active('99999999-0000-4000-8000-000000000001', false);
+    perform set_staff_active('99999999-0000-4000-8000-000000000004', false);
     raise exception 'FAIL  ปิดบัญชีตัวเองไม่ควรได้';
   exception when sqlstate '22023' then
     raise notice 'PASS  ปิดการใช้งานบัญชีตัวเองไม่ได้';
@@ -187,55 +187,9 @@ begin
 end;
 $$;
 
--- ★ ============== กันร้านล็อกตัวเอง: ต้องเหลือเจ้าของอย่างน้อย 1 ==============
-
-do $$
-declare
-  v_owner uuid := '99999999-0000-4000-8000-00000000000c';
-  v_other uuid := '99999999-0000-4000-8000-00000000000d';
-  v_row   staff;
-begin
-  insert into auth.users (id, email) values
-    (v_owner, 'owner1@staff.local'), (v_other, 'owner2@staff.local');
-
-  insert into staff (user_id, username, display_name, role)
-  values (v_owner, 'owner1', 'เจ้าของ 1', 'owner'),
-         (v_other, 'owner2', 'เจ้าของ 2', 'owner');
-
-  -- ตอนนี้มีเจ้าของ 2 คน ปิดไปคนหนึ่งได้
-  -- SET รับค่าคงที่เท่านั้น ใช้ตัวแปรต้องผ่าน set_config
-  perform set_config('test.user_id', v_owner::text, false);
-  v_row := set_staff_active(v_other, false);
-  perform assert_eq('มีเจ้าของ 2 คน ปิดได้หนึ่ง', v_row.active, false);
-
-  -- เหลือเจ้าของคนเดียวแล้ว จะลดสิทธิ์หรือปิดคนสุดท้ายไม่ได้
-  perform set_config('test.user_id', '99999999-0000-4000-8000-000000000001', false);
-  begin
-    perform set_staff_active(v_owner, false);
-    raise exception 'FAIL  ปิดเจ้าของคนสุดท้ายไม่ควรได้';
-  exception when sqlstate '22023' then
-    raise notice 'PASS  ปิดการใช้งานเจ้าของร้านคนสุดท้ายไม่ได้';
-  end;
-
-  begin
-    perform set_staff_role(v_owner, 'staff');
-    raise exception 'FAIL  ลดสิทธิ์เจ้าของคนสุดท้ายไม่ควรได้';
-  exception when sqlstate '22023' then
-    raise notice 'PASS  ลดสิทธิ์เจ้าของร้านคนสุดท้ายไม่ได้';
-  end;
-
-  -- เปิดคนที่สองกลับมาแล้วค่อยทำได้
-  perform set_staff_active(v_other, true);
-  v_row := set_staff_role(v_owner, 'manager');
-  perform assert_eq('มีเจ้าของสองคนแล้ว ลดสิทธิ์คนหนึ่งได้', v_row.role, 'manager');
-
-  -- คืนสภาพให้เทสต์อื่น — ต้องให้เจ้าของร้าน (v_other) เป็นคนตั้ง
-  -- เพราะผู้จัดการตั้งเจ้าของร้านคนใหม่ไม่ได้ ซึ่งเป็นกติกาที่เพิ่งทดสอบไป
-  perform set_config('test.user_id', v_other::text, false);
-  v_row := set_staff_role(v_owner, 'owner');
-  perform assert_eq('เจ้าของร้านตั้งเจ้าของร้านคนใหม่ได้', v_row.role, 'owner');
-end;
-$$;
+-- หมายเหตุ: กฎ "ต้องเหลือคนที่จัดการบัญชีได้อย่างน้อย 1 คน" ย้ายไปอยู่ใน
+-- 80_capability_test.sql แล้ว เพราะตอนนี้ผูกกับสิทธิ์ accounts ไม่ใช่ชื่อ role
+-- 'owner' การมีเทสต์สองชุดที่เช็คกฎเดียวกันคนละนิยามจะเพี้ยนจากกันแน่นอน
 
 -- ============================ ขอบเขตสิทธิ์ ============================
 
@@ -266,6 +220,6 @@ begin
 end;
 $$;
 
-set "test.user_id" = '99999999-0000-4000-8000-000000000001';
+set "test.user_id" = '99999999-0000-4000-8000-000000000004';
 
 select '=== จัดการบัญชีพนักงานผ่านทั้งหมด ===' as result;

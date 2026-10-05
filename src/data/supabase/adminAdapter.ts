@@ -1,6 +1,7 @@
 import type { AdminPort } from '../port'
 import type {
-  CafeTable, MenuItem, RatePlan, ShopHours, StaffMember, StaffRole, TaxConfig,
+  CafeTable, Capability, MenuItem, RatePlan, ShopHours, StaffMember, StaffRole,
+  TaxConfig,
 } from '../../domain/types'
 import { requireClient } from './client'
 
@@ -25,6 +26,10 @@ async function all<T>(table: string, order: string): Promise<T[]> {
 export const supabaseAdminAdapter: AdminPort = {
   async myRole() {
     return await rpc<StaffRole | null>('my_staff_role', {})
+  },
+
+  async myCapabilities() {
+    return (await rpc<Capability[] | null>('my_capabilities', {})) ?? []
   },
 
   // หน้าตั้งค่าต้องเห็นของที่เก็บเข้ากรุด้วย ต่างจากหน้าร้านที่กรองออก

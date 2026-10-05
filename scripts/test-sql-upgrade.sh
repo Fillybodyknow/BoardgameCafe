@@ -43,6 +43,7 @@ run supabase/patch-booking.sql
 run supabase/patch-owner.sql
 run supabase/patch-menu-images.sql
 run supabase/patch-staff.sql
+run supabase/patch-roles.sql
 
 echo "--- เทสต์ชุดเดียวกับการติดตั้งใหม่ ---"
 run supabase/tests/05_test_grants.sql
@@ -53,6 +54,7 @@ run supabase/tests/40_reservation_test.sql
 run supabase/tests/50_owner_test.sql
 run supabase/tests/60_menu_image_test.sql
 run supabase/tests/70_staff_test.sql
+run supabase/tests/80_capability_test.sql
 
 echo
 echo "เส้นทางอัปเกรดผ่านทั้งหมด"

@@ -48,3 +48,5 @@ make_patch supabase/patch-owner.sql "patch หน้าตั้งค่าเ�
 make_patch supabase/patch-menu-images.sql "patch รูปประกอบเมนู"   supabase/migrations/20260930001000_menu_images.sql
 
 make_patch supabase/patch-staff.sql "patch จัดการบัญชีพนักงาน + ล็อกอินด้วย username"   supabase/migrations/20260930001100_staff_management.sql
+
+make_patch supabase/patch-roles.sql "patch ระดับพนักงานแบบแยกสิทธิ์"   supabase/migrations/20260930001200_role_capabilities.sql

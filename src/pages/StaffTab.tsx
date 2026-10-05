@@ -8,19 +8,28 @@ import type { Tone } from '../components/ui'
 const ROLE_LABEL: Record<StaffRole, string> = {
   owner: 'เจ้าของร้าน',
   manager: 'ผู้จัดการ',
-  staff: 'พนักงานหน้าร้าน',
+  staff: 'พนักงานทั่วไป',
+  floor: 'หน้าร้าน',
+  kitchen: 'ครัว',
 }
 
 const ROLE_HINT: Record<StaffRole, string> = {
-  owner: 'ทำได้ทุกอย่าง รวมถึงตั้งเจ้าของร้านคนอื่น',
-  manager: 'ตั้งค่าร้านได้ แต่ตั้งเจ้าของร้านไม่ได้',
-  staff: 'เปิดโต๊ะ รับออเดอร์ เช็คบิล — แก้ราคาไม่ได้',
+  floor: 'ดูผังโต๊ะและการจอง เปิดโต๊ะ รับออเดอร์ เช็คบิล',
+  kitchen: 'ดูจอครัวและเปลี่ยนสถานะออเดอร์เท่านั้น',
+  staff: 'ทำได้ทั้งหน้าร้านและครัว',
+  manager: 'เพิ่มการตั้งค่าร้าน (เมนู โต๊ะ ราคา เวลาทำการ)',
+  owner: 'เพิ่มการจัดการบัญชีพนักงาน — ทำได้ทุกอย่าง',
 }
+
+/** เรียงจากสิทธิ์น้อยไปมาก ให้คนเลือกไล่อ่านได้ */
+const ROLE_ORDER: StaffRole[] = ['floor', 'kitchen', 'staff', 'manager', 'owner']
 
 const ROLE_TONE: Record<StaffRole, Tone> = {
   owner: 'royal',
   manager: 'lapis',
-  staff: 'neutral',
+  staff: 'forest',
+  floor: 'gold',
+  kitchen: 'ember',
 }
 
 const INPUT =
@@ -152,8 +161,8 @@ export default function StaffTab({ myRole }: { myRole: StaffRole }) {
               <div>
                 <span className="text-xs text-ink-faint">ระดับสิทธิ์</span>
                 <div className="mt-1 space-y-1">
-                  {(['staff', 'manager', 'owner'] as StaffRole[])
-                    // ผู้จัดการตั้งเจ้าของร้านไม่ได้ ซ่อนตัวเลือกไว้ไม่ให้สับสน
+                  {ROLE_ORDER
+                    // ยกสิทธิ์จัดการบัญชีให้คนอื่นได้เฉพาะคนที่มีสิทธิ์นั้นเอง
                     .filter((r) => r !== 'owner' || myRole === 'owner')
                     .map((r) => (
                       <button
@@ -236,7 +245,7 @@ function StaffRow({
             onChange={(e) => onRole(e.target.value as StaffRole)}
             className="rounded-lg border border-line-strong bg-vellum px-2 py-1.5 text-sm outline-none disabled:opacity-40"
           >
-            {(['staff', 'manager', 'owner'] as StaffRole[])
+            {ROLE_ORDER
               .filter((r) => r !== 'owner' || myRole === 'owner' || m.role === 'owner')
               .map((r) => (
                 <option key={r} value={r}>

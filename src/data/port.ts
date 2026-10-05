@@ -2,7 +2,7 @@ import type {
   AvailableTable, BillPreview, BookingConfig, BookingLookup, BookingReceipt,
   CafeTable, GameTitle, GuestOrder, GuestPass, GuestSession, ID, MenuCategory,
   MenuItem, Occupancy, Order, OrderStatus, PaymentInput, RatePlan, Reservation,
-  ShopHours, StaffMember, StaffRole, TaxConfig, Visit,
+  Capability, ShopHours, StaffMember, StaffRole, TaxConfig, Visit,
 } from '../domain/types'
 
 /**
@@ -112,6 +112,8 @@ export interface BookingPort {
 export interface AdminPort {
   /** บอกว่าผู้ใช้ปัจจุบันเป็นระดับไหน — null = ไม่ได้อยู่ในทะเบียนพนักงาน */
   myRole(): Promise<StaffRole | null>
+  /** สิทธิ์ที่ผู้ใช้ปัจจุบันมี — หน้าจอใช้ซ่อนเมนูที่กดไปก็โดนปฏิเสธ */
+  myCapabilities(): Promise<Capability[]>
 
   /** รวมของที่เก็บเข้ากรุแล้วด้วย ต่างจาก snapshot ที่หน้าร้านใช้ */
   allMenuItems(): Promise<MenuItem[]>
