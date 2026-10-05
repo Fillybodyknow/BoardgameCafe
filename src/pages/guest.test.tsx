@@ -32,7 +32,7 @@ describe('ลูกค้าสแกน QR', () => {
   })
 
   it('ยังไม่เคยลงชื่อ ต้องถามชื่อก่อนถึงจะเห็นเมนู', async () => {
-    window.location.hash = '#/t/qr-b1' // B1 มี visit v-1 เปิดอยู่
+    window.location.hash = '#/t/qr-v1' // B1 มี visit v-1 เปิดอยู่
     render(<App />)
 
     expect(await screen.findByText('คุณชื่ออะไร')).toBeTruthy()
@@ -40,7 +40,7 @@ describe('ลูกค้าสแกน QR', () => {
   })
 
   it('ลงชื่อแล้วเข้าหน้าเมนูได้ และถูกจำไว้ในเครื่อง', async () => {
-    window.location.hash = '#/t/qr-b1'
+    window.location.hash = '#/t/qr-v1'
     render(<App />)
 
     fireEvent.change(await screen.findByPlaceholderText('ชื่อเล่นก็ได้'), {
@@ -49,12 +49,12 @@ describe('ลูกค้าสแกน QR', () => {
     fireEvent.click(screen.getByText('เริ่มสั่งของ'))
 
     expect(await screen.findByText('อเมริกาโน่เย็น')).toBeTruthy()
-    expect(myPass('qr-b1')?.displayName).toBe('คุณใหม่')
+    expect(myPass('qr-v1')?.displayName).toBe('คุณใหม่')
   })
 
   it('เครื่องที่ลงชื่อแล้วเข้าเมนูได้เลย ไม่ถามซ้ำ', async () => {
-    await signedInAs('qr-b1', 'คุณเดิม')
-    window.location.hash = '#/t/qr-b1'
+    await signedInAs('qr-v1', 'คุณเดิม')
+    window.location.hash = '#/t/qr-v1'
     render(<App />)
 
     expect(await screen.findByText('โต๊ะ B1')).toBeTruthy()
@@ -62,8 +62,8 @@ describe('ลูกค้าสแกน QR', () => {
   })
 
   it('ไม่ต้องล็อกอิน — ไม่เจอหน้าเข้าสู่ระบบ', async () => {
-    await signedInAs('qr-b1', 'คุณไม่ล็อกอิน')
-    window.location.hash = '#/t/qr-b1'
+    await signedInAs('qr-v1', 'คุณไม่ล็อกอิน')
+    window.location.hash = '#/t/qr-v1'
     render(<App />)
     await screen.findByText('โต๊ะ B1')
     expect(screen.queryByText(/เข้าสู่ระบบพนักงาน/)).toBeNull()
@@ -86,8 +86,8 @@ describe('ลูกค้าสแกน QR', () => {
   // เพราะเคยกด + แล้วกด − ใส่เมนูอีกอัน ทำให้เหลือรายการ qty=0 ค้างในตะกร้า
   // หน้าจอยังขึ้นว่า 2 รายการ (0 ไม่ถูกนับ) ลูกค้าจึงเดาไม่ออกว่าอะไรผิด
   it('กดเพิ่มแล้วกดลดจนเหลือศูนย์ ต้องไม่ทำให้สั่งทั้งออเดอร์ไม่ได้', async () => {
-    await signedInAs('qr-b1', 'คุณตะกร้า')
-    window.location.hash = '#/t/qr-b1'
+    await signedInAs('qr-v1', 'คุณตะกร้า')
+    window.location.hash = '#/t/qr-v1'
     render(<App />)
     await screen.findByText('โต๊ะ B1')
 
@@ -116,8 +116,8 @@ describe('ลูกค้าสแกน QR', () => {
   })
 
   it('สั่งของแล้วเข้าครัวทันที และผูกกับโต๊ะที่สแกน', async () => {
-    await signedInAs('qr-b1', 'คุณสั่ง')
-    window.location.hash = '#/t/qr-b1'
+    await signedInAs('qr-v1', 'คุณสั่ง')
+    window.location.hash = '#/t/qr-v1'
     render(<App />)
     await screen.findByText('โต๊ะ B1')
 
@@ -138,8 +138,8 @@ describe('ลูกค้าสแกน QR', () => {
   // ★ หัวใจของการให้แต่ละเครื่องลงชื่อเอง: ไม่ต้องเลือกชื่อตอนสั่งอีก
   // และออเดอร์ลงชื่อเจ้าของเครื่องเสมอ ไม่มีทางลงผิดคน
   it('ออเดอร์ลงชื่อเจ้าของเครื่องเอง ไม่ต้องเลือก', async () => {
-    const me = await signedInAs('qr-b1', 'คุณเจ้าของเครื่อง')
-    window.location.hash = '#/t/qr-b1'
+    const me = await signedInAs('qr-v1', 'คุณเจ้าของเครื่อง')
+    window.location.hash = '#/t/qr-v1'
     render(<App />)
     await screen.findByText('โต๊ะ B1')
 
@@ -162,8 +162,8 @@ describe('ขอบเขตของ token (ระดับ adapter)', () => {
   })
 
   it('เห็นออเดอร์เฉพาะโต๊ะตัวเอง', async () => {
-    const b1 = await mockGuestAdapter.orders('qr-b1') // v-1
-    const a2 = await mockGuestAdapter.orders('qr-a2') // v-2
+    const b1 = await mockGuestAdapter.orders('qr-v1') // v-1
+    const a2 = await mockGuestAdapter.orders('qr-v2') // v-2
     expect(b1.length).toBeGreaterThan(0)
     expect(a2.length).toBeGreaterThan(0)
     const overlap = b1.filter((o) => a2.some((x) => x.id === o.id))
@@ -174,7 +174,7 @@ describe('ขอบเขตของ token (ระดับ adapter)', () => {
     const other = (await mockAdapter.getSnapshot()).passes.find((p) => p.visitId === 'v-2')!
     await expect(
       mockGuestAdapter.placeOrder({
-        token: 'qr-b1', // โต๊ะ B1 = v-1
+        token: 'qr-v1', // โต๊ะ B1 = v-1
         idempotencyKey: 'cross-1',
         orderedByPassId: other.id, // แต่สั่งในชื่อคนของ v-2
         splitMode: 'owner',
@@ -184,7 +184,7 @@ describe('ขอบเขตของ token (ระดับ adapter)', () => {
   })
 
   it('บิลที่เห็นเป็นของโต๊ะตัวเองเท่านั้น', async () => {
-    const bill = await mockGuestAdapter.bill('qr-b1')
+    const bill = await mockGuestAdapter.bill('qr-v1')
     expect(bill.visitId).toBe('v-1')
   })
 
@@ -215,7 +215,7 @@ describe('ลบคนที่ลงชื่อผิด', () => {
   })
 
   it('พนักงานลบคนที่เพิ่งลงชื่อออกได้', async () => {
-    const pass = await signedInAs('qr-b1', 'คนกดมั่ว')
+    const pass = await signedInAs('qr-v1', 'คนกดมั่ว')
     await db.voidPass(pass.passId)
 
     const snap = await mockAdapter.getSnapshot()
@@ -223,7 +223,7 @@ describe('ลบคนที่ลงชื่อผิด', () => {
   })
 
   it('คนที่สั่งของไปแล้วลบไม่ได้', async () => {
-    const pass = await signedInAs('qr-b1', 'คนสั่งของ')
+    const pass = await signedInAs('qr-v1', 'คนสั่งของ')
     const snap = await mockAdapter.getSnapshot()
 
     await db.placeOrder({
@@ -239,12 +239,73 @@ describe('ลบคนที่ลงชื่อผิด', () => {
   })
 
   it('ลงชื่อซ้ำไม่กลายเป็นสองคน', async () => {
-    const a = await signedInAs('qr-b1', 'คนเดิม')
-    const b = await signedInAs('qr-b1', '  คนเดิม ')
+    const a = await signedInAs('qr-v1', 'คนเดิม')
+    const b = await signedInAs('qr-v1', '  คนเดิม ')
     expect(b.passId).toBe(a.passId)
   })
 
   it('ลงชื่อตอนโต๊ะยังไม่เปิดไม่ได้', async () => {
     await expect(mockGuestAdapter.register('qr-a3', 'คนมาก่อน')).rejects.toThrow(/ยังไม่ได้เปิด/)
+  })
+})
+
+/**
+ * QR ต่อรอบ — เปิดโต๊ะหนึ่งครั้งได้ QR ใหม่หนึ่งใบ (migration 1800)
+ * ฝั่ง SQL ทดสอบกติกาเดียวกันไว้ใน supabase/tests/30_guest_test.sql
+ */
+describe('QR ต่อรอบ', () => {
+  beforeEach(() => {
+    cleanup()
+    localStorage.clear()
+    mockAdapter.reset()
+    window.location.hash = ''
+  })
+
+  it('เปิดโต๊ะแล้วได้ QR ของรอบนี้ ใช้ได้ทันที และคนละใบกับรอบอื่น', async () => {
+    const a = await db.openVisit({ tableIds: ['t-a3'], guests: [{ name: 'ก', ratePlanId: '11111111-0000-4000-8000-000000000001' }] })
+    const b = await db.openVisit({ tableIds: ['t-b2'], guests: [{ name: 'ข', ratePlanId: '11111111-0000-4000-8000-000000000001' }] })
+    expect(a.qrToken).toBeTruthy()
+    expect(a.qrToken).not.toBe(b.qrToken)
+    expect((await mockGuestAdapter.session(a.qrToken!)).visitId).toBe(a.id)
+  })
+
+  // ★ เหตุผลหลักของการเปลี่ยน: QR ที่ลูกค้าเก่าถ่ายรูปไว้ ต้องเข้าบิลคนใหม่ไม่ได้
+  it('สติกเกอร์ QR ติดโต๊ะแบบเก่า เข้าบิลของคนที่นั่งอยู่ไม่ได้', async () => {
+    const s = await mockGuestAdapter.session('qr-b1') // B1 มี v-1 นั่งอยู่
+    expect(s.visitId).toBeNull()
+    expect(s.ended).toBe(false)
+    await expect(mockGuestAdapter.register('qr-b1', 'คนนอกร้าน')).rejects.toThrow()
+  })
+
+  it('ย้ายโต๊ะแล้ว QR ใบเดิมตามกลุ่มไป ไม่ต้องพิมพ์ใหม่', async () => {
+    await db.moveVisitToTables('v-1', ['t-a3'])
+    const s = await mockGuestAdapter.session('qr-v1')
+    expect(s.visitId).toBe('v-1')
+    expect(s.tableCode).toBe('A3')
+  })
+
+  it('ปิดบิลแล้ว QR ใช้ไม่ได้ และหน้าจอบอกว่ารอบนี้จบแล้ว', async () => {
+    await db.closeVisit('v-1')
+    await expect(mockGuestAdapter.register('qr-v1', 'มาทีหลัง')).rejects.toThrow()
+
+    window.location.hash = '#/t/qr-v1'
+    render(<App />)
+    expect(await screen.findByText('รอบนี้ปิดบิลแล้ว')).toBeTruthy()
+    expect(screen.queryByText('ส่งเข้าครัว')).toBeNull()
+  })
+
+  it('ออก QR ใหม่แล้ว ใบเดิมใช้ไม่ได้ทันที', async () => {
+    const fresh = await db.rotateVisitToken('v-1')
+    expect(fresh).not.toBe('qr-v1')
+    await expect(mockGuestAdapter.session('qr-v1')).rejects.toThrow(/ใช้ไม่ได้/)
+    expect((await mockGuestAdapter.session(fresh)).visitId).toBe('v-1')
+  })
+
+  it('เปิดโต๊ะจากผังโต๊ะแล้วขึ้นใบ QR ให้พิมพ์ทันที', async () => {
+    render(<App />)
+    fireEvent.click(await screen.findByText('A3'))
+    fireEvent.click(await screen.findByRole('button', { name: 'เปิดโต๊ะ' }))
+    expect(await screen.findByText('เปิดโต๊ะ A3 แล้ว')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'พิมพ์ใบ QR' })).toBeTruthy()
   })
 })

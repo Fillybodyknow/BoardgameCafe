@@ -134,10 +134,23 @@ export default function GuestApp() {
         <div className="divider my-6 w-48 text-xs" aria-hidden>
           ◆
         </div>
-        <p className="font-display text-lg font-bold">ยังไม่ได้เปิดโต๊ะ</p>
-        <p className="mt-2 max-w-xs text-sm text-ink-soft">
-          แจ้งพนักงานเพื่อเปิดโต๊ะก่อนนะครับ แล้วสแกนใหม่อีกครั้ง
-        </p>
+        {s.ended ? (
+          <>
+            <p className="font-display text-lg font-bold">รอบนี้ปิดบิลแล้ว</p>
+            <p className="mt-2 max-w-xs text-sm text-ink-soft">
+              ขอบคุณที่มาเล่นด้วยกันนะครับ — QR ใบนี้ใช้ได้เฉพาะรอบที่ผ่านมา
+              มาครั้งหน้าพนักงานจะพิมพ์ใบใหม่ให้
+            </p>
+          </>
+        ) : (
+          <>
+            {/* สติกเกอร์ QR ติดโต๊ะแบบเก่า — QR ตอนนี้ออกใหม่ทุกครั้งที่เปิดโต๊ะ */}
+            <p className="font-display text-lg font-bold">ยังไม่ได้เปิดโต๊ะ</p>
+            <p className="mt-2 max-w-xs text-sm text-ink-soft">
+              QR ที่ติดโต๊ะเลิกใช้แล้ว แจ้งพนักงานเพื่อเปิดโต๊ะ แล้วสแกนจากใบ QR ที่ได้รับครับ
+            </p>
+          </>
+        )}
       </Centered>
     )
   }

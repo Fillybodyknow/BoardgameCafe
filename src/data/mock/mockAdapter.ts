@@ -28,6 +28,8 @@ class MockAdapter implements DataPort {
 
   constructor() {
     this.state = load() ?? seed()
+    // เดโมที่เคยเก็บไว้ก่อนมี QR ต่อรอบ — ออก token ให้รอบที่ยังเปิดอยู่
+    for (const v of this.state.visits) v.qrToken ??= newToken()
   }
 
   private commit() {
@@ -77,6 +79,8 @@ class MockAdapter implements DataPort {
       closedAt: null,
       businessDate: businessDateOf(new Date()),
       sharedSettled: 0,
+      // เปิดโต๊ะหนึ่งครั้ง = QR ใหม่หนึ่งใบ (ดู migration 1800)
+      qrToken: newToken(),
     }
     this.state.visits.push(visit)
 
@@ -212,12 +216,12 @@ class MockAdapter implements DataPort {
     this.commit()
   }
 
-  async rotateTableToken(tableId: ID) {
-    const table = this.state.tables.find((t) => t.id === tableId)
-    if (!table) throw new Error(`ไม่พบโต๊ะ ${tableId}`)
-    table.qrToken = newId('qr')
+  async rotateVisitToken(visitId: ID) {
+    const visit = this.state.visits.find((v) => v.id === visitId && v.status === 'open')
+    if (!visit) throw new Error('ไม่พบรอบที่ยังเปิดอยู่')
+    visit.qrToken = newToken()
     this.commit()
-    return table.qrToken
+    return visit.qrToken
   }
 
   async closeVisit(visitId: ID, payments: PaymentInput[] = []) {
@@ -582,25 +586,47 @@ class MockAdapter implements DataPort {
 
   // ---------- ฝั่งลูกค้า (สแกน QR) ----------
 
-  /** แปลง token เป็น visit ที่เปิดอยู่ — ตรรกะเดียวกับ visit_for_token() ใน SQL */
-  private visitForToken(token: string): { tableId: ID; visitId: ID | null; code: string; zone: string } {
-    const table = this.state.tables.find((t) => t.qrToken === token)
-    if (!table) throw new Error('QR นี้ใช้ไม่ได้')
-    const occ = this.state.occupancies.find((o) => o.tableId === table.id && o.toAt === null)
-    const visit = occ && this.state.visits.find((v) => v.id === occ.visitId && v.status === 'open')
-    return { tableId: table.id, visitId: visit ? visit.id : null, code: table.code, zone: table.zone }
+  /**
+   * แปลง token เป็นรอบที่เปิดอยู่ — ตรรกะเดียวกับ visit_for_token() + guest_session() ใน SQL
+   *
+   * visitId = null แปลว่าสั่งไม่ได้: ended = ปิดบิลแล้ว, ไม่ ended = สติกเกอร์ติดโต๊ะแบบเก่า
+   */
+  private visitForToken(token: string): { visitId: ID | null; ended: boolean; code: string; zone: string } {
+    const visit = this.state.visits.find((v) => v.qrToken === token)
+    if (!visit) {
+      const table = this.state.tables.find((t) => t.qrToken === token && !t.archived)
+      if (!table) throw new Error('QR นี้ใช้ไม่ได้')
+      return { visitId: null, ended: false, code: table.code, zone: table.zone }
+    }
+
+    // กลุ่มใหญ่ต่อโต๊ะ → B1+B2 / ปิดบิลแล้วใช้โต๊ะสุดท้ายที่นั่ง
+    const mine = this.state.occupancies.filter((o) => o.visitId === visit.id)
+    const current = mine.filter((o) => o.toAt === null)
+    const occs = current.length > 0 ? current : mine.sort((a, b) => b.fromAt.localeCompare(a.fromAt)).slice(0, 1)
+    const tables = occs
+      .map((o) => this.state.tables.find((t) => t.id === o.tableId))
+      .filter((t): t is NonNullable<typeof t> => Boolean(t))
+    const open = visit.status === 'open'
+    return {
+      visitId: open ? visit.id : null,
+      ended: !open,
+      code: tables.map((t) => t.code).join('+') || '—',
+      zone: tables[0]?.zone ?? '',
+    }
   }
 
   async guestSession(token: string): Promise<GuestSession> {
-    const { visitId, code, zone } = this.visitForToken(token)
+    const { visitId, ended, code, zone } = this.visitForToken(token)
     return {
       tableCode: code,
       zone,
       visitId,
+      ended,
       passes: this.state.passes
         .filter((p) => p.visitId === visitId && (p.status === 'active' || p.status === 'paused'))
         .map((p) => ({ id: p.id, displayName: p.displayName })),
-      menu: structuredClone(this.state.menu),
+      // สั่งไม่ได้ก็ไม่ต้องส่งเมนู — ตรงกับฝั่ง SQL
+      menu: visitId ? structuredClone(this.state.menu.filter((m) => !m.archived)) : [],
       kitchen: kitchenWindow(loadHours()),
     }
   }
@@ -893,6 +919,11 @@ function randomCode(): string {
   let out = ''
   for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)]
   return out
+}
+
+/** token ใน QR ต้องเดายาก — ใช้ UUID แบบเดียวกับฝั่ง Postgres */
+function newToken(): string {
+  return globalThis.crypto?.randomUUID?.() ?? newId('qr') + newId('')
 }
 
 function newId(prefix: string): string {

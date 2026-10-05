@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom'
 import { useSnapshot, useNow } from '../hooks/useData'
 import { db } from '../data'
 import { billableMinutes, computeBill, formatBaht, formatDuration } from '../domain/pricing'
-import type { CafeTable, RatePlan, TableStatus } from '../domain/types'
+import type { CafeTable, RatePlan, TableStatus, Visit } from '../domain/types'
 import { Badge, Button, Dot, Icon, INPUT, Modal, PageHeader, SectionTitle } from '../components/ui'
 import type { IconName, Tone } from '../components/ui'
+import SlipDialog from './SlipDialog'
 
 const STATUS_STYLE: Record<TableStatus, { ribbon: string; tile: string; label: string; tone: Tone }> = {
   free: { ribbon: 'bg-line-strong', tile: 'hover:border-gold', label: 'ว่าง', tone: 'neutral' },
@@ -18,6 +19,8 @@ export default function FloorMap() {
   const { data } = useSnapshot()
   const now = useNow(5000)
   const [seating, setSeating] = useState<CafeTable | null>(null)
+  // เปิดโต๊ะเสร็จ → ใบ QR ของรอบนี้ให้พิมพ์ยื่นลูกค้า
+  const [slip, setSlip] = useState<{ visit: Visit; table: CafeTable } | null>(null)
 
   const zones = useMemo(() => {
     if (!data) return []
@@ -129,7 +132,25 @@ export default function FloorMap() {
         })}
       </div>
 
-      {seating && <SeatDialog table={seating} onClose={() => setSeating(null)} />}
+      {seating && (
+        <SeatDialog
+          table={seating}
+          onClose={() => setSeating(null)}
+          onOpened={(visit) => {
+            setSlip({ visit, table: seating })
+            setSeating(null)
+          }}
+        />
+      )}
+      {slip && (
+        <SlipDialog
+          visit={slip.visit}
+          tableCode={slip.table.code}
+          zone={slip.table.zone}
+          justOpened
+          onClose={() => setSlip(null)}
+        />
+      )}
     </div>
   )
 }
@@ -266,7 +287,15 @@ function Stat({
 }
 
 /** เปิด visit ใหม่ — รองรับตั้งแต่ลูกค้าคนเดียวจนถึงกลุ่มใหญ่ */
-function SeatDialog({ table, onClose }: { table: CafeTable; onClose: () => void }) {
+function SeatDialog({
+  table,
+  onClose,
+  onOpened,
+}: {
+  table: CafeTable
+  onClose: () => void
+  onOpened: (visit: Visit) => void
+}) {
   const { data } = useSnapshot()
   // ว่างไว้ก่อน แล้วค่อยใช้เรตแรกที่ร้านตั้งไว้ — รหัสเรตต่างกันในแต่ละฐานข้อมูล
   // จึง hardcode ไม่ได้
@@ -282,14 +311,14 @@ function SeatDialog({ table, onClose }: { table: CafeTable; onClose: () => void 
   async function submit() {
     setBusy(true)
     try {
-      await db.openVisit({
+      const visit = await db.openVisit({
         tableIds: [table.id],
         guests: guests.map((g, i) => ({
           name: g.name.trim() || `ผู้เล่น ${i + 1}`,
           ratePlanId: g.ratePlanId || defaultPlanId,
         })),
       })
-      onClose()
+      onOpened(visit)
     } finally {
       setBusy(false)
     }

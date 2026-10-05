@@ -64,7 +64,7 @@ describe('ลูกค้าสแกน QR หลังครัวปิด', 
   it('สั่งอาหารไม่ได้', async () => {
     await expect(
       guestDb.placeOrder({
-        token: 'qr-b1',
+        token: 'qr-v1',
         idempotencyKey: 'kh-food',
         orderedByPassId: null,
         splitMode: 'shared',
@@ -75,7 +75,7 @@ describe('ลูกค้าสแกน QR หลังครัวปิด', 
 
   it('แต่เครื่องดื่มยังสั่งได้', async () => {
     const res = await guestDb.placeOrder({
-      token: 'qr-b1',
+      token: 'qr-v1',
       idempotencyKey: 'kh-drink',
       orderedByPassId: null,
       splitMode: 'shared',
@@ -87,7 +87,7 @@ describe('ลูกค้าสแกน QR หลังครัวปิด', 
   it('ปนกันในตะกร้าเดียวก็ถูกปฏิเสธทั้งออเดอร์', async () => {
     await expect(
       guestDb.placeOrder({
-        token: 'qr-b1',
+        token: 'qr-v1',
         idempotencyKey: 'kh-mixed',
         orderedByPassId: null,
         splitMode: 'shared',
@@ -100,8 +100,8 @@ describe('ลูกค้าสแกน QR หลังครัวปิด', 
   })
 
   it('หน้าเมนูบอกตั้งแต่แรกว่าครัวปิด และกดเพิ่มอาหารไม่ได้', async () => {
-    rememberMyPass('qr-b1', await guestDb.register('qr-b1', 'คุณครัวปิด'))
-    window.location.hash = '#/t/qr-b1'
+    rememberMyPass('qr-v1', await guestDb.register('qr-v1', 'คุณครัวปิด'))
+    window.location.hash = '#/t/qr-v1'
     render(<App />)
     await screen.findByText('โต๊ะ B1')
 
@@ -121,8 +121,8 @@ describe('ลูกค้าสแกน QR หลังครัวปิด', 
 
   it('ครัวเปิดอยู่ ไม่ต้องขึ้นแถบเตือน', async () => {
     await openKitchenNow()
-    rememberMyPass('qr-b1', await guestDb.register('qr-b1', 'คุณครัวเปิด'))
-    window.location.hash = '#/t/qr-b1'
+    rememberMyPass('qr-v1', await guestDb.register('qr-v1', 'คุณครัวเปิด'))
+    window.location.hash = '#/t/qr-v1'
     render(<App />)
     await screen.findByText('โต๊ะ B1')
 

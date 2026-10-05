@@ -29,7 +29,7 @@ const NAV: { to: string; label: string; icon: IconName; cap: Capability; end?: b
   { to: '/', label: 'ผังโต๊ะ', icon: 'castle', cap: 'floor', end: true },
   { to: '/kitchen', label: 'ครัว', icon: 'cauldron', cap: 'kitchen' },
   { to: '/reservations', label: 'การจอง', icon: 'scroll', cap: 'floor' },
-  { to: '/qr', label: 'QR โต๊ะ', icon: 'qr', cap: 'floor' },
+  { to: '/qr', label: 'QR & พิมพ์', icon: 'qr', cap: 'floor' },
   { to: '/owner', label: 'ตั้งค่า', icon: 'crown', cap: 'settings' },
 ]
 

@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useNow, useSnapshot } from '../hooks/useData'
 import { db } from '../data'
 import {
@@ -27,7 +27,7 @@ import type { Tone } from '../components/ui'
 import OrderDialog from './OrderDialog'
 import PaymentDialog from './PaymentDialog'
 import SettleDialog from './SettleDialog'
-import TableQRModal from '../components/TableQRModal'
+import SlipDialog from './SlipDialog'
 
 const PASS_TONE: Record<GuestPass['status'], Tone> = {
   active: 'forest',
@@ -72,13 +72,23 @@ export default function VisitDetail() {
   const { data } = useSnapshot()
   const now = useNow(1000)
   const navigate = useNavigate()
+  const location = useLocation()
+
+  // มาจากการเช็คอินคิวจอง → เปิดใบ QR ให้พิมพ์ทันที
+  const fromSeat = Boolean((location.state as { slip?: boolean } | null)?.slip)
 
   const [showOrder, setShowOrder] = useState(false)
   const [showAddPass, setShowAddPass] = useState(false)
   const [showMove, setShowMove] = useState(false)
-  const [showQR, setShowQR] = useState(false)
+  const [showQR, setShowQR] = useState(fromSeat)
+  const [justOpened, setJustOpened] = useState(fromSeat)
   const [splitMode, setSplitMode] = useState<'together' | 'by_owner'>('together')
   const [showPayment, setShowPayment] = useState(false)
+
+  // ล้าง state ทิ้ง ไม่งั้นกดรีเฟรชแล้วใบ QR เด้งขึ้นมาอีก
+  useEffect(() => {
+    if (fromSeat) navigate(location.pathname, { replace: true, state: null })
+  }, [])
 
   const ratePlans = useMemo<Record<string, RatePlan>>(
     () => Object.fromEntries((data?.ratePlans ?? []).map((p) => [p.id, p])),
@@ -158,8 +168,8 @@ export default function VisitDetail() {
           <Button onClick={() => setShowAddPass(true)} disabled={!isOpen}>
             + เพิ่มคน
           </Button>
-          <Button onClick={() => setShowQR(true)} disabled={!isOpen || !tables[0]?.qrToken}>
-            QR ให้ลูกค้าสแกน
+          <Button onClick={() => setShowQR(true)} disabled={!isOpen}>
+            พิมพ์ QR ให้ลูกค้า
           </Button>
           <Button onClick={() => setShowMove(true)} disabled={!isOpen}>
             ย้าย / เพิ่มโต๊ะ
@@ -332,11 +342,16 @@ export default function VisitDetail() {
       )}
       {showAddPass && <AddPassDialog visitId={visit.id} onClose={() => setShowAddPass(false)} />}
       {showMove && <MoveTableDialog visitId={visit.id} onClose={() => setShowMove(false)} />}
-      {showQR && tables[0]?.qrToken && (
-        <TableQRModal
-          tableCode={tables[0].code}
-          token={tables[0].qrToken}
-          onClose={() => setShowQR(false)}
+      {showQR && (
+        <SlipDialog
+          visit={visit}
+          tableCode={tables.map((t) => t.code).join('+') || '—'}
+          zone={tables[0]?.zone ?? ''}
+          justOpened={justOpened}
+          onClose={() => {
+            setShowQR(false)
+            setJustOpened(false)
+          }}
         />
       )}
       {showPayment && (

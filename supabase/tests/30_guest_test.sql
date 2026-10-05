@@ -1,6 +1,7 @@
 -- ============================================================================
 -- ลูกค้าสั่งเองผ่าน QR
 -- คำถามหลัก: คนที่ถือ QR ของโต๊ะ A ทำอะไรกับโต๊ะ B ได้บ้าง (คำตอบต้องคือ ไม่ได้)
+-- QR ผูกกับรอบ (visit) ไม่ใช่โต๊ะ — ดู migration 1800
 -- ============================================================================
 
 set "test.user_id" = '99999999-0000-4000-8000-000000000001';
@@ -35,25 +36,35 @@ begin
   select * into v_pa from guest_passes where visit_id = v_va.id and display_name = 'โต๊ะA-หนึ่ง';
   select * into v_pb from guest_passes where visit_id = v_vb.id;
 
-  -- อ่าน token ใหม่หลังเปิดโต๊ะ (ค่าเดิมอ่านมาก่อนก็ยังเหมือนเดิม แต่กันพลาด)
-  select * into v_ta from cafe_tables where id = v_ta.id;
-  select * into v_tb from cafe_tables where id = v_tb.id;
-  select * into v_tc from cafe_tables where id = v_tc.id;
+  perform assert_eq('เปิดโต๊ะแล้วได้ QR ของรอบนี้', v_va.qr_token is not null, true);
+  perform assert_eq('แต่ละรอบได้ QR คนละใบ', v_va.qr_token <> v_vb.qr_token, true);
 
   -- ============================ สวมบทลูกค้า ============================
   set local role anon;
 
-  -- สแกน QR โต๊ะ A
-  v_sess := guest_session(v_ta.qr_token);
+  -- สแกน QR ของรอบโต๊ะ A
+  v_sess := guest_session(v_va.qr_token);
   perform assert_eq('เห็นรหัสโต๊ะตัวเอง', v_sess ->> 'tableCode', 'A2');
   perform assert_eq('เห็นรายชื่อคนในโต๊ะ 2 คน', jsonb_array_length(v_sess -> 'passes'), 2);
   perform assert_eq('เห็นเมนู', jsonb_array_length(v_sess -> 'menu') > 0, true);
   perform assert_eq('ไม่มี token โผล่ใน session', v_sess ? 'qrToken', false);
 
-  -- โต๊ะที่ยังไม่เปิด สแกนได้แต่สั่งไม่ได้
+  -- สติกเกอร์ QR ติดโต๊ะแบบเก่า สแกนได้ (บอกให้ขอ QR ใหม่) แต่สั่งไม่ได้
   v_sess := guest_session(v_tc.qr_token);
-  perform assert_eq('โต๊ะว่างไม่มี visit', v_sess ->> 'visitId', null::text);
-  perform assert_eq('โต๊ะว่างไม่มีรายชื่อ', jsonb_array_length(v_sess -> 'passes'), 0);
+  perform assert_eq('QR ติดโต๊ะไม่มี visit', v_sess ->> 'visitId', null::text);
+  perform assert_eq('QR ติดโต๊ะไม่ใช่รอบที่จบแล้ว', (v_sess ->> 'ended')::boolean, false);
+  perform assert_eq('QR ติดโต๊ะไม่มีรายชื่อ', jsonb_array_length(v_sess -> 'passes'), 0);
+
+  -- ★ สติกเกอร์เก่าของโต๊ะที่มีคนนั่งอยู่ ต้องเข้าบิลของรอบนั้นไม่ได้
+  v_sess := guest_session(v_ta.qr_token);
+  perform assert_eq('QR ติดโต๊ะของโต๊ะที่เปิดอยู่ก็ไม่ผูกกับ visit', v_sess ->> 'visitId', null::text);
+  begin
+    perform guest_place_order(v_ta.qr_token, null, 'shared',
+      jsonb_build_array(jsonb_build_object('menuItemId', v_menu, 'qty', 1)), 'g-sticker');
+    raise exception 'FAIL  QR ติดโต๊ะไม่ควรสั่งของได้แล้ว';
+  exception when sqlstate '22023' then
+    raise notice 'PASS  QR ติดโต๊ะแบบเก่าสั่งของไม่ได้';
+  end;
 
   begin
     perform guest_place_order(v_tc.qr_token, null, 'shared',
@@ -72,12 +83,12 @@ begin
   end;
 
   -- สั่งของสำเร็จ เข้าครัวทันที
-  v_res := guest_place_order(v_ta.qr_token, v_pa.id, 'owner',
+  v_res := guest_place_order(v_va.qr_token, v_pa.id, 'owner',
     jsonb_build_array(jsonb_build_object('menuItemId', v_menu, 'qty', 2)), 'g-1');
   perform assert_eq('ลูกค้าสั่งแล้วเข้าครัวทันที', v_res ->> 'status', 'placed');
 
   -- ยิงซ้ำ key เดิมไม่เกิดใบใหม่
-  perform guest_place_order(v_ta.qr_token, v_pa.id, 'owner',
+  perform guest_place_order(v_va.qr_token, v_pa.id, 'owner',
     jsonb_build_array(jsonb_build_object('menuItemId', v_menu, 'qty', 2)), 'g-1');
 
   -- ถอดบทลูกค้าก่อน เพราะลูกค้าอ่านตาราง orders ตรงไม่ได้ (และไม่ควรได้)
@@ -96,7 +107,7 @@ begin
 
   -- ★ ใจกลางของเรื่อง: ใช้ QR โต๊ะ A สั่งให้คนโต๊ะ B
   begin
-    perform guest_place_order(v_ta.qr_token, v_pb.id, 'owner',
+    perform guest_place_order(v_va.qr_token, v_pb.id, 'owner',
       jsonb_build_array(jsonb_build_object('menuItemId', v_menu, 'qty', 1)), 'g-cross');
     raise exception 'FAIL  สั่งข้ามโต๊ะไม่ควรได้';
   exception when sqlstate '22023' then
@@ -105,11 +116,11 @@ begin
 
   -- ดูออเดอร์และบิลได้เฉพาะของโต๊ะตัวเอง
   perform assert_eq('เห็นออเดอร์ของโต๊ะตัวเอง',
-    jsonb_array_length(guest_orders(v_ta.qr_token)), 1);
+    jsonb_array_length(guest_orders(v_va.qr_token)), 1);
   perform assert_eq('ไม่เห็นออเดอร์โต๊ะอื่น',
-    jsonb_array_length(guest_orders(v_tb.qr_token)), 0);
+    jsonb_array_length(guest_orders(v_vb.qr_token)), 0);
 
-  v_bill := guest_bill(v_ta.qr_token);
+  v_bill := guest_bill(v_va.qr_token);
   perform assert_eq('บิลเป็นของ visit ตัวเอง', v_bill ->> 'visitId', v_va.id::text);
 
   reset role;
@@ -161,27 +172,121 @@ $$;
 
 reset role;
 
--- เปลี่ยน token แล้ว QR ใบเดิมต้องใช้ไม่ได้ทันที
+-- ออก QR ใหม่ให้รอบเดิมแล้ว ใบเดิมต้องใช้ไม่ได้ทันที
 do $$
 declare
-  v_t   cafe_tables;
+  v_v   visits;
   v_old uuid;
   v_new uuid;
 begin
-  select * into v_t from cafe_tables where code = 'A2';
-  v_old := v_t.qr_token;
-  v_new := rotate_table_token(v_t.id);
-  perform assert_eq('token เปลี่ยนจริง', v_new <> v_old, true);
+  select v.* into v_v
+    from visits v join occupancies o on o.visit_id = v.id and o.to_at is null
+    join cafe_tables t on t.id = o.table_id
+   where t.code = 'A2' and v.status = 'open';
+  v_old := v_v.qr_token;
+  v_new := rotate_visit_token(v_v.id);
+  perform assert_eq('token ของรอบเปลี่ยนจริง', v_new <> v_old, true);
 
   set local role anon;
   begin
     perform guest_session(v_old);
     raise exception 'FAIL  QR ใบเก่าไม่ควรใช้ได้';
   exception when sqlstate 'P0002' then
-    raise notice 'PASS  เปลี่ยน token แล้ว QR ใบเก่าใช้ไม่ได้';
+    raise notice 'PASS  ออก QR ใหม่แล้ว ใบเก่าใช้ไม่ได้';
   end;
-  perform assert_eq('QR ใบใหม่ใช้ได้', guest_session(v_new) ->> 'tableCode', 'A2');
+  perform assert_eq('QR ใบใหม่ยังเป็นรอบเดิม', guest_session(v_new) ->> 'visitId', v_v.id::text);
   reset role;
+end;
+$$;
+
+-- ลูกค้าเปลี่ยน token เองไม่ได้
+set role anon;
+do $$
+begin
+  perform rotate_visit_token('00000000-0000-0000-0000-000000000000');
+  raise exception 'FAIL  anon ไม่ควรออก QR ใหม่ได้';
+exception when insufficient_privilege then
+  raise notice 'PASS  anon ออก QR ใหม่ไม่ได้';
+end;
+$$;
+reset role;
+
+-- ★ โต๊ะนั่งร่วม: สองกลุ่มบนโต๊ะเดียวกันต้องไม่ปนบิลกัน
+--   (เดิม token ผูกกับโต๊ะ จึงชี้ได้แค่กลุ่มล่าสุด)
+do $$
+declare
+  v_plan  uuid;
+  v_menu  uuid;
+  v_t     cafe_tables;
+  v_v1    visits;
+  v_v2    visits;
+  v_res   jsonb;
+begin
+  select id into v_plan from rate_plans where active limit 1;
+  select id into v_menu from menu_items where available limit 1;
+  select * into v_t from cafe_tables where allow_share and not archived order by code limit 1;
+
+  v_v1 := open_visit(array[v_t.id], jsonb_build_array(jsonb_build_object('name', 'กลุ่มแรก', 'ratePlanId', v_plan)));
+  v_v2 := open_visit(array[v_t.id], jsonb_build_array(jsonb_build_object('name', 'กลุ่มสอง', 'ratePlanId', v_plan)));
+
+  set local role anon;
+  perform assert_eq('QR กลุ่มแรกชี้กลุ่มแรก', guest_session(v_v1.qr_token) ->> 'visitId', v_v1.id::text);
+  perform assert_eq('QR กลุ่มสองชี้กลุ่มสอง', guest_session(v_v2.qr_token) ->> 'visitId', v_v2.id::text);
+  v_res := guest_place_order(v_v1.qr_token, null, 'shared',
+    jsonb_build_array(jsonb_build_object('menuItemId', v_menu, 'qty', 1)), 'g-share-1');
+  reset role;
+
+  perform assert_eq('ออเดอร์กลุ่มแรกเข้าบิลกลุ่มแรก',
+    (select visit_id from orders where id = (v_res ->> 'orderId')::uuid), v_v1.id);
+  perform assert_eq('บิลกลุ่มสองไม่มีของกลุ่มแรก',
+    (select count(*) from orders where visit_id = v_v2.id), 0::bigint);
+
+  -- ★ ปิดบิลแล้ว QR ตายทันที แต่ยังบอกลูกค้าได้ว่ารอบนี้จบแล้ว
+  perform close_visit(v_v1.id, '[]'::jsonb);
+  set local role anon;
+  perform assert_eq('ปิดบิลแล้วไม่มี visit', guest_session(v_v1.qr_token) ->> 'visitId', null::text);
+  perform assert_eq('ปิดบิลแล้วบอกว่ารอบนี้จบ', (guest_session(v_v1.qr_token) ->> 'ended')::boolean, true);
+  perform assert_eq('ปิดบิลแล้วยังรู้ว่าเป็นโต๊ะไหน', guest_session(v_v1.qr_token) ->> 'tableCode', v_t.code);
+  begin
+    perform guest_register(v_v1.qr_token, 'คนแอบมา');
+    raise exception 'FAIL  QR ของรอบที่ปิดแล้วไม่ควรลงชื่อได้';
+  exception when sqlstate '22023' then
+    raise notice 'PASS  QR ของรอบที่ปิดแล้วลงชื่อไม่ได้';
+  end;
+  reset role;
+
+  -- เก็บกวาด ไม่ให้โต๊ะค้างไปกวนเทสต์ไฟล์ถัดไป
+  perform close_visit(v_v2.id);
+end;
+$$;
+
+-- ★ ย้ายโต๊ะแล้ว QR ตามกลุ่มไปด้วย ไม่ต้องพิมพ์ใหม่
+do $$
+declare
+  v_plan uuid;
+  v_from cafe_tables;
+  v_to   cafe_tables;
+  v_v    visits;
+begin
+  select id into v_plan from rate_plans where active limit 1;
+  select * into v_from from cafe_tables t
+   where not allow_share and not archived
+     and not exists (select 1 from occupancies o where o.table_id = t.id and o.to_at is null)
+   order by code limit 1;
+  select * into v_to from cafe_tables t
+   where not allow_share and not archived and t.id <> v_from.id
+     and not exists (select 1 from occupancies o where o.table_id = t.id and o.to_at is null)
+   order by code limit 1;
+
+  v_v := open_visit(array[v_from.id], jsonb_build_array(jsonb_build_object('name', 'ย้ายโต๊ะ', 'ratePlanId', v_plan)));
+  perform move_visit_to_tables(v_v.id, array[v_to.id]);
+
+  set local role anon;
+  perform assert_eq('ย้ายแล้ว QR เดิมยังเป็นรอบเดิม', guest_session(v_v.qr_token) ->> 'visitId', v_v.id::text);
+  perform assert_eq('ย้ายแล้ว QR เดิมบอกโต๊ะใหม่', guest_session(v_v.qr_token) ->> 'tableCode', v_to.code);
+  reset role;
+
+  perform close_visit(v_v.id);
 end;
 $$;
 

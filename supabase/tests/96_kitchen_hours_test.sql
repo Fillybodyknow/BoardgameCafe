@@ -126,10 +126,9 @@ begin
   insert into cafe_tables (id, code, zone, seat_min, seat_max, allow_share, sort_order)
   values ('96000000-0000-4000-8000-0000000000a1', 'K1', 'ทดสอบครัว', 1, 6, false, 96);
   v_table := '96000000-0000-4000-8000-0000000000a1';
-  select qr_token into v_token from cafe_tables where id = v_table;
-
   v_visit := open_visit(array[v_table], jsonb_build_array(
     jsonb_build_object('name', 'ลูกค้าดึก', 'ratePlanId', v_plan)));
+  v_token := v_visit.qr_token;
 
   -- บังคับให้ "ตอนนี้" อยู่หลังครัวปิด โดยให้ครัวปิดตั้งแต่เปิดร้านหนึ่งนาที
   update shop_hours set open_time = '00:00', close_time = '23:59', kitchen_close_time = '00:01';

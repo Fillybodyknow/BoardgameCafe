@@ -1,66 +1,196 @@
 import { useEffect, useState } from 'react'
-import { db } from '../data'
-import { bookingUrl, guestUrl, toQrDataUrl } from '../lib/qr'
+import { bookingUrl, toQrDataUrl } from '../lib/qr'
+import { DEFAULT_PRINTER, loadPrinter, printTableSlip, savePrinter } from '../lib/printer'
+import type { PaperWidth, PrinterSettings } from '../lib/printer'
 import { useSnapshot } from '../hooks/useData'
-import type { CafeTable } from '../domain/types'
-import { Badge, Button, Card, Empty, Icon, PageHeader } from '../components/ui'
+import type { Visit } from '../domain/types'
+import { Button, Card, Empty, Field, Icon, INPUT, PageHeader, SectionTitle, Segmented } from '../components/ui'
 import type { IconName } from '../components/ui'
+import SlipDialog from './SlipDialog'
 
+/**
+ * QR ของโต๊ะสร้างใหม่ทุกครั้งที่เปิดโต๊ะ แล้วพิมพ์ลงเครื่องพิมพ์ความร้อนยื่นให้ลูกค้า
+ * หน้านี้จึงไม่มี QR ติดโต๊ะให้พิมพ์แล้ว เหลือ: ตั้งค่าเครื่องพิมพ์, พิมพ์ซ้ำให้โต๊ะ
+ * ที่เปิดอยู่ และ QR จองโต๊ะ (ใบเดียวที่ยังถาวร เพราะไม่ผูกกับโต๊ะไหน)
+ */
 export default function TableQR() {
   const { data } = useSnapshot()
-  const [codes, setCodes] = useState<Record<string, string>>({})
   const [bookingQR, setBookingQR] = useState<string>('')
-  const [busy, setBusy] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [printer, setPrinter] = useState<PrinterSettings>(loadPrinter)
+  const [reprint, setReprint] = useState<Visit | null>(null)
 
   useEffect(() => {
     void toQrDataUrl(bookingUrl()).then(setBookingQR)
   }, [])
 
-  const tables = data?.tables ?? []
-
-  useEffect(() => {
-    let cancelled = false
-    async function render() {
-      const next: Record<string, string> = {}
-      for (const table of tables) {
-        if (!table.qrToken) continue
-        next[table.id] = await toQrDataUrl(guestUrl(table.qrToken))
-      }
-      if (!cancelled) setCodes(next)
-    }
-    void render()
-    return () => {
-      cancelled = true
-    }
-    // แปลงใหม่เมื่อ token เปลี่ยน (เช่นหลังกดเปลี่ยน token)
-  }, [tables.map((t) => `${t.id}:${t.qrToken}`).join(',')])
-
   if (!data) return null
 
-  const missing = tables.some((t) => !t.qrToken)
+  function update(patch: Partial<PrinterSettings>) {
+    const next = { ...printer, ...patch }
+    setPrinter(next)
+    savePrinter(next)
+  }
+
+  /** โต๊ะที่แต่ละรอบครองอยู่ — รอบหนึ่งอาจต่อหลายโต๊ะ */
+  function tablesOf(visitId: string) {
+    return data!.occupancies
+      .filter((o) => o.visitId === visitId && o.toAt === null)
+      .map((o) => data!.tables.find((t) => t.id === o.tableId))
+      .filter((t): t is NonNullable<typeof t> => Boolean(t))
+  }
+
+  const open = data.visits.filter((v) => v.status === 'open')
 
   return (
     <div>
       <PageHeader
-        eyebrow="ป้ายประจำโต๊ะ"
-        title="QR ประจำโต๊ะ"
-        subtitle="พิมพ์ติดไว้ที่โต๊ะ ลูกค้าสแกนแล้วสั่งอาหารได้เองโดยไม่ต้องล็อกอิน"
+        eyebrow="ใบ QR และเครื่องพิมพ์"
+        title="QR & เครื่องพิมพ์"
+        subtitle="เปิดโต๊ะแล้วระบบออก QR ใหม่ให้ทุกครั้ง — พิมพ์ลงเครื่องพิมพ์ความร้อนยื่นให้ลูกค้า"
       />
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <Rule icon="qr" title="สแกนแล้วสั่งได้เลย">
-          ไม่ต้องสมัคร ไม่ต้องล็อกอิน
+        <Rule icon="qr" title="QR ใหม่ทุกครั้งที่เปิดโต๊ะ">
+          ลูกค้าเก่าเอา QR ที่ถ่ายไว้มาสั่งของเข้าบิลคนใหม่ไม่ได้
         </Rule>
-        <Rule icon="table" title="ใช้ได้เฉพาะตอนเปิดโต๊ะ">
-          ปิดบิลแล้วใบเดิมสั่งอะไรไม่ได้ จนกว่าจะมีลูกค้าใหม่นั่ง
+        <Rule icon="table" title="ตามกลุ่มไปเมื่อย้ายโต๊ะ">
+          ย้ายหรือต่อโต๊ะ ใบเดิมยังใช้ได้ ไม่ต้องพิมพ์ใหม่
         </Rule>
-        <Rule icon="refresh" title="QR หลุดออกนอกร้าน?" warn>
-          กด "เปลี่ยน QR" แล้วพิมพ์ใบใหม่ — ใบเก่าจะใช้ไม่ได้ทันที
+        <Rule icon="clock" title="หมดอายุเมื่อปิดบิล">
+          ชำระเงินแล้วใบนั้นสั่งอะไรไม่ได้อีก
         </Rule>
       </div>
+      <p className="mt-3 text-xs text-ink-faint">
+        สติกเกอร์ QR ที่เคยติดโต๊ะไว้เลิกใช้แล้ว แกะออกได้ — ลูกค้าที่สแกนจะเห็นข้อความให้ขอใบจากพนักงาน
+      </p>
 
-      <Card ornate className="mt-6">
+      <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_22rem]">
+        <section>
+          <SectionTitle>เครื่องพิมพ์ใบเสร็จ</SectionTitle>
+          <Card ornate className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-sm font-medium">ขนาดกระดาษ</span>
+              <Segmented
+                value={String(printer.paper) as '58' | '80'}
+                onChange={(v) => update({ paper: Number(v) as PaperWidth })}
+                options={[
+                  { value: '58', label: '58 มม.' },
+                  { value: '80', label: '80 มม.' },
+                ]}
+              />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="ชื่อร้านบนหัวใบ">
+                <input
+                  value={printer.shopName}
+                  onChange={(e) => update({ shopName: e.target.value })}
+                  placeholder={DEFAULT_PRINTER.shopName}
+                  className={INPUT}
+                />
+              </Field>
+              <Field label="ข้อความท้ายใบ">
+                <input
+                  value={printer.footer}
+                  onChange={(e) => update({ footer: e.target.value })}
+                  placeholder="เช่น Wi-Fi: BoardgameCafe / รหัส 12345678"
+                  className={INPUT}
+                />
+              </Field>
+            </div>
+
+            <label className="flex cursor-pointer items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={printer.autoPrint}
+                onChange={(e) => update({ autoPrint: e.target.checked })}
+                className="mt-1 h-4 w-4 accent-[#3d6b46]"
+              />
+              <span>
+                เปิดโต๊ะแล้วสั่งพิมพ์ทันที
+                <span className="block text-xs text-ink-faint">
+                  ไม่ต้องกดปุ่มพิมพ์ในหน้าต่าง QR — ถ้าอยากข้ามหน้าต่างเลือกเครื่องพิมพ์ด้วย ดูวิธีด้านล่าง
+                </span>
+              </span>
+            </label>
+
+            <div className="flex flex-wrap items-center gap-2 border-t border-line pt-4">
+              <Button
+                variant="primary"
+                onClick={() =>
+                  void printTableSlip(
+                    {
+                      tableCode: 'A1',
+                      zone: 'ตัวอย่าง',
+                      visitCode: 'V-000',
+                      openedAt: new Date().toISOString(),
+                      url: bookingUrl(),
+                      test: true,
+                    },
+                    printer,
+                  )
+                }
+              >
+                <Icon name="print" className="h-4 w-4" />
+                พิมพ์ใบทดสอบ
+              </Button>
+              <span className="text-xs text-ink-faint">ค่าเหล่านี้จำไว้ในเครื่องนี้เท่านั้น</span>
+            </div>
+
+            <details className="rounded-lg bg-parchment-deep/50 p-3 text-sm">
+              <summary className="cursor-pointer font-medium">วิธีตั้งเครื่องพิมพ์ความร้อนครั้งแรก</summary>
+              <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-ink-soft">
+                <li>ลงไดรเวอร์ของเครื่องพิมพ์ (Xprinter, Epson TM, Sunmi ฯลฯ) ให้ Windows/macOS เห็นเป็นเครื่องพิมพ์ปกติ</li>
+                <li>
+                  ในไดรเวอร์ตั้งขนาดกระดาษเป็น <b>80mm × ยาวต่อเนื่อง</b> (หรือ 58mm) และเปิดตัดกระดาษอัตโนมัติ
+                </li>
+                <li>
+                  กด “พิมพ์ใบทดสอบ” → เลือกเครื่องพิมพ์ความร้อน → ระยะขอบ <b>ไม่มี</b> → ปิด
+                  “หัวกระดาษและท้ายกระดาษ” → พิมพ์ (Chrome จำค่านี้ไว้ให้ครั้งต่อไป)
+                </li>
+                <li>
+                  อยากให้ออกเครื่องทันทีไม่ต้องเห็นหน้าต่างพิมพ์: ตั้งเครื่องพิมพ์ความร้อนเป็นเครื่องหลัก
+                  แล้วเปิด Chrome ด้วย <code className="rounded bg-vellum px-1">--kiosk-printing</code>{' '}
+                  (คลิกขวาที่ shortcut → Properties → ต่อท้ายช่อง Target) คู่กับติ๊ก “เปิดโต๊ะแล้วสั่งพิมพ์ทันที”
+                </li>
+              </ol>
+            </details>
+          </Card>
+        </section>
+
+        <section>
+          <SectionTitle>พิมพ์ซ้ำให้โต๊ะที่เปิดอยู่</SectionTitle>
+          {open.length === 0 ? (
+            <Empty icon="🕯">ยังไม่มีโต๊ะเปิดอยู่</Empty>
+          ) : (
+            <div className="space-y-2">
+              {open.map((v) => {
+                const tables = tablesOf(v.id)
+                return (
+                  <Card key={v.id} className="flex items-center justify-between gap-3 !py-3">
+                    <div className="min-w-0">
+                      <div className="font-bold tracking-wide">
+                        {tables.map((t) => t.code).join('+') || '—'}
+                      </div>
+                      <div className="text-xs text-ink-faint">
+                        {v.code} · เปิด{' '}
+                        {new Date(v.openedAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                    </div>
+                    <Button onClick={() => setReprint(v)}>
+                      <Icon name="qr" className="h-4 w-4" />
+                      ใบ QR
+                    </Button>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+        </section>
+      </div>
+
+      <Card ornate className="mt-8">
         <div className="flex flex-col items-center gap-5 sm:flex-row">
           {bookingQR ? (
             <img
@@ -77,7 +207,7 @@ export default function TableQR() {
             </p>
             <h3 className="text-xl font-bold">QR จองโต๊ะล่วงหน้า</h3>
             <p className="mt-1 text-sm text-ink-soft">
-              คนละใบกับ QR ประจำโต๊ะ — ใบนี้ไม่ผูกกับโต๊ะไหน เอาไปติดหน้าร้าน โพสต์เพจ
+              ใบเดียวที่ยังถาวร เพราะไม่ผูกกับโต๊ะไหน เอาไปติดหน้าร้าน โพสต์เพจ
               หรือส่งให้ลูกค้าทางแชตได้เลย
             </p>
             <code className="mt-3 block truncate rounded bg-parchment-deep px-2 py-1 text-xs text-ink-faint">
@@ -96,75 +226,21 @@ export default function TableQR() {
               </Button>
               <Button onClick={() => printBooking(bookingQR)}>
                 <Icon name="print" className="h-4 w-4" />
-                พิมพ์
+                พิมพ์โปสเตอร์
               </Button>
             </div>
           </div>
         </div>
       </Card>
 
-      {missing && (
-        <Empty>
-          ข้อมูลโต๊ะยังไม่มี token — ต้องรัน migration ล่าสุดก่อน (supabase/setup-all.sql)
-        </Empty>
+      {reprint && (
+        <SlipDialog
+          visit={reprint}
+          tableCode={tablesOf(reprint.id).map((t) => t.code).join('+') || '—'}
+          zone={tablesOf(reprint.id)[0]?.zone ?? ''}
+          onClose={() => setReprint(null)}
+        />
       )}
-
-      <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {tables
-          .filter((t) => t.qrToken)
-          .map((table) => (
-            <article key={table.id} className="panel lift rounded-xl p-2">
-              {/* ป้ายตั้งโต๊ะ: กรอบคู่ด้านใน */}
-              <div className="rounded-lg border-4 border-double border-gold/50 p-4 text-center">
-                <div className="flex items-center justify-between">
-                  <Badge tone={table.status === 'occupied' ? 'forest' : 'neutral'}>
-                    {table.zone}
-                  </Badge>
-                  <span className="text-xs text-ink-faint">{table.seatMax} ที่นั่ง</span>
-                </div>
-                <div className="mt-2 text-4xl tracking-wide font-bold">{table.code}</div>
-                <div className="divider my-2 text-[0.6rem]" aria-hidden>
-                  ◆
-                </div>
-                {codes[table.id] ? (
-                  <img
-                    src={codes[table.id]}
-                    alt={`QR โต๊ะ ${table.code}`}
-                    className="mx-auto w-full max-w-[200px] rounded bg-[#fffdf7] p-1"
-                  />
-                ) : (
-                  <div className="mx-auto aspect-square w-full max-w-[200px] animate-pulse rounded bg-parchment-deep" />
-                )}
-                <p className="mt-2 text-xs text-ink-faint italic">
-                  สแกนเพื่อสั่งอาหารและเครื่องดื่ม
-                </p>
-              </div>
-
-              <div className="mt-2 flex gap-1.5">
-                <Button className="flex-1" onClick={() => printOne(table, codes[table.id])}>
-                  <Icon name="print" className="h-4 w-4" />
-                  พิมพ์
-                </Button>
-                <Button
-                  variant="danger"
-                  disabled={busy === table.id}
-                  onClick={async () => {
-                    if (!confirm(`เปลี่ยน QR ของโต๊ะ ${table.code}? ใบที่พิมพ์ไว้จะใช้ไม่ได้ทันที`))
-                      return
-                    setBusy(table.id)
-                    try {
-                      await db.rotateTableToken(table.id)
-                    } finally {
-                      setBusy(null)
-                    }
-                  }}
-                >
-                  เปลี่ยน QR
-                </Button>
-              </div>
-            </article>
-          ))}
-      </div>
     </div>
   )
 }
@@ -172,23 +248,15 @@ export default function TableQR() {
 function Rule({
   icon,
   title,
-  warn,
   children,
 }: {
   icon: IconName
   title: string
-  warn?: boolean
   children: React.ReactNode
 }) {
   return (
-    <div
-      className={`panel flex gap-3 rounded-xl p-4 ${warn ? '!border-ember/40 !bg-ember/5' : ''}`}
-    >
-      <div
-        className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${
-          warn ? 'bg-ember/15 text-ember-deep' : 'bg-gold/15 text-gold-deep'
-        }`}
-      >
+    <div className="panel flex gap-3 rounded-xl p-4">
+      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gold/15 text-gold-deep">
         <Icon name={icon} className="h-4 w-4" />
       </div>
       <div className="min-w-0">
@@ -199,35 +267,25 @@ function Rule({
   )
 }
 
+/** โปสเตอร์ QR จอง — กระดาษ A4/A5 ปกติ ไม่ใช่เครื่องพิมพ์ความร้อน */
 function printBooking(dataUrl: string) {
-  printSheet('จองโต๊ะล่วงหน้า', '', dataUrl, 'สแกนเพื่อจองโต๊ะ')
-}
-
-function printOne(table: CafeTable, dataUrl?: string) {
-  if (!dataUrl) return
-  printSheet(table.code, table.zone, dataUrl, 'สแกนเพื่อสั่งอาหารและเครื่องดื่ม')
-}
-
-function printSheet(title: string, subtitle: string, dataUrl: string, hint: string) {
   const w = window.open('', '_blank', 'width=480,height=720')
   if (!w) return
   w.document.write(`<!doctype html><html lang="th"><head><meta charset="utf-8">
-    <title>${title}</title>
+    <title>จองโต๊ะล่วงหน้า</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Taviraj:wght@400;700&display=swap">
     <style>
       body { font-family: 'Taviraj', Georgia, serif; text-align: center; padding: 32px; color: #2a1c12; }
       .frame { display: inline-block; padding: 24px 40px; border: 6px double #b8872e; border-radius: 12px; }
       .orn { color: #b8872e; letter-spacing: 10px; margin: 0 0 12px; }
-      h1 { font-size: 60px; margin: 0 0 4px; }
-      p { color: #5b4633; margin: 4px 0 20px; }
+      h1 { font-size: 48px; margin: 0 0 16px; }
       img { width: 300px; }
-      .hint { margin-top: 20px; font-size: 18px; }
+      .hint { margin-top: 20px; font-size: 18px; color: #5b4633; }
     </style></head><body><div class="frame">
     <div class="orn">❦ ◆ ❦</div>
-    <h1>${title}</h1>
-    <p>${subtitle}</p>
+    <h1>จองโต๊ะล่วงหน้า</h1>
     <img src="${dataUrl}" alt="QR">
-    <p class="hint">${hint}</p>
+    <p class="hint">สแกนเพื่อจองโต๊ะ</p>
     </div></body></html>`)
   w.document.close()
   w.focus()

@@ -52,7 +52,8 @@ export interface DataPort {
   /** ปิดบิล พร้อมบันทึกการชำระเงิน (ว่าง = ปิดโดยยังไม่เก็บเงิน) */
   closeVisit(visitId: ID, payments?: PaymentInput[]): Promise<void>
   /** เปลี่ยน token ของโต๊ะ ใช้เมื่อสงสัยว่า QR หลุดออกนอกร้าน */
-  rotateTableToken(tableId: ID): Promise<string>
+  /** ออก QR ใหม่ให้รอบที่ยังเปิดอยู่ — ใบเดิมใช้ไม่ได้ทันที */
+  rotateVisitToken(visitId: ID): Promise<string>
 
   // --- การจอง (ฝั่งพนักงาน) ---
   confirmReservation(id: ID): Promise<void>

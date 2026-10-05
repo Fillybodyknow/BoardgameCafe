@@ -45,7 +45,8 @@ begin
 
   v_visit := open_visit(array[v_table], jsonb_build_array(
     jsonb_build_object('name', 'คนจอง', 'ratePlanId', v_plan)));
-  select qr_token into v_token from cafe_tables where id = v_table;
+  -- QR ผูกกับรอบที่เพิ่งเปิด ไม่ใช่สติกเกอร์ติดโต๊ะ (migration 1800)
+  v_token := v_visit.qr_token;
 
   v_res := guest_register(v_token, '  เพื่อนเอ  ');
   perform assert_eq('ตัดช่องว่างหน้าหลังชื่อออก', v_res ->> 'displayName', 'เพื่อนเอ');

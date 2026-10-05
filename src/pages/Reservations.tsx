@@ -259,7 +259,7 @@ function SeatDialog({ reservation: r, onClose }: { reservation: Reservation; onC
         })),
         tableIds,
       )
-      navigate(`/visit/${visit.id}`)
+      navigate(`/visit/${visit.id}`, { state: { slip: true } })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'เช็คอินไม่สำเร็จ')
       setBusy(false)

@@ -168,8 +168,8 @@ class SupabaseAdapter implements DataPort {
     })
   }
 
-  async rotateTableToken(tableId: ID) {
-    return await rpc<string>('rotate_table_token', { p_table_id: tableId })
+  async rotateVisitToken(visitId: ID) {
+    return await rpc<string>('rotate_visit_token', { p_visit_id: visitId })
   }
 
   // ------------------------------------------------------------- Order ----
@@ -262,6 +262,7 @@ function toVisit(r: Record<string, any>): Visit {
     openedAt: r.opened_at, closedAt: r.closed_at,
     businessDate: r.business_date, note: r.note ?? undefined,
     sharedSettled: Number(r.shared_settled ?? 0),
+    qrToken: r.qr_token ?? undefined,
   }
 }
 

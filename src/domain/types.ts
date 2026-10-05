@@ -27,7 +27,10 @@ export interface CafeTable {
   sortOrder?: number
   /** เก็บเข้ากรุ — ไม่ลบจริงเพราะ occupancies/orders อ้างถึงอยู่ */
   archived?: boolean
-  /** token ใน QR ที่ติดโต๊ะ — พนักงานเท่านั้นที่อ่านได้ */
+  /**
+   * token ของสติกเกอร์ QR ติดโต๊ะแบบเก่า — เลิกใช้สั่งของแล้ว (ดู Visit.qrToken)
+   * เก็บไว้ให้สติกเกอร์ที่ยังติดอยู่บอกลูกค้าว่าต้องขอ QR จากพนักงาน
+   */
   qrToken?: string
 }
 
@@ -47,6 +50,11 @@ export interface Visit {
   note?: string
   /** ยอดของที่หารกันซึ่งคนที่กลับก่อนจ่ายไปแล้ว */
   sharedSettled: number
+  /**
+   * token ใน QR ที่พิมพ์ให้ลูกค้าตอนเปิดโต๊ะ — หนึ่งรอบหนึ่งใบ ตามกลุ่มไปเมื่อย้ายโต๊ะ
+   * และใช้ไม่ได้ทันทีที่ปิดบิล พนักงานเท่านั้นที่อ่านได้
+   */
+  qrToken?: string
 }
 
 /** ประวัติการครองโต๊ะ — ย้ายโต๊ะ = ปิดแถวเดิม เปิดแถวใหม่ */
@@ -308,8 +316,10 @@ export interface PaymentInput {
 export interface GuestSession {
   tableCode: string
   zone: string
-  /** null = โต๊ะยังไม่ได้เปิด ต้องแจ้งพนักงานก่อน */
+  /** null = สั่งไม่ได้ — ดู ended ว่าเพราะปิดบิลแล้ว หรือเป็น QR ติดโต๊ะแบบเก่า */
   visitId: ID | null
+  /** true = รอบนี้ปิดบิลไปแล้ว */
+  ended?: boolean
   passes: { id: ID; displayName: string }[]
   menu: MenuItem[]
   kitchen: KitchenWindow

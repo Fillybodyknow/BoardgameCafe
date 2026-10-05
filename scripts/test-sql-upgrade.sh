@@ -49,11 +49,44 @@ run supabase/patch-settle.sql
 run supabase/patch-kitchen-hours.sql
 run supabase/patch-guest-register.sql
 
+# รอบที่เปิดค้างอยู่ตอนอัปเกรด ต้องได้ QR ของตัวเองทันที ไม่งั้นโต๊ะที่นั่งอยู่
+# ตอนกด deploy จะพิมพ์ใบ QR ให้ลูกค้าไม่ได้จนกว่าจะปิดบิล
+echo "--- มีรอบเปิดค้างก่อนลง patch-visit-qr ---"
+docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d bgcafe -q <<'SQL'
+insert into visits (id, code) values ('18000000-0000-4000-8000-000000000001', 'V-PRE');
+insert into occupancies (visit_id, table_id, from_at)
+select '18000000-0000-4000-8000-000000000001', id, now()
+  from cafe_tables t
+ where not exists (select 1 from occupancies o where o.table_id = t.id and o.to_at is null)
+ order by code limit 1;
+SQL
+run supabase/patch-visit-qr.sql
+docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d bgcafe -q <<'SQL'
+do $$
+begin
+  if exists (select 1 from visits where qr_token is null) then
+    raise exception 'FAIL  มีรอบที่ไม่ได้ QR หลังอัปเกรด';
+  end if;
+  if (select count(distinct qr_token) from visits) <> (select count(*) from visits) then
+    raise exception 'FAIL  QR ของรอบเดิมซ้ำกัน';
+  end if;
+  if visit_for_token((select qr_token from visits where code = 'V-PRE'))
+     is distinct from '18000000-0000-4000-8000-000000000001'::uuid then
+    raise exception 'FAIL  รอบที่เปิดค้างก่อนอัปเกรดใช้ QR ของตัวเองไม่ได้';
+  end if;
+  raise notice 'PASS  รอบที่เปิดค้างก่อนอัปเกรดได้ QR คนละใบและใช้ได้ทันที';
+end;
+$$;
+-- เก็บกวาด ไม่ให้โต๊ะค้างไปกวนเทสต์ชุดหลัง
+delete from occupancies where visit_id = '18000000-0000-4000-8000-000000000001';
+delete from visits where id = '18000000-0000-4000-8000-000000000001';
+SQL
+
 # ผู้ใช้วาง SQL ทีละไฟล์ในหน้าเว็บ ถ้าล้มกลางไฟล์จะค้างครึ่ง ๆ แล้วต้องรันใหม่
 # patch ที่ยังต้องใช้จึงต้องรันซ้ำได้โดยไม่พัง — พิสูจน์ด้วยการรันซ้ำจริง
 # รันซ้ำเฉพาะตัวล่าสุดได้ ส่วนตัวเก่ากว่าจะโดนการ์ดบล็อก (ทดสอบด้านล่าง)
 echo "--- รัน patch ล่าสุดซ้ำอีกรอบ ต้องไม่พัง ---"
-run supabase/patch-guest-register.sql
+run supabase/patch-visit-qr.sql
 
 # patch หลายไฟล์ประกาศฟังก์ชันชื่อเดียวกัน ถ้ารันไฟล์เก่าทีหลังไฟล์ใหม่
 # ของเก่าจะทับของใหม่เงียบ ๆ แล้วฟีเจอร์หายโดยไม่มีอะไรบอก — เคยเกิดจริง

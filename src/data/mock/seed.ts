@@ -35,9 +35,9 @@ export function seed(): Snapshot {
     ],
 
     visits: [
-      { id: 'v-1', code: 'V-014', source: 'walkin', status: 'open', openedAt: ago(135), closedAt: null, businessDate: businessDateOf(new Date()), sharedSettled: 0 },
-      { id: 'v-2', code: 'V-015', source: 'reservation', status: 'open', openedAt: ago(52), closedAt: null, businessDate: businessDateOf(new Date()), sharedSettled: 0 },
-      { id: 'v-3', code: 'V-016', source: 'walkin', status: 'open', openedAt: ago(18), closedAt: null, businessDate: businessDateOf(new Date()), sharedSettled: 0 },
+      { id: 'v-1', code: 'V-014', source: 'walkin', status: 'open', openedAt: ago(135), closedAt: null, businessDate: businessDateOf(new Date()), sharedSettled: 0, qrToken: 'qr-v1' },
+      { id: 'v-2', code: 'V-015', source: 'reservation', status: 'open', openedAt: ago(52), closedAt: null, businessDate: businessDateOf(new Date()), sharedSettled: 0, qrToken: 'qr-v2' },
+      { id: 'v-3', code: 'V-016', source: 'walkin', status: 'open', openedAt: ago(18), closedAt: null, businessDate: businessDateOf(new Date()), sharedSettled: 0, qrToken: 'qr-v3' },
     ],
 
     // v-1 ย้ายโต๊ะกลางคัน A1 → B1 (เกมใหญ่ ต้องการโต๊ะกว้างกว่า)
