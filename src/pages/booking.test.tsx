@@ -367,8 +367,12 @@ describe('จำการจองไว้บนเครื่องนี้'
     expect(screen.queryByText('เล่นกี่ชั่วโมง')).toBeNull()
   })
 
-  // ลูกค้าไม่ได้เลือกชั่วโมงเองแล้ว แต่ยังต้องรู้ว่าโต๊ะกันไว้ถึงกี่โมง
-  it('ใบจองบอกช่วงเวลาแทนแถวระยะเวลา', async () => {
+  /*
+    ร้านไม่รู้จริง ๆ ว่าลูกค้าจะเล่นถึงกี่โมง สิ่งที่รู้แน่คือเวลาเริ่ม
+    ใบจองจึงบอกแค่เวลาเริ่ม ไม่โฆษณาเวลาจบที่ไม่ได้บังคับจริง
+    (ระบบยังกันโต๊ะตามรอบมาตรฐานอยู่เบื้องหลัง เพื่อไม่ให้จองทับกัน)
+  */
+  it('ใบจองบอกแค่เวลาเริ่ม ไม่มีทั้งระยะเวลาและเวลาจบ', async () => {
     const startAt = tomorrowAt('18:00')
     const t = await freeTable(startAt)
     const made = await mockBookingAdapter.create({
@@ -383,8 +387,8 @@ describe('จำการจองไว้บนเครื่องนี้'
 
     await screen.findByText('คุณช่วงเวลา')
     expect(screen.queryByText('ระยะเวลา')).toBeNull()
-    // 18:00 + 2 ชม. = 20:00 ต้องปรากฏเป็นเวลาสิ้นสุด
-    expect(screen.getByText(/18:00–20:00/)).toBeTruthy()
+    expect(screen.queryByText(/–20:00/)).toBeNull()
+    expect(screen.getAllByText(/18:00/).length).toBeGreaterThan(0)
   })
 
   it('ยังไม่เคยจอง ต้องเห็นฟอร์มกรอกรหัสตามเดิม', async () => {

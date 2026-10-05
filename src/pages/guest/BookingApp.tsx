@@ -45,23 +45,6 @@ function weekdayOf(date: string): number {
   return new Date(`${date}T12:00:00+07:00`).getUTCDay()
 }
 
-/**
- * ช่วงเวลาที่กันโต๊ะไว้ เช่น "ศ. 10 ต.ค. 18:00–20:00"
- *
- * ลูกค้าไม่ได้เลือกจำนวนชั่วโมงเองแล้ว การโชว์แถว "ระยะเวลา" แยกจึงดูเหมือน
- * ของตกค้าง แต่ข้อมูลยังจำเป็น — ต้องรู้ว่าโต๊ะถูกกันไว้ถึงกี่โมง จึงรวบมา
- * ไว้ในบรรทัดเวลาแทน
- */
-function fmtRange(iso: string, minutes: number): string {
-  const end = new Date(Date.parse(iso) + minutes * 60_000)
-  const endTime = end.toLocaleTimeString('th-TH', {
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Asia/Bangkok',
-  })
-  return `${fmtDateTime(iso)}–${endTime}`
-}
-
 function fmtDateTime(iso: string): string {
   return new Date(iso).toLocaleString('th-TH', {
     weekday: 'short',
@@ -423,7 +406,7 @@ function BookForm() {
           <div className="flex justify-between gap-3">
             <span className="text-ink-faint">นัดหมาย</span>
             <span className="tabular text-right font-medium">
-              {slots.length > 0 ? fmtRange(startAt, duration) : '—'}
+              {slots.length > 0 ? fmtDateTime(startAt) : '—'}
             </span>
           </div>
           <div className="mt-1 flex justify-between gap-3">
@@ -533,7 +516,7 @@ function Receipt({ receipt }: { receipt: BookingReceipt }) {
 
       <Card className="space-y-1.5 text-left text-sm">
         <Row label="สถานะ" value={st?.label ?? receipt.status} />
-        <Row label="เวลา" value={fmtRange(receipt.startAt, receipt.durationMinutes)} />
+        <Row label="เวลา" value={fmtDateTime(receipt.startAt)} />
         <Row label="โต๊ะ" value={receipt.tables.join(', ')} />
       </Card>
 
@@ -652,7 +635,7 @@ function FindBooking() {
             <Badge tone={st?.tone ?? 'neutral'}>{st?.label ?? result.status}</Badge>
           </div>
           <div className="space-y-1.5 border-t border-dashed border-line pt-3 text-sm">
-            <Row label="เวลา" value={fmtRange(result.startAt, result.durationMinutes)} />
+            <Row label="เวลา" value={fmtDateTime(result.startAt)} />
             <Row label="จำนวน" value={`${result.partySize} คน`} />
             <Row label="โต๊ะ" value={result.tables.join(', ') || '—'} />
             {result.note && <Row label="หมายเหตุ" value={result.note} />}
