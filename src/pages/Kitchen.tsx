@@ -10,6 +10,7 @@ import {
   setTabBadge,
   soundEnabled,
   soundSupported,
+  usingCustomSound,
 } from '../lib/alert'
 import { PUSH_HINT, disablePush, enablePush, pushState, type PushState } from '../lib/push'
 
@@ -61,6 +62,7 @@ export default function Kitchen() {
 
   const [sound, setSound] = useState(soundEnabled)
   const [soundError, setSoundError] = useState(false)
+  const [custom, setCustom] = useState(false)
 
   // แจ้งเตือนขึ้นมือถือ — ทำงานแม้ปิดแอป ต่างจากเสียงที่ต้องเปิดหน้านี้ค้างไว้
   const [push, setPush] = useState<PushState | null>(null)
@@ -91,6 +93,8 @@ export default function Kitchen() {
     const ok = await enableSound()
     setSound(ok)
     setSoundError(!ok)
+    setCustom(usingCustomSound())
+    // เล่นทันทีให้รู้ว่าได้ยินจริง และได้ยินว่าเป็นเสียงไหน
     if (ok) playNewOrderChime()
   }
 
@@ -162,6 +166,13 @@ export default function Kitchen() {
       {push && push !== 'on' && push !== 'off' && push !== 'unsupported' && (
         <p className="mb-3 rounded-lg border border-lapis/40 bg-lapis/10 p-3 text-sm text-lapis">
           {PUSH_HINT[push]}
+        </p>
+      )}
+
+      {sound && !custom && (
+        <p className="mb-3 text-xs text-ink-faint">
+          กำลังใช้เสียงสังเคราะห์ — ถ้าอยากใช้เสียงของร้านเอง
+          วางไฟล์ชื่อ <code>order-sound.mp3</code> ไว้ในโฟลเดอร์ <code>public/</code>
         </p>
       )}
 

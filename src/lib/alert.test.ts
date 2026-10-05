@@ -16,6 +16,8 @@ import {
  * เล่นเสียงทั้งที่ยังไม่ได้ปลดล็อก
  */
 let started = 0
+let bufferPlayed = 0
+let decodable = true
 let state: AudioContextState = 'suspended'
 /** บางเบราว์เซอร์ไม่ยอม resume ถ้าไม่ได้มาจากการกดจริง */
 let resumeWorks = true
@@ -38,6 +40,19 @@ class FakeAudioContext {
       },
       stop: () => {},
     } as unknown as OscillatorNode
+  }
+  createBufferSource() {
+    return {
+      buffer: null,
+      connect: (n: unknown) => n,
+      start: () => {
+        bufferPlayed++
+      },
+    } as unknown as AudioBufferSourceNode
+  }
+  async decodeAudioData() {
+    if (!decodable) throw new Error('decode failed')
+    return {} as AudioBuffer
   }
   createGain() {
     return {
@@ -111,6 +126,91 @@ describe('เสียงเตือนออเดอร์เข้าคร�
     started = 0
     playNewOrderChime()
     expect(started).toBe(0)
+  })
+})
+
+/**
+ * ไฟล์เสียงของร้าน
+ *
+ * โมดูลจำผลการโหลดไว้ (ตั้งใจ — จะได้ไม่ยิงซ้ำทุกออเดอร์) เทสต์จึงต้อง
+ * โหลดโมดูลใหม่ทุกเคสด้วย resetModules ไม่งั้นเคสหลังจะเห็นผลของเคสก่อน
+ */
+describe('ใช้ไฟล์เสียงของร้านแทนเสียงสังเคราะห์', () => {
+  async function freshModule() {
+    vi.resetModules()
+    return await import('./alert')
+  }
+
+  beforeEach(() => {
+    localStorage.clear()
+    started = 0
+    bufferPlayed = 0
+    state = 'suspended'
+    resumeWorks = true
+    decodable = true
+    vi.stubGlobal('AudioContext', FakeAudioContext)
+  })
+
+  it('มีไฟล์และถอดรหัสได้ → ใช้ไฟล์ของร้าน', async () => {
+    vi.stubGlobal('fetch', async () => new Response(new ArrayBuffer(8), { status: 200 }))
+    const m = await freshModule()
+
+    expect(await m.enableSound()).toBe(true)
+    expect(m.usingCustomSound()).toBe(true)
+
+    m.playNewOrderChime()
+    expect(bufferPlayed).toBe(1)
+    expect(started).toBe(0) // ไม่ใช้เสียงสังเคราะห์
+  })
+
+  // ★ ครัวต้องไม่เงียบเพราะลืมใส่ไฟล์
+  it('ไม่มีไฟล์ → ถอยไปใช้เสียงสังเคราะห์', async () => {
+    vi.stubGlobal('fetch', async () => new Response(null, { status: 404 }))
+    const m = await freshModule()
+
+    expect(await m.enableSound()).toBe(true)
+    expect(m.usingCustomSound()).toBe(false)
+
+    m.playNewOrderChime()
+    expect(started).toBe(2)
+    expect(bufferPlayed).toBe(0)
+  })
+
+  it('ไฟล์เปิดไม่ได้ (เช่นไฟล์เสีย) → ถอยไปใช้เสียงสังเคราะห์', async () => {
+    decodable = false
+    vi.stubGlobal('fetch', async () => new Response(new ArrayBuffer(8), { status: 200 }))
+    const m = await freshModule()
+
+    await m.enableSound()
+    expect(m.usingCustomSound()).toBe(false)
+
+    m.playNewOrderChime()
+    expect(started).toBe(2)
+  })
+
+  it('เน็ตล่มตอนโหลด → ยังมีเสียงสำรองให้ได้ยิน', async () => {
+    vi.stubGlobal('fetch', async () => {
+      throw new Error('network down')
+    })
+    const m = await freshModule()
+
+    await m.enableSound()
+    m.playNewOrderChime()
+    expect(started).toBe(2)
+  })
+
+  it('โหลดครั้งเดียว ไม่ยิงซ้ำทุกออเดอร์', async () => {
+    let calls = 0
+    vi.stubGlobal('fetch', async () => {
+      calls++
+      return new Response(new ArrayBuffer(8), { status: 200 })
+    })
+    const m = await freshModule()
+
+    await m.enableSound()
+    await m.preloadSound()
+    await m.preloadSound()
+    expect(calls).toBe(1)
   })
 })
 

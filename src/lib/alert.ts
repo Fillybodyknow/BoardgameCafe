@@ -12,7 +12,19 @@
 
 const STORAGE_KEY = 'bgcafe.kitchen.sound'
 
+/**
+ * ไฟล์เสียงของร้าน — วางไว้ที่ public/ ชื่อ order-sound.<นามสกุล>
+ *
+ * รับหลายนามสกุลเพื่อไม่ต้องแปลงไฟล์ก่อน ลองไล่จนกว่าจะเจอตัวที่เบราว์เซอร์
+ * ถอดรหัสได้ ถ้าไม่เจอเลยจะใช้เสียงสังเคราะห์แทน — ครัวต้องไม่เงียบเพราะ
+ * ลืมใส่ไฟล์หรือใส่ไฟล์ที่เปิดไม่ได้
+ */
+const SOUND_FILES = ['order-sound.mp3', 'order-sound.m4a', 'order-sound.wav', 'order-sound.ogg']
+
 let ctx: AudioContext | null = null
+let customBuffer: AudioBuffer | null = null
+/** null = ยังไม่เคยลองโหลด */
+let loadAttempted = false
 
 type Ctor = typeof AudioContext
 function audioContextCtor(): Ctor | null {
@@ -60,6 +72,7 @@ export async function enableSound(): Promise<boolean> {
 
   const ok = ctx.state === 'running'
   remember(ok)
+  if (ok) await preloadSound()
   return ok
 }
 
@@ -67,10 +80,53 @@ export function disableSound() {
   remember(false)
 }
 
-/** ปี๊บสองจังหวะ สั้นและคมพอให้ได้ยินในครัวที่มีเสียงรบกวน */
+/**
+ * โหลดไฟล์เสียงของร้านเข้าหน่วยความจำ
+ *
+ * โหลดล่วงหน้าตอนเปิดเสียง ไม่ใช่ตอนออเดอร์เข้า เพราะถ้ารอโหลดตอนนั้น
+ * เสียงจะดังช้ากว่าที่ควร และถ้าเน็ตสะดุดก็จะไม่ดังเลย
+ */
+export async function preloadSound(): Promise<boolean> {
+  if (loadAttempted) return customBuffer !== null
+  loadAttempted = true
+  if (!ctx) return false
+
+  const base = import.meta.env.BASE_URL ?? '/'
+  for (const name of SOUND_FILES) {
+    try {
+      const res = await fetch(`${base}${name}`)
+      if (!res.ok) continue
+      customBuffer = await ctx.decodeAudioData(await res.arrayBuffer())
+      return true
+    } catch {
+      // ไฟล์ไม่มี หรือถอดรหัสไม่ได้ — ลองนามสกุลถัดไป
+    }
+  }
+  return false
+}
+
+/** true = กำลังใช้ไฟล์เสียงของร้าน, false = ใช้เสียงสังเคราะห์ */
+export function usingCustomSound(): boolean {
+  return customBuffer !== null
+}
+
 export function playNewOrderChime() {
   if (!soundEnabled() || !ctx || ctx.state !== 'running') return
 
+  if (customBuffer) {
+    const src = ctx.createBufferSource()
+    src.buffer = customBuffer
+    src.connect(ctx.destination)
+    src.start()
+    return
+  }
+
+  synthChime()
+}
+
+/** เสียงสำรอง — ปี๊บสองจังหวะ สั้นและคมพอให้ได้ยินในครัวที่มีเสียงรบกวน */
+function synthChime() {
+  if (!ctx) return
   const now = ctx.currentTime
   for (const [i, freq] of [880, 1320].entries()) {
     const osc = ctx.createOscillator()
