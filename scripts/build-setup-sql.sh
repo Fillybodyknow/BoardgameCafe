@@ -118,3 +118,6 @@ make_patch supabase/patch-settle.sql "patch จ่ายตอนกลับก
 
 make_patch supabase/patch-kitchen-hours.sql "patch เวลาปิดครัว" \
   supabase/migrations/20260930001600_kitchen_hours.sql
+
+make_patch supabase/patch-guest-register.sql "patch ลูกค้าลงชื่อตัวเองผ่าน QR" \
+  supabase/migrations/20260930001700_guest_register.sql

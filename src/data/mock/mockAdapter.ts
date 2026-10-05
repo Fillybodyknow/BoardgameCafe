@@ -9,6 +9,9 @@ import { cartNeedsKitchen, kitchenWindow } from '../../domain/kitchen'
 import { seed, businessDateOf } from './seed'
 import { bangkokParts, loadHours, loadTax, toMinutes } from './shopStore'
 
+/** ต้องตรงกับ guest_register_limit() ฝั่ง SQL */
+const GUEST_REGISTER_LIMIT = 20
+
 const STORAGE_KEY = 'bgcafe.mock.v1'
 
 /**
@@ -138,6 +141,56 @@ class MockAdapter implements DataPort {
     pass.checkedOutAt = new Date().toISOString()
     pass.status = 'checked_out'
     this.commit()
+  }
+
+  async voidPass(passId: ID) {
+    const pass = this.mustPass(passId)
+    if (pass.status === 'billed') throw new Error('คนนี้ชำระเงินไปแล้ว ลบไม่ได้')
+
+    const visit = this.state.visits.find((v) => v.id === pass.visitId)
+    if (!visit || visit.status !== 'open') throw new Error('visit นี้ปิดไปแล้ว')
+
+    if (this.state.orders.some((o) => o.orderedByPassId === passId)) {
+      throw new Error('คนนี้สั่งของไปแล้ว ลบไม่ได้ — ใช้ "กลับก่อน" แทน')
+    }
+    if (this.state.passes.filter((p) => p.visitId === pass.visitId).length <= 1) {
+      throw new Error('โต๊ะต้องมีอย่างน้อย 1 คน')
+    }
+
+    this.state.passes = this.state.passes.filter((p) => p.id !== passId)
+    this.commit()
+  }
+
+  /** ลูกค้าลงชื่อตัวเอง — กติกาเดียวกับ guest_register() ฝั่ง SQL */
+  async guestRegister(token: string, name: string) {
+    const { visitId } = this.visitForToken(token)
+    if (!visitId) throw new Error('โต๊ะนี้ยังไม่ได้เปิด กรุณาแจ้งพนักงาน')
+
+    const clean = name.trim()
+    if (!clean) throw new Error('กรุณาใส่ชื่อ')
+    if (clean.length > 40) throw new Error('ชื่อยาวเกินไป')
+
+    // กดสองที หรือเปิดสองแท็บ ต้องไม่กลายเป็นสองคน
+    const same = this.state.passes.find(
+      (p) =>
+        p.visitId === visitId &&
+        p.displayName.toLowerCase() === clean.toLowerCase() &&
+        (p.status === 'active' || p.status === 'paused'),
+    )
+    if (same) return { passId: same.id, displayName: same.displayName }
+
+    const inVisit = this.state.passes.filter((p) => p.visitId === visitId)
+    if (inVisit.length >= GUEST_REGISTER_LIMIT) {
+      throw new Error('โต๊ะนี้มีคนครบแล้ว กรุณาแจ้งพนักงาน')
+    }
+
+    const plan = this.state.ratePlans[0]
+    if (!plan) throw new Error('ร้านยังไม่ได้ตั้งเรทค่าเล่น')
+
+    const pass = makePass(visitId, clean, plan.id, new Date().toISOString(), plan)
+    this.state.passes.push(pass)
+    this.commit()
+    return { passId: pass.id, displayName: pass.displayName }
   }
 
   async moveVisitToTables(visitId: ID, tableIds: ID[]) {
@@ -901,6 +954,7 @@ export const mockBookingAdapter: BookingPort = {
 }
 
 export const mockGuestAdapter: GuestPort = {
+  register: (token, name) => mockAdapter.guestRegister(token, name),
   session: (token) => mockAdapter.guestSession(token),
   orders: (token) => mockAdapter.guestOrders(token),
   bill: (token) => mockAdapter.guestBill(token),

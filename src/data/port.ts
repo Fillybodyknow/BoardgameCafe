@@ -42,6 +42,8 @@ export interface DataPort {
   pausePass(passId: ID): Promise<void>
   resumePass(passId: ID): Promise<void>
   checkOutPass(passId: ID): Promise<void>
+  /** ลบคนที่ถูกสร้างผิด — ต่างจาก checkOutPass ที่แปลว่ากลับไปแล้วแต่ยังต้องจ่าย */
+  voidPass(passId: ID): Promise<void>
   /** ยอดที่คนนี้ต้องจ่ายถ้ากลับตอนนี้ — ดูก่อนกดเก็บเงิน */
   passSettlement(passId: ID): Promise<PassSettlement>
   /** เก็บเงินคนที่กลับก่อน แล้วออกบิลย่อย — คนที่เหลือยังเล่นต่อได้ */
@@ -199,6 +201,8 @@ export interface AdminPort {
 
 export interface GuestPort {
   session(token: string): Promise<GuestSession>
+  /** ลูกค้าลงชื่อตัวเองหลังสแกน QR — คืน pass ให้เครื่องจำไว้ */
+  register(token: string, name: string): Promise<{ passId: ID; displayName: string }>
   orders(token: string): Promise<GuestOrder[]>
   bill(token: string): Promise<BillPreview>
   placeOrder(input: {

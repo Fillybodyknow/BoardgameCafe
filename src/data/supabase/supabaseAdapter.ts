@@ -149,6 +149,10 @@ class SupabaseAdapter implements DataPort {
     })
   }
 
+  async voidPass(passId: ID) {
+    await rpc('void_pass', { p_pass_id: passId })
+  }
+
   async moveVisitToTables(visitId: ID, tableIds: ID[]) {
     await rpc('move_visit_to_tables', { p_visit_id: visitId, p_table_ids: tableIds })
   }
@@ -395,6 +399,13 @@ export const supabaseBookingAdapter: BookingPort = {
 }
 
 export const supabaseGuestAdapter: GuestPort = {
+  async register(token, name) {
+    return await rpc<{ passId: ID; displayName: string }>('guest_register', {
+      p_token: token,
+      p_name: name,
+    })
+  },
+
   async session(token) {
     return await rpc<GuestSession>('guest_session', { p_token: token })
   },

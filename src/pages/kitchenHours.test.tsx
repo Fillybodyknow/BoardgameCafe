@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import App from '../App'
 import { adminDb, db, guestDb, mockAdapter } from '../data'
+import { rememberMyPass } from '../lib/myPass'
 
 /**
  * เวลาปิดครัว — เส้นทางเต็มผ่าน adapter จริง (โหมดจำลอง)
@@ -99,6 +100,7 @@ describe('ลูกค้าสแกน QR หลังครัวปิด', 
   })
 
   it('หน้าเมนูบอกตั้งแต่แรกว่าครัวปิด และกดเพิ่มอาหารไม่ได้', async () => {
+    rememberMyPass('qr-b1', await guestDb.register('qr-b1', 'คุณครัวปิด'))
     window.location.hash = '#/t/qr-b1'
     render(<App />)
     await screen.findByText('โต๊ะ B1')
@@ -119,6 +121,7 @@ describe('ลูกค้าสแกน QR หลังครัวปิด', 
 
   it('ครัวเปิดอยู่ ไม่ต้องขึ้นแถบเตือน', async () => {
     await openKitchenNow()
+    rememberMyPass('qr-b1', await guestDb.register('qr-b1', 'คุณครัวเปิด'))
     window.location.hash = '#/t/qr-b1'
     render(<App />)
     await screen.findByText('โต๊ะ B1')

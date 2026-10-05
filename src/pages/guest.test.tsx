@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import App from '../App'
 import { mockAdapter, mockGuestAdapter } from '../data/mock/mockAdapter'
+import { db } from '../data'
+import { myPass, rememberMyPass } from '../lib/myPass'
 
 /**
  * หน้าลูกค้าที่สแกน QR
@@ -10,11 +12,15 @@ import { mockAdapter, mockGuestAdapter } from '../data/mock/mockAdapter'
  * โจทย์หลักไม่ใช่ว่าสั่งของได้ไหม แต่คือ "ถือ QR โต๊ะหนึ่ง แตะโต๊ะอื่นได้ไหม"
  * ฝั่ง SQL ทดสอบไว้แล้วใน supabase/tests/30_guest_test.sql ที่นี่ตรวจฝั่งหน้าจอ
  */
-/** เลือกผู้สั่งในหน้าต่างที่เด้งตอนกดส่ง แล้วกดยืนยัน */
-async function pickOrderer(value: string) {
-  const select = await screen.findByRole('combobox')
-  fireEvent.change(select, { target: { value } })
-  fireEvent.click(screen.getByText('ยืนยันส่งเข้าครัว'))
+/**
+ * ลงชื่อไว้ล่วงหน้าเหมือนเครื่องที่เคยสแกนมาแล้ว
+ *
+ * ของจริงลูกค้าลงชื่อครั้งแรกครั้งเดียว เทสต์ที่สนใจเรื่องอื่นจึงข้ามขั้นนี้ไป
+ */
+async function signedInAs(token: string, name: string) {
+  const pass = await mockGuestAdapter.register(token, name)
+  rememberMyPass(token, pass)
+  return pass
 }
 
 describe('ลูกค้าสแกน QR', () => {
@@ -25,25 +31,38 @@ describe('ลูกค้าสแกน QR', () => {
     window.location.hash = ''
   })
 
-  it('โต๊ะที่เปิดอยู่ เห็นเมนูและรายชื่อคนในโต๊ะ', async () => {
+  it('ยังไม่เคยลงชื่อ ต้องถามชื่อก่อนถึงจะเห็นเมนู', async () => {
     window.location.hash = '#/t/qr-b1' // B1 มี visit v-1 เปิดอยู่
     render(<App />)
 
-    expect(await screen.findByText('โต๊ะ B1')).toBeTruthy()
+    expect(await screen.findByText('คุณชื่ออะไร')).toBeTruthy()
+    expect(screen.queryByText('อเมริกาโน่เย็น')).toBeNull()
+  })
+
+  it('ลงชื่อแล้วเข้าหน้าเมนูได้ และถูกจำไว้ในเครื่อง', async () => {
+    window.location.hash = '#/t/qr-b1'
+    render(<App />)
+
+    fireEvent.change(await screen.findByPlaceholderText('ชื่อเล่นก็ได้'), {
+      target: { value: 'คุณใหม่' },
+    })
+    fireEvent.click(screen.getByText('เริ่มสั่งของ'))
+
     expect(await screen.findByText('อเมริกาโน่เย็น')).toBeTruthy()
+    expect(myPass('qr-b1')?.displayName).toBe('คุณใหม่')
+  })
 
-    // รายชื่อคนในโต๊ะอยู่ในหน้าต่างที่ถามตอนกดส่ง ไม่ได้ลอยอยู่หัวเมนูแล้ว
-    fireEvent.click(screen.getAllByRole('button', { name: 'เพิ่ม' })[0]!)
-    fireEvent.click(await screen.findByText('ส่งเข้าครัว'))
+  it('เครื่องที่ลงชื่อแล้วเข้าเมนูได้เลย ไม่ถามซ้ำ', async () => {
+    await signedInAs('qr-b1', 'คุณเดิม')
+    window.location.hash = '#/t/qr-b1'
+    render(<App />)
 
-    expect(await screen.findByText('ใครเป็นคนสั่ง')).toBeTruthy()
-    const options = screen.getByRole('combobox').textContent ?? ''
-    expect(options).toContain('ต้น')
-    // คนที่กลับไปแล้วต้องไม่อยู่ในรายการให้เลือก
-    expect(options).not.toContain('บอส')
+    expect(await screen.findByText('โต๊ะ B1')).toBeTruthy()
+    expect(screen.queryByText('คุณชื่ออะไร')).toBeNull()
   })
 
   it('ไม่ต้องล็อกอิน — ไม่เจอหน้าเข้าสู่ระบบ', async () => {
+    await signedInAs('qr-b1', 'คุณไม่ล็อกอิน')
     window.location.hash = '#/t/qr-b1'
     render(<App />)
     await screen.findByText('โต๊ะ B1')
@@ -67,6 +86,7 @@ describe('ลูกค้าสแกน QR', () => {
   // เพราะเคยกด + แล้วกด − ใส่เมนูอีกอัน ทำให้เหลือรายการ qty=0 ค้างในตะกร้า
   // หน้าจอยังขึ้นว่า 2 รายการ (0 ไม่ถูกนับ) ลูกค้าจึงเดาไม่ออกว่าอะไรผิด
   it('กดเพิ่มแล้วกดลดจนเหลือศูนย์ ต้องไม่ทำให้สั่งทั้งออเดอร์ไม่ได้', async () => {
+    await signedInAs('qr-b1', 'คุณตะกร้า')
     window.location.hash = '#/t/qr-b1'
     render(<App />)
     await screen.findByText('โต๊ะ B1')
@@ -84,7 +104,6 @@ describe('ลูกค้าสแกน QR', () => {
     fireEvent.click(minus[2]!) // เอาเมนู 3 ออกจนเหลือ 0
 
     fireEvent.click(await screen.findByText('ส่งเข้าครัว'))
-    await pickOrderer('shared')
 
     await waitFor(async () => {
       const snap = await mockAdapter.getSnapshot()
@@ -97,6 +116,7 @@ describe('ลูกค้าสแกน QR', () => {
   })
 
   it('สั่งของแล้วเข้าครัวทันที และผูกกับโต๊ะที่สแกน', async () => {
+    await signedInAs('qr-b1', 'คุณสั่ง')
     window.location.hash = '#/t/qr-b1'
     render(<App />)
     await screen.findByText('โต๊ะ B1')
@@ -104,7 +124,6 @@ describe('ลูกค้าสแกน QR', () => {
     const before = (await mockAdapter.getSnapshot()).orders.length
     fireEvent.click(screen.getAllByText('+')[0]!)
     fireEvent.click(await screen.findByText('ส่งเข้าครัว'))
-    await pickOrderer((await mockGuestAdapter.session('qr-b1')).passes[0]!.id)
 
     await waitFor(async () => {
       const snap = await mockAdapter.getSnapshot()
@@ -116,25 +135,21 @@ describe('ลูกค้าสแกน QR', () => {
     })
   })
 
-  // ★ เหตุผลที่ย้ายมาถามตอนกดส่ง: ของเดิมเป็น dropdown ที่ลูกค้าเลื่อนผ่าน
-  // ออเดอร์เลยไปลงชื่อคนแรกของกลุ่มทั้งที่ไม่ใช่คนสั่ง
-  it('ออเดอร์ลงชื่อคนที่เลือกจริง ไม่ใช่คนแรกของกลุ่ม', async () => {
+  // ★ หัวใจของการให้แต่ละเครื่องลงชื่อเอง: ไม่ต้องเลือกชื่อตอนสั่งอีก
+  // และออเดอร์ลงชื่อเจ้าของเครื่องเสมอ ไม่มีทางลงผิดคน
+  it('ออเดอร์ลงชื่อเจ้าของเครื่องเอง ไม่ต้องเลือก', async () => {
+    const me = await signedInAs('qr-b1', 'คุณเจ้าของเครื่อง')
     window.location.hash = '#/t/qr-b1'
     render(<App />)
     await screen.findByText('โต๊ะ B1')
 
-    const session = await mockGuestAdapter.session('qr-b1')
-    const second = session.passes[1]!
-    expect(second.id).not.toBe(session.passes[0]!.id)
-
     fireEvent.click(screen.getAllByText('+')[0]!)
     fireEvent.click(await screen.findByText('ส่งเข้าครัว'))
-    await pickOrderer(second.id)
 
     await waitFor(async () => {
       const snap = await mockAdapter.getSnapshot()
       const created = snap.orders[snap.orders.length - 1]!
-      expect(created.orderedByPassId).toBe(second.id)
+      expect(created.orderedByPassId).toBe(me.passId)
       expect(created.splitMode).toBe('owner')
     })
   })
@@ -183,5 +198,53 @@ describe('ขอบเขตของ token (ระดับ adapter)', () => {
         items: [{ menuItemId: 'm-1', qty: 1 }],
       }),
     ).rejects.toThrow()
+  })
+})
+
+/**
+ * ลบคนที่ลงชื่อผิด
+ *
+ * เปิดให้ลูกค้าสร้างคนเองแล้ว ต้องมีทางเก็บกวาดด้วย ไม่งั้นชื่อซ้ำ/ชื่อเล่น
+ * ของเล่นจะค้างอยู่ในบิล — check_out_pass ใช้แทนไม่ได้เพราะยังคิดเงิน
+ */
+describe('ลบคนที่ลงชื่อผิด', () => {
+  beforeEach(() => {
+    cleanup()
+    localStorage.clear()
+    mockAdapter.reset()
+  })
+
+  it('พนักงานลบคนที่เพิ่งลงชื่อออกได้', async () => {
+    const pass = await signedInAs('qr-b1', 'คนกดมั่ว')
+    await db.voidPass(pass.passId)
+
+    const snap = await mockAdapter.getSnapshot()
+    expect(snap.passes.some((p) => p.id === pass.passId)).toBe(false)
+  })
+
+  it('คนที่สั่งของไปแล้วลบไม่ได้', async () => {
+    const pass = await signedInAs('qr-b1', 'คนสั่งของ')
+    const snap = await mockAdapter.getSnapshot()
+
+    await db.placeOrder({
+      idempotencyKey: 'void-guard',
+      visitId: 'v-1',
+      orderedByPassId: pass.passId,
+      splitMode: 'owner',
+      placedBy: 'staff',
+      items: [{ menuItemId: snap.menu[0]!.id, qty: 1 }],
+    })
+
+    await expect(db.voidPass(pass.passId)).rejects.toThrow(/สั่งของไปแล้ว/)
+  })
+
+  it('ลงชื่อซ้ำไม่กลายเป็นสองคน', async () => {
+    const a = await signedInAs('qr-b1', 'คนเดิม')
+    const b = await signedInAs('qr-b1', '  คนเดิม ')
+    expect(b.passId).toBe(a.passId)
+  })
+
+  it('ลงชื่อตอนโต๊ะยังไม่เปิดไม่ได้', async () => {
+    await expect(mockGuestAdapter.register('qr-a3', 'คนมาก่อน')).rejects.toThrow(/ยังไม่ได้เปิด/)
   })
 })

@@ -296,8 +296,9 @@ declare
   --                        ไม่ได้ และคืนอีเมลปลอมเมื่อหาไม่เจอ จึงไม่บอกว่ามี
   --                        ชื่อผู้ใช้ไหนอยู่บ้าง
   --   assert_eq          — ตัวช่วยของชุดทดสอบเอง ไม่มีในของจริง
+  --   guest_register     — ลูกค้าลงชื่อตัวเองหลังสแกน QR ของโต๊ะที่เปิดอยู่
   v_allowed  text[] := array['guest_session', 'guest_orders', 'guest_bill',
-                             'guest_place_order', 'available_tables',
+                             'guest_place_order', 'guest_register', 'available_tables',
                              'create_reservation', 'reservation_by_code',
                              'cancel_reservation_by_code', 'login_email_for',
                              'assert_eq'];
@@ -326,7 +327,7 @@ begin
     raise exception 'FAIL  ฟังก์ชันฝั่งลูกค้าถูกปิดเกินไป: %', array_to_string(v_missing, ', ');
   end if;
 
-  raise notice 'PASS  anon เรียกได้เฉพาะ 4 ฟังก์ชันฝั่งลูกค้าเท่านั้น';
+  raise notice 'PASS  anon เรียกได้เฉพาะฟังก์ชันฝั่งลูกค้าที่อนุญาตไว้เท่านั้น';
 end;
 $$;
 

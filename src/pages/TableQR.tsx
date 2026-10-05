@@ -1,24 +1,10 @@
 import { useEffect, useState } from 'react'
-import QRCode from 'qrcode'
 import { db } from '../data'
+import { bookingUrl, guestUrl, toQrDataUrl } from '../lib/qr'
 import { useSnapshot } from '../hooks/useData'
 import type { CafeTable } from '../domain/types'
 import { Badge, Button, Card, Empty, Icon, PageHeader } from '../components/ui'
 import type { IconName } from '../components/ui'
-
-// สีหมึกบนกระดาษหนัง — ยังตัดกันชัดพอให้กล้องมือถืออ่านได้
-const QR_COLOR = { dark: '#2a1c12', light: '#fffdf7' }
-
-/** URL ที่ฝังใน QR — ต้องเป็น absolute เพราะลูกค้าเปิดจากมือถือตัวเอง */
-function guestUrl(token: string): string {
-  const { origin, pathname } = window.location
-  return `${origin}${pathname}#/t/${token}`
-}
-
-function bookingUrl(): string {
-  const { origin, pathname } = window.location
-  return `${origin}${pathname}#/book`
-}
 
 export default function TableQR() {
   const { data } = useSnapshot()
@@ -28,7 +14,7 @@ export default function TableQR() {
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    void QRCode.toDataURL(bookingUrl(), { width: 320, margin: 1, color: QR_COLOR }).then(setBookingQR)
+    void toQrDataUrl(bookingUrl()).then(setBookingQR)
   }, [])
 
   const tables = data?.tables ?? []
@@ -39,11 +25,7 @@ export default function TableQR() {
       const next: Record<string, string> = {}
       for (const table of tables) {
         if (!table.qrToken) continue
-        next[table.id] = await QRCode.toDataURL(guestUrl(table.qrToken), {
-          width: 320,
-          margin: 1,
-          color: QR_COLOR,
-        })
+        next[table.id] = await toQrDataUrl(guestUrl(table.qrToken))
       }
       if (!cancelled) setCodes(next)
     }
@@ -95,8 +77,8 @@ export default function TableQR() {
             </p>
             <h3 className="text-xl font-bold">QR จองโต๊ะล่วงหน้า</h3>
             <p className="mt-1 text-sm text-ink-soft">
-              คนละใบกับ QR ประจำโต๊ะ — ใบนี้ไม่ผูกกับโต๊ะไหน เอาไปติดหน้าร้าน
-              โพสต์เพจ หรือส่งให้ลูกค้าทางแชตได้เลย
+              คนละใบกับ QR ประจำโต๊ะ — ใบนี้ไม่ผูกกับโต๊ะไหน เอาไปติดหน้าร้าน โพสต์เพจ
+              หรือส่งให้ลูกค้าทางแชตได้เลย
             </p>
             <code className="mt-3 block truncate rounded bg-parchment-deep px-2 py-1 text-xs text-ink-faint">
               {bookingUrl()}
@@ -122,7 +104,9 @@ export default function TableQR() {
       </Card>
 
       {missing && (
-        <Empty>ข้อมูลโต๊ะยังไม่มี token — ต้องรัน migration ล่าสุดก่อน (supabase/setup-all.sql)</Empty>
+        <Empty>
+          ข้อมูลโต๊ะยังไม่มี token — ต้องรัน migration ล่าสุดก่อน (supabase/setup-all.sql)
+        </Empty>
       )}
 
       <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -133,7 +117,9 @@ export default function TableQR() {
               {/* ป้ายตั้งโต๊ะ: กรอบคู่ด้านใน */}
               <div className="rounded-lg border-4 border-double border-gold/50 p-4 text-center">
                 <div className="flex items-center justify-between">
-                  <Badge tone={table.status === 'occupied' ? 'forest' : 'neutral'}>{table.zone}</Badge>
+                  <Badge tone={table.status === 'occupied' ? 'forest' : 'neutral'}>
+                    {table.zone}
+                  </Badge>
                   <span className="text-xs text-ink-faint">{table.seatMax} ที่นั่ง</span>
                 </div>
                 <div className="mt-2 text-4xl tracking-wide font-bold">{table.code}</div>
@@ -149,7 +135,9 @@ export default function TableQR() {
                 ) : (
                   <div className="mx-auto aspect-square w-full max-w-[200px] animate-pulse rounded bg-parchment-deep" />
                 )}
-                <p className="mt-2 text-xs text-ink-faint italic">สแกนเพื่อสั่งอาหารและเครื่องดื่ม</p>
+                <p className="mt-2 text-xs text-ink-faint italic">
+                  สแกนเพื่อสั่งอาหารและเครื่องดื่ม
+                </p>
               </div>
 
               <div className="mt-2 flex gap-1.5">
@@ -161,7 +149,8 @@ export default function TableQR() {
                   variant="danger"
                   disabled={busy === table.id}
                   onClick={async () => {
-                    if (!confirm(`เปลี่ยน QR ของโต๊ะ ${table.code}? ใบที่พิมพ์ไว้จะใช้ไม่ได้ทันที`)) return
+                    if (!confirm(`เปลี่ยน QR ของโต๊ะ ${table.code}? ใบที่พิมพ์ไว้จะใช้ไม่ได้ทันที`))
+                      return
                     setBusy(table.id)
                     try {
                       await db.rotateTableToken(table.id)
@@ -192,7 +181,9 @@ function Rule({
   children: React.ReactNode
 }) {
   return (
-    <div className={`panel flex gap-3 rounded-xl p-4 ${warn ? '!border-ember/40 !bg-ember/5' : ''}`}>
+    <div
+      className={`panel flex gap-3 rounded-xl p-4 ${warn ? '!border-ember/40 !bg-ember/5' : ''}`}
+    >
       <div
         className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${
           warn ? 'bg-ember/15 text-ember-deep' : 'bg-gold/15 text-gold-deep'

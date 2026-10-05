@@ -5,17 +5,23 @@ import { guestDb, menuImageUrl } from '../../data'
 import { cartItems, setCartQty, type Cart } from '../../lib/cart'
 import { formatBaht } from '../../domain/pricing'
 import type { GuestOrder, MenuItem, OrderStatus } from '../../domain/types'
-import { Badge, Button, Card, Empty } from '../../components/ui'
-import OrdererModal from '../../components/OrdererModal'
+import { Badge, Button, Card, Empty, INPUT } from '../../components/ui'
+import { myPass, rememberMyPass, type MyPass } from '../../lib/myPass'
 import type { Tone } from '../../components/ui'
 import { Stepper } from '../OrderDialog'
 import { needsKitchen } from '../../domain/kitchen'
 
 const CATEGORY_LABEL: Record<MenuItem['category'], string> = {
-  drink: 'เครื่องดื่ม', snack: 'ของกินเล่น', food: 'อาหารจานหลัก', dessert: 'ของหวาน',
+  drink: 'เครื่องดื่ม',
+  snack: 'ของกินเล่น',
+  food: 'อาหารจานหลัก',
+  dessert: 'ของหวาน',
 }
 const CATEGORY_ICON: Record<MenuItem['category'], string> = {
-  drink: '🍺', snack: '🥨', food: '🍖', dessert: '🍯',
+  drink: '🍺',
+  snack: '🥨',
+  food: '🍖',
+  dessert: '🍯',
 }
 
 const STATUS: Record<OrderStatus, { label: string; tone: Tone }> = {
@@ -52,7 +58,9 @@ export default function GuestApp() {
   const { token = '' } = useParams()
   const qc = useQueryClient()
   const [tab, setTab] = useState<Tab>('menu')
-  const [picking, setPicking] = useState(false)
+  const [me, setMe] = useState(() => myPass(token))
+  /** 'mine' = ของฉันคนเดียว, 'shared' = หารกันทั้งโต๊ะ */
+  const [split, setSplit] = useState<'mine' | 'shared'>('mine')
   const [cart, setCart] = useState<Cart>({})
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -119,7 +127,9 @@ export default function GuestApp() {
   if (!s.visitId) {
     return (
       <Centered>
-        <div className="shield h-28 w-24 bg-wine text-3xl text-gold-light shadow-xl">{s.tableCode}</div>
+        <div className="shield h-28 w-24 bg-wine text-3xl text-gold-light shadow-xl">
+          {s.tableCode}
+        </div>
         <p className="mt-3 text-sm text-ink-faint">{s.zone}</p>
         <div className="divider my-6 w-48 text-xs" aria-hidden>
           ◆
@@ -129,6 +139,23 @@ export default function GuestApp() {
           แจ้งพนักงานเพื่อเปิดโต๊ะก่อนนะครับ แล้วสแกนใหม่อีกครั้ง
         </p>
       </Centered>
+    )
+  }
+
+  // คนที่เคยลงชื่อแล้วแต่พนักงานลบออก (หรือปิดบิลไปแล้ว) ต้องลงใหม่
+  const stillHere = me !== null && s.passes.some((p) => p.id === me.passId)
+  if (!stillHere) {
+    return (
+      <RegisterGate
+        token={token}
+        tableCode={s.tableCode}
+        zone={s.zone}
+        onDone={(pass) => {
+          rememberMyPass(token, pass)
+          setMe(pass)
+          void qc.invalidateQueries({ queryKey: ['guest', token] })
+        }}
+      />
     )
   }
 
@@ -156,15 +183,12 @@ export default function GuestApp() {
         items: cartItems(cart),
       })
       setCart({})
-      setPicking(false)
       setJustSent(true)
       setTab('orders')
       void qc.invalidateQueries({ queryKey: ['guest', token] })
       setTimeout(() => setJustSent(false), 4000)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'สั่งไม่สำเร็จ')
-      // ปิดหน้าต่างเลือกคน เพื่อให้เห็นข้อความผิดพลาดบนแถบตะกร้า
-      setPicking(false)
     } finally {
       setSending(false)
     }
@@ -188,7 +212,13 @@ export default function GuestApp() {
       <nav className="sticky top-0 z-30 -mt-4 px-4 pt-1 pb-3">
         <div className="seg flex w-full shadow-lg">
           {(['menu', 'orders', 'bill'] as Tab[]).map((t) => (
-            <button key={t} type="button" aria-pressed={tab === t} onClick={() => setTab(t)} className="relative flex-1">
+            <button
+              key={t}
+              type="button"
+              aria-pressed={tab === t}
+              onClick={() => setTab(t)}
+              className="relative flex-1"
+            >
               {t === 'menu' ? 'เมนู' : t === 'orders' ? 'ออเดอร์' : 'ยอดของโต๊ะ'}
               {t === 'orders' && liveOrders > 0 && (
                 <span className="absolute -top-1 right-2 grid h-4 min-w-4 place-items-center rounded-full bg-crimson px-1 text-[0.6rem] font-bold text-vellum">
@@ -217,8 +247,8 @@ export default function GuestApp() {
                     🍳
                   </span>
                   <span>
-                    {s.kitchen.reason} ตอนนี้สั่งได้เฉพาะเครื่องดื่มและของกินเล่น
-                    {' '}ถ้าอยากได้อาหาร ลองแจ้งพนักงานดูได้
+                    {s.kitchen.reason} ตอนนี้สั่งได้เฉพาะเครื่องดื่มและของกินเล่น ถ้าอยากได้อาหาร
+                    ลองแจ้งพนักงานดูได้
                   </span>
                 </div>
               )}
@@ -231,7 +261,9 @@ export default function GuestApp() {
                     type="button"
                     className="chip"
                     onClick={() =>
-                      document.getElementById(`cat-${category}`)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+                      document
+                        .getElementById(`cat-${category}`)
+                        ?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
                     }
                   >
                     {CATEGORY_ICON[category]} {CATEGORY_LABEL[category]}
@@ -242,7 +274,9 @@ export default function GuestApp() {
               <div className="space-y-6">
                 {groups.map(([category, items]) => (
                   <section key={category} id={`cat-${category}`} className="scroll-mt-20">
-                    <h2 className="flourish mb-2 text-sm font-semibold">{CATEGORY_LABEL[category]}</h2>
+                    <h2 className="flourish mb-2 text-sm font-semibold">
+                      {CATEGORY_LABEL[category]}
+                    </h2>
                     <div className="space-y-2">
                       {items.map((item) => {
                         const qty = cart[item.id] ?? 0
@@ -259,7 +293,12 @@ export default function GuestApp() {
                           >
                             <div className="flex min-w-0 items-center gap-3">
                               {img ? (
-                                <img src={img} alt="" loading="lazy" className="h-16 w-16 shrink-0 rounded-lg object-cover" />
+                                <img
+                                  src={img}
+                                  alt=""
+                                  loading="lazy"
+                                  className="h-16 w-16 shrink-0 rounded-lg object-cover"
+                                />
                               ) : (
                                 <div className="grid h-16 w-16 shrink-0 place-items-center rounded-lg bg-parchment-deep text-2xl">
                                   {CATEGORY_ICON[item.category]}
@@ -270,7 +309,9 @@ export default function GuestApp() {
                                 <div className="tabular text-sm font-semibold text-gold-deep">
                                   ฿{formatBaht(item.price)}
                                 </div>
-                                {!item.available && <div className="text-xs text-crimson">ของหมด</div>}
+                                {!item.available && (
+                                  <div className="text-xs text-crimson">ของหมด</div>
+                                )}
                                 {item.available && kitchenClosed && (
                                   <div className="text-xs text-ember-deep">ครัวปิดแล้ว</div>
                                 )}
@@ -312,7 +353,9 @@ export default function GuestApp() {
                   </ul>
                   <div className="mt-4 flex items-baseline justify-between border-t border-double border-line-strong pt-3 text-lg font-bold">
                     <span className="font-display">ยอดรวมทั้งโต๊ะ</span>
-                    <span className="tabular text-2xl text-gold-deep">฿{formatBaht(bill.data.total)}</span>
+                    <span className="tabular text-2xl text-gold-deep">
+                      ฿{formatBaht(bill.data.total)}
+                    </span>
                   </div>
                   <p className="mt-3 text-center text-xs text-ink-faint italic">
                     ค่าเล่นยังเดินอยู่ ยอดนี้เป็นยอด ณ ตอนนี้ · ชำระเงินที่เคาน์เตอร์
@@ -327,7 +370,11 @@ export default function GuestApp() {
       {tab === 'menu' && cartCount > 0 && (
         <div className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-lg animate-unroll px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <div className="tapestry flex items-center gap-3 rounded-2xl p-3 shadow-2xl">
-            <div ref={bagRef} key={cartCount} className="relative grid h-11 w-11 shrink-0 animate-bump place-items-center rounded-full bg-gold/20 text-2xl">
+            <div
+              ref={bagRef}
+              key={cartCount}
+              className="relative grid h-11 w-11 shrink-0 animate-bump place-items-center rounded-full bg-gold/20 text-2xl"
+            >
               💰
               <span className="tabular absolute -top-1 -right-1 grid h-5 min-w-5 place-items-center rounded-full bg-crimson px-1 text-[0.65rem] font-bold text-vellum">
                 {cartCount}
@@ -341,31 +388,47 @@ export default function GuestApp() {
             <Button
               variant="primary"
               className="!px-5 !py-2.5"
-              onClick={() => setPicking(true)}
+              onClick={() => void send(split === 'mine' ? me.passId : null)}
               disabled={sending}
             >
               {sending ? 'กำลังส่ง…' : 'ส่งเข้าครัว'}
             </Button>
           </div>
-        </div>
-      )}
 
-      {picking && (
-        <OrdererModal
-          people={s.passes}
-          count={cartCount}
-          total={cartTotal}
-          busy={sending}
-          onPick={send}
-          onClose={() => setPicking(false)}
-        />
+          {/* เครื่องรู้แล้วว่าเราคือใคร เหลือแค่บอกว่าจ่ายคนเดียวหรือหารกัน */}
+          <div className="mt-2 flex gap-1.5 rounded-xl bg-[#2a1c12]/60 p-1 text-sm">
+            {(
+              [
+                ['mine', `ของ ${me.displayName}`],
+                ['shared', 'หารกันทั้งโต๊ะ'],
+              ] as const
+            ).map(([v, label]) => (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={split === v}
+                onClick={() => setSplit(v)}
+                className={`flex-1 truncate rounded-lg px-2 py-1.5 transition ${
+                  split === v ? 'bg-gold text-[#2a1c12] font-semibold' : 'text-[#f3e6c8]/80'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
       )}
 
       {coins.map((c) => (
         <span
           key={c.id}
           className="coin-fly"
-          style={{ left: c.x, top: c.y, ['--dx' as string]: `${c.dx}px`, ['--dy' as string]: `${c.dy}px` }}
+          style={{
+            left: c.x,
+            top: c.y,
+            ['--dx' as string]: `${c.dx}px`,
+            ['--dy' as string]: `${c.dy}px`,
+          }}
           onAnimationEnd={() => setCoins((all) => all.filter((x) => x.id !== c.id))}
         />
       ))}
@@ -418,10 +481,16 @@ function OrderList({
                       >
                         {i < step ? '✓' : i + 1}
                       </span>
-                      <span className={`text-[0.65rem] ${i <= step ? 'text-ink' : 'text-ink-faint'}`}>{t.label}</span>
+                      <span
+                        className={`text-[0.65rem] ${i <= step ? 'text-ink' : 'text-ink-faint'}`}
+                      >
+                        {t.label}
+                      </span>
                     </div>
                     {i < TRACK.length - 1 && (
-                      <span className={`mx-1 mb-4 h-0.5 flex-1 rounded ${i < step ? 'bg-forest' : 'bg-line'}`} />
+                      <span
+                        className={`mx-1 mb-4 h-0.5 flex-1 rounded ${i < step ? 'bg-forest' : 'bg-line'}`}
+                      />
                     )}
                   </li>
                 ))}
@@ -450,5 +519,75 @@ function Centered({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen animate-page flex-col items-center justify-center p-8 text-center">
       {children}
     </div>
+  )
+}
+
+/**
+ * ลงชื่อครั้งแรกก่อนสั่งของ
+ *
+ * ขอแค่ชื่อ ไม่ขอเบอร์หรืออย่างอื่น เพราะสิ่งเดียวที่ระบบต้องรู้คือ
+ * "ออเดอร์นี้ของใคร" ตอนแยกบิล ยิ่งถามน้อยยิ่งมีคนกรอกจริง
+ */
+function RegisterGate({
+  token,
+  tableCode,
+  zone,
+  onDone,
+}: {
+  token: string
+  tableCode: string
+  zone: string
+  onDone: (pass: MyPass) => void
+}) {
+  const [name, setName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function submit() {
+    setBusy(true)
+    setError(null)
+    try {
+      onDone(await guestDb.register(token, name))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'ลงชื่อไม่สำเร็จ')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Centered>
+      <div className="shield h-28 w-24 bg-wine text-3xl text-gold-light shadow-xl">{tableCode}</div>
+      <p className="mt-3 text-sm text-ink-faint">{zone}</p>
+      <div className="divider my-6 w-48 text-xs" aria-hidden>
+        ◆
+      </div>
+
+      <p className="font-display text-lg font-bold">คุณชื่ออะไร</p>
+      <p className="mt-2 max-w-xs text-sm text-ink-soft">
+        ลงชื่อครั้งเดียวพอ เครื่องนี้จะจำไว้ให้ ตอนสั่งของจะได้ไม่ต้องเลือกชื่อทุกครั้ง
+      </p>
+
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && name.trim() && !busy) void submit()
+        }}
+        maxLength={40}
+        placeholder="ชื่อเล่นก็ได้"
+        className={`${INPUT} mt-5 max-w-xs text-center`}
+      />
+
+      {error && <p className="mt-3 animate-shake text-sm text-crimson">{error}</p>}
+
+      <Button
+        variant="primary"
+        className="mt-4 w-full max-w-xs !py-3"
+        disabled={busy || !name.trim()}
+        onClick={() => void submit()}
+      >
+        {busy ? 'กำลังลงชื่อ…' : 'เริ่มสั่งของ'}
+      </Button>
+    </Centered>
   )
 }
