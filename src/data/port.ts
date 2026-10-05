@@ -204,6 +204,11 @@ export interface GuestPort {
   session(token: string): Promise<GuestSession>
   /** ลูกค้าลงชื่อตัวเองหลังสแกน QR — คืน pass ให้เครื่องจำไว้ */
   register(token: string, name: string): Promise<{ passId: ID; displayName: string }>
+  /**
+   * รับชื่อที่พนักงานสร้างไว้ตอนเปิดโต๊ะ (เช่น "ผู้เล่น 2") แทนการสร้างคนใหม่
+   * name ว่าง = ใช้ชื่อเดิม
+   */
+  claim(token: string, passId: ID, name?: string): Promise<{ passId: ID; displayName: string }>
   orders(token: string): Promise<GuestOrder[]>
   bill(token: string): Promise<BillPreview>
   placeOrder(input: {

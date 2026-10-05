@@ -7,6 +7,7 @@ import { formatBaht } from '../../domain/pricing'
 import type { GuestOrder, MenuItem, OrderStatus } from '../../domain/types'
 import { Badge, Button, Card, Empty, INPUT } from '../../components/ui'
 import { myPass, rememberMyPass, type MyPass } from '../../lib/myPass'
+import { isPlaceholderName } from '../../lib/placeholderName'
 import type { Tone } from '../../components/ui'
 import { Stepper } from '../OrderDialog'
 import { needsKitchen } from '../../domain/kitchen'
@@ -163,6 +164,7 @@ export default function GuestApp() {
         token={token}
         tableCode={s.tableCode}
         zone={s.zone}
+        passes={s.passes}
         onDone={(pass) => {
           rememberMyPass(token, pass)
           setMe(pass)
@@ -545,27 +547,40 @@ function RegisterGate({
   token,
   tableCode,
   zone,
+  passes,
   onDone,
 }: {
   token: string
   tableCode: string
   zone: string
+  passes: { id: string; displayName: string; claimed?: boolean }[]
   onDone: (pass: MyPass) => void
 }) {
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // ชื่อที่พนักงานสร้างไว้ตอนเปิดโต๊ะ ซึ่งยังไม่มีเครื่องไหนมารับ
+  const unclaimed = passes.filter((p) => !p.claimed)
+  const [picked, setPicked] = useState<{ id: string; displayName: string } | null>(null)
+  const [rename, setRename] = useState('')
 
-  async function submit() {
+  async function run(fn: () => Promise<MyPass>) {
     setBusy(true)
     setError(null)
     try {
-      onDone(await guestDb.register(token, name))
+      onDone(await fn())
     } catch (e) {
       setError(e instanceof Error ? e.message : 'ลงชื่อไม่สำเร็จ')
       setBusy(false)
     }
   }
+
+  const submit = () => run(() => guestDb.register(token, name))
+
+  // ชื่อชั่วคราวต้องเปลี่ยนเป็นชื่อจริง ไม่งั้นบิลแยกจะขึ้นว่า "ผู้เล่น 2" ไปจนจบ
+  const needsName = picked !== null && isPlaceholderName(picked.displayName)
+  const claim = () =>
+    run(() => guestDb.claim(token, picked!.id, rename.trim() || undefined))
 
   return (
     <Centered>
@@ -576,9 +591,75 @@ function RegisterGate({
       </div>
 
       <p className="font-display text-lg font-bold">คุณชื่ออะไร</p>
-      <p className="mt-2 max-w-xs text-sm text-ink-soft">
-        ลงชื่อครั้งเดียวพอ เครื่องนี้จะจำไว้ให้ ตอนสั่งของจะได้ไม่ต้องเลือกชื่อทุกครั้ง
-      </p>
+
+      {unclaimed.length > 0 && (
+        <div className="mt-2 w-full max-w-xs">
+          <p className="text-sm text-ink-soft">พนักงานลงชื่อโต๊ะนี้ไว้แล้ว แตะชื่อของคุณ</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {unclaimed.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                aria-pressed={picked?.id === p.id}
+                disabled={busy}
+                onClick={() => {
+                  setPicked(p)
+                  setRename(isPlaceholderName(p.displayName) ? '' : p.displayName)
+                  setError(null)
+                }}
+                className="pick truncate px-3 py-2.5 text-sm font-medium"
+              >
+                {p.displayName}
+              </button>
+            ))}
+          </div>
+
+          {picked && (
+            <div className="panel mt-3 animate-unroll rounded-xl p-3 text-left">
+              <p className="text-sm">
+                คุณคือ <b>{picked.displayName}</b> ใช่ไหม
+              </p>
+              <input
+                value={rename}
+                onChange={(e) => setRename(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !busy && (!needsName || rename.trim())) void claim()
+                }}
+                maxLength={40}
+                placeholder="ชื่อที่จะให้เพื่อนเห็น"
+                className={`${INPUT} mt-2`}
+                autoFocus
+              />
+              {needsName && (
+                <p className="mt-1 text-xs text-ink-faint">ใส่ชื่อจริงแทน “{picked.displayName}” ตอนแยกบิลจะได้รู้ว่าใคร</p>
+              )}
+              <div className="mt-3 flex gap-2">
+                <Button className="flex-1" disabled={busy} onClick={() => setPicked(null)}>
+                  ไม่ใช่
+                </Button>
+                <Button
+                  variant="primary"
+                  className="flex-1"
+                  disabled={busy || (needsName && !rename.trim())}
+                  onClick={() => void claim()}
+                >
+                  ใช่ ฉันเอง
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div className="divider my-5 text-xs text-ink-faint">หรือ</div>
+          <p className="text-sm text-ink-soft">ไม่มีชื่อคุณ? ลงชื่อใหม่</p>
+          <p className="text-xs text-ink-faint">จะเพิ่มเป็นผู้เล่นอีกคนในโต๊ะ และคิดค่าเล่นเพิ่ม</p>
+        </div>
+      )}
+
+      {unclaimed.length === 0 && (
+        <p className="mt-2 max-w-xs text-sm text-ink-soft">
+          ลงชื่อครั้งเดียวพอ เครื่องนี้จะจำไว้ให้ ตอนสั่งของจะได้ไม่ต้องเลือกชื่อทุกครั้ง
+        </p>
+      )}
 
       <input
         value={name}

@@ -82,6 +82,8 @@ export interface GuestPass {
   pausedMinutes: number
   /** เวลาที่เริ่ม pause ครั้งล่าสุด — null ถ้าไม่ได้ pause อยู่ */
   pausedAt: Timestamp | null
+  /** เครื่องลูกค้ามารับชื่อนี้ไปแล้ว (ลงชื่อเอง หรือแตะเลือกชื่อที่พนักงานสร้างไว้) */
+  claimedAt?: Timestamp | null
   /**
    * เรตค่าเล่น ณ เวลาเช็คอิน
    *
@@ -320,7 +322,8 @@ export interface GuestSession {
   visitId: ID | null
   /** true = รอบนี้ปิดบิลไปแล้ว */
   ended?: boolean
-  passes: { id: ID; displayName: string }[]
+  /** claimed = มีเครื่องลูกค้ารับชื่อนี้ไปแล้ว — หน้าลงชื่อให้เลือกได้เฉพาะใบที่ยังว่าง */
+  passes: { id: ID; displayName: string; claimed?: boolean }[]
   menu: MenuItem[]
   kitchen: KitchenWindow
 }

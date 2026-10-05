@@ -124,3 +124,6 @@ make_patch supabase/patch-guest-register.sql "patch ลูกค้าลงช�
 
 make_patch supabase/patch-visit-qr.sql "patch QR ต่อรอบ (พิมพ์ใบให้ลูกค้าตอนเปิดโต๊ะ)" \
   supabase/migrations/20260930001800_visit_qr.sql
+
+make_patch supabase/patch-claim-pass.sql "patch ลูกค้ารับชื่อที่พนักงานสร้างไว้ตอนเปิดโต๊ะ" \
+  supabase/migrations/20260930001900_claim_pass.sql

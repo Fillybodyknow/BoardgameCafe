@@ -309,3 +309,73 @@ describe('QR ต่อรอบ', () => {
     expect(screen.getByRole('button', { name: 'พิมพ์ใบ QR' })).toBeTruthy()
   })
 })
+
+/**
+ * เคสที่เจอจริง: จอง 4 คน เช็คอินโดยไม่พิมพ์ชื่อ → "ผู้เล่น 1–4"
+ * ลูกค้าสแกนแล้วลงชื่อ ระบบเคยสร้างคนที่ 5 แทนที่จะเป็นหนึ่งใน 4 คนนั้น
+ * ฝั่ง SQL: supabase/tests/98_claim_pass_test.sql
+ */
+describe('รับชื่อที่พนักงานสร้างไว้ตอนเปิดโต๊ะ', () => {
+  const STD = '11111111-0000-4000-8000-000000000001'
+
+  beforeEach(() => {
+    cleanup()
+    localStorage.clear()
+    mockAdapter.reset()
+    window.location.hash = ''
+  })
+
+  async function checkedInFour() {
+    return await db.openVisit({
+      tableIds: ['t-a3'],
+      guests: [1, 2, 3, 4].map((n) => ({ name: `ผู้เล่น ${n}`, ratePlanId: STD })),
+    })
+  }
+
+  it('แตะชื่อตัวเองแล้วใส่ชื่อจริง — โต๊ะยังมี 4 คน ไม่ใช่ 5', async () => {
+    const visit = await checkedInFour()
+    window.location.hash = `#/t/${visit.qrToken}`
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'ผู้เล่น 2' }))
+    const ok = screen.getByRole('button', { name: 'ใช่ ฉันเอง' }) as HTMLButtonElement
+    expect(ok.disabled).toBe(true) // ชื่อชั่วคราว ต้องใส่ชื่อจริงก่อน
+
+    fireEvent.change(screen.getByPlaceholderText('ชื่อที่จะให้เพื่อนเห็น'), { target: { value: 'แนน' } })
+    fireEvent.click(ok)
+
+    expect(await screen.findByText('อเมริกาโน่เย็น')).toBeTruthy()
+    const snap = await mockAdapter.getSnapshot()
+    const passes = snap.passes.filter((p) => p.visitId === visit.id)
+    expect(passes).toHaveLength(4)
+    expect(passes.map((p) => p.displayName)).toContain('แนน')
+    expect(myPass(visit.qrToken!)?.displayName).toBe('แนน')
+  })
+
+  it('ชื่อที่มีคนรับไปแล้ว ไม่ขึ้นให้เครื่องอื่นเลือกอีก', async () => {
+    const visit = await checkedInFour()
+    const p1 = (await mockAdapter.getSnapshot()).passes.find(
+      (p) => p.visitId === visit.id && p.displayName === 'ผู้เล่น 1',
+    )!
+    await mockGuestAdapter.claim(visit.qrToken!, p1.id, 'ต้น')
+
+    window.location.hash = `#/t/${visit.qrToken}`
+    render(<App />)
+    await screen.findByRole('button', { name: 'ผู้เล่น 2' })
+    expect(screen.queryByRole('button', { name: 'ต้น' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'ผู้เล่น 1' })).toBeNull()
+  })
+
+  it('ไม่มีชื่อตัวเองในรายการ ก็ยังลงชื่อใหม่ได้เหมือนเดิม', async () => {
+    const visit = await checkedInFour()
+    window.location.hash = `#/t/${visit.qrToken}`
+    render(<App />)
+
+    fireEvent.change(await screen.findByPlaceholderText('ชื่อเล่นก็ได้'), { target: { value: 'มาเพิ่ม' } })
+    fireEvent.click(screen.getByText('เริ่มสั่งของ'))
+
+    expect(await screen.findByText('อเมริกาโน่เย็น')).toBeTruthy()
+    const snap = await mockAdapter.getSnapshot()
+    expect(snap.passes.filter((p) => p.visitId === visit.id)).toHaveLength(5)
+  })
+})

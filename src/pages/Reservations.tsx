@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useNow, useSnapshot } from '../hooks/useData'
 import { db } from '../data'
+import { placeholderName } from '../lib/placeholderName'
 import { Badge, Button, Card, Empty, INPUT, Modal, PageHeader, Segmented } from '../components/ui'
 import type { CafeTable, Reservation, ReservationStatus } from '../domain/types'
 import type { Tone } from '../components/ui'
@@ -254,7 +255,7 @@ function SeatDialog({ reservation: r, onClose }: { reservation: Reservation; onC
       const visit = await db.seatReservation(
         r.id,
         guests.map((g, i) => ({
-          name: g.name.trim() || `ผู้เล่น ${i + 1}`,
+          name: g.name.trim() || placeholderName(i + 1),
           ratePlanId: g.ratePlanId || defaultPlanId,
         })),
         tableIds,

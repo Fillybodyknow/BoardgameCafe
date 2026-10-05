@@ -286,6 +286,7 @@ function toPass(r: Record<string, any>): GuestPass {
     ratePlanId: r.rate_plan_id, status: r.status,
     checkedInAt: r.checked_in_at, checkedOutAt: r.checked_out_at,
     pausedMinutes: r.paused_minutes, pausedAt: r.paused_at,
+    claimedAt: r.claimed_at ?? null,
     rate: {
       name: r.rate_name ?? '',
       pricePerHour: Number(r.rate_price_per_hour),
@@ -400,6 +401,14 @@ export const supabaseBookingAdapter: BookingPort = {
 }
 
 export const supabaseGuestAdapter: GuestPort = {
+  async claim(token, passId, name) {
+    return await rpc<{ passId: ID; displayName: string }>('guest_claim', {
+      p_token: token,
+      p_pass_id: passId,
+      p_name: name ?? null,
+    })
+  },
+
   async register(token, name) {
     return await rpc<{ passId: ID; displayName: string }>('guest_register', {
       p_token: token,

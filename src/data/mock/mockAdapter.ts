@@ -181,7 +181,11 @@ class MockAdapter implements DataPort {
         p.displayName.toLowerCase() === clean.toLowerCase() &&
         (p.status === 'active' || p.status === 'paused'),
     )
-    if (same) return { passId: same.id, displayName: same.displayName }
+    if (same) {
+      same.claimedAt ??= new Date().toISOString()
+      this.commit()
+      return { passId: same.id, displayName: same.displayName }
+    }
 
     const inVisit = this.state.passes.filter((p) => p.visitId === visitId)
     if (inVisit.length >= GUEST_REGISTER_LIMIT) {
@@ -192,7 +196,37 @@ class MockAdapter implements DataPort {
     if (!plan) throw new Error('ร้านยังไม่ได้ตั้งเรทค่าเล่น')
 
     const pass = makePass(visitId, clean, plan.id, new Date().toISOString(), plan)
+    pass.claimedAt = pass.checkedInAt
     this.state.passes.push(pass)
+    this.commit()
+    return { passId: pass.id, displayName: pass.displayName }
+  }
+
+  /** ลูกค้ารับชื่อที่พนักงานสร้างไว้ — กติกาเดียวกับ guest_claim() ฝั่ง SQL */
+  async guestClaim(token: string, passId: ID, name?: string) {
+    const { visitId } = this.visitForToken(token)
+    if (!visitId) throw new Error('โต๊ะนี้ยังไม่ได้เปิด กรุณาแจ้งพนักงาน')
+
+    const pass = this.state.passes.find(
+      (p) => p.id === passId && p.visitId === visitId && (p.status === 'active' || p.status === 'paused'),
+    )
+    if (!pass) throw new Error('ไม่พบชื่อนี้ในโต๊ะ')
+
+    const clean = name?.trim() || null
+    if (clean) {
+      if (clean.length > 40) throw new Error('ชื่อยาวเกินไป')
+      const dup = this.state.passes.some(
+        (p) =>
+          p.visitId === visitId && p.id !== passId &&
+          (p.status === 'active' || p.status === 'paused') &&
+          p.displayName.toLowerCase() === clean.toLowerCase(),
+      )
+      if (dup) throw new Error('ชื่อนี้มีคนใช้ในโต๊ะแล้ว')
+    }
+    if (pass.claimedAt) throw new Error('ชื่อนี้มีคนรับไปแล้ว — ถ้าเป็นคุณ ให้ลงชื่อด้วยชื่อเดิม')
+
+    pass.claimedAt = new Date().toISOString()
+    if (clean) pass.displayName = clean
     this.commit()
     return { passId: pass.id, displayName: pass.displayName }
   }
@@ -624,7 +658,7 @@ class MockAdapter implements DataPort {
       ended,
       passes: this.state.passes
         .filter((p) => p.visitId === visitId && (p.status === 'active' || p.status === 'paused'))
-        .map((p) => ({ id: p.id, displayName: p.displayName })),
+        .map((p) => ({ id: p.id, displayName: p.displayName, claimed: Boolean(p.claimedAt) })),
       // สั่งไม่ได้ก็ไม่ต้องส่งเมนู — ตรงกับฝั่ง SQL
       menu: visitId ? structuredClone(this.state.menu.filter((m) => !m.archived)) : [],
       kitchen: kitchenWindow(loadHours()),
@@ -986,6 +1020,7 @@ export const mockBookingAdapter: BookingPort = {
 
 export const mockGuestAdapter: GuestPort = {
   register: (token, name) => mockAdapter.guestRegister(token, name),
+  claim: (token, passId, name) => mockAdapter.guestClaim(token, passId, name),
   session: (token) => mockAdapter.guestSession(token),
   orders: (token) => mockAdapter.guestOrders(token),
   bill: (token) => mockAdapter.guestBill(token),

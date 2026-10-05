@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useSnapshot, useNow } from '../hooks/useData'
 import { db } from '../data'
+import { placeholderName } from '../lib/placeholderName'
 import { billableMinutes, computeBill, formatBaht, formatDuration } from '../domain/pricing'
 import type { CafeTable, RatePlan, TableStatus, Visit } from '../domain/types'
 import { Badge, Button, Dot, Icon, INPUT, Modal, PageHeader, SectionTitle } from '../components/ui'
@@ -314,7 +315,7 @@ function SeatDialog({
       const visit = await db.openVisit({
         tableIds: [table.id],
         guests: guests.map((g, i) => ({
-          name: g.name.trim() || `ผู้เล่น ${i + 1}`,
+          name: g.name.trim() || placeholderName(i + 1),
           ratePlanId: g.ratePlanId || defaultPlanId,
         })),
       })
