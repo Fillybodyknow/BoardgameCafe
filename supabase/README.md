@@ -5,6 +5,10 @@
 Supabase → New project → เลือก region **Southeast Asia (Singapore)** (ใกล้ไทยที่สุด)
 จดรหัสผ่านฐานข้อมูลไว้
 
+> **patch รันซ้ำได้** — ถ้าวางแล้วล้มกลางไฟล์ (เช่นเน็ตหลุด หรือกดปิดหน้าต่าง)
+> ให้วางใหม่ทั้งไฟล์ได้เลย ไม่ต้องไล่ลบของที่สร้างไปแล้ว
+> ใช้ได้กับ `patch-menu-images.sql`, `patch-staff.sql`, `patch-roles.sql`
+
 ## 2. รัน migration
 
 Dashboard → **SQL Editor** → New query → วาง **`setup-all.sql`** ทั้งไฟล์ → Run

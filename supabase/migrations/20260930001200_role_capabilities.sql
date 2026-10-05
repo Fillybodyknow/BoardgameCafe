@@ -14,7 +14,8 @@
 -- ระดับเดิมทั้งสามได้สิทธิ์เท่าเดิมเป๊ะ ไม่มีใครได้เพิ่มหรือถูกตัดจากการ migrate
 -- ============================================================================
 
-create table role_capabilities (
+-- ไฟล์นี้ออกแบบให้รันซ้ำได้ ถ้าล้มกลางทางให้รันใหม่ทั้งไฟล์ได้เลย
+create table if not exists role_capabilities (
   role       text not null,
   capability text not null check (capability in ('floor', 'kitchen', 'settings', 'accounts')),
   primary key (role, capability)
@@ -30,16 +31,17 @@ insert into role_capabilities (role, capability) values
   -- เพิ่มการตั้งค่าร้าน (ความหมายเดิมของ manager)
   ('manager', 'floor'), ('manager', 'kitchen'), ('manager', 'settings'),
   -- เพิ่มการจัดการบัญชีพนักงาน (ความหมายเดิมของ owner)
-  ('owner',   'floor'), ('owner',   'kitchen'), ('owner',   'settings'), ('owner', 'accounts');
+  ('owner',   'floor'), ('owner',   'kitchen'), ('owner',   'settings'), ('owner', 'accounts')
+on conflict do nothing;
 
-alter table staff drop constraint staff_role_check;
+alter table staff drop constraint if exists staff_role_check;
 alter table staff add constraint staff_role_check
   check (role in ('floor', 'kitchen', 'staff', 'manager', 'owner'));
 
 -- ---------------------------------------------------------------------------
 -- ตรวจสิทธิ์รายข้อ
 -- ---------------------------------------------------------------------------
-create function has_cap(p_cap text) returns boolean
+create or replace function has_cap(p_cap text) returns boolean
 language sql stable security definer set search_path = public, pg_temp as $$
   select exists (
     select 1
@@ -49,7 +51,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
   );
 $$;
 
-create function assert_cap(p_cap text) returns void
+create or replace function assert_cap(p_cap text) returns void
 language plpgsql stable security definer set search_path = public, pg_temp as $$
 begin
   if not has_cap(p_cap) then
@@ -65,7 +67,7 @@ end;
 $$;
 
 /** หน้าจอใช้ซ่อน/แสดงเมนู — การซ่อนเมนูไม่ใช่กำแพง ด่านจริงอยู่ที่ RPC */
-create function my_capabilities() returns text[]
+create or replace function my_capabilities() returns text[]
 language sql stable security definer set search_path = public, pg_temp as $$
   select coalesce(array_agg(rc.capability order by rc.capability), '{}')
     from staff s
@@ -215,7 +217,7 @@ $$;
 -- เดิมผูกกับ role 'owner' ตรง ๆ ตอนนี้ผูกกับ "สิทธิ์จัดการบัญชี" แทน
 -- เพราะระดับที่ถือสิทธิ์นั้นอาจมีมากกว่าหนึ่งชื่อในอนาคต
 -- ---------------------------------------------------------------------------
-create function assert_admin_remains(p_user_id uuid)
+create or replace function assert_admin_remains(p_user_id uuid)
 returns void
 language plpgsql stable security definer set search_path = public, pg_temp as $$
 declare v_is_admin boolean;
@@ -352,6 +354,7 @@ grant execute on function has_cap(text)     to authenticated;
 
 grant select on role_capabilities to authenticated;
 alter table role_capabilities enable row level security;
+drop policy if exists staff_read_capabilities on role_capabilities;
 create policy staff_read_capabilities on role_capabilities
   for select to authenticated using (is_staff());
 

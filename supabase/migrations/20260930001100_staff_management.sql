@@ -13,10 +13,11 @@
 -- จึงอยู่ใน Edge Function — ดู supabase/functions/create-staff/
 -- ============================================================================
 
-alter table staff add column username text;
+-- ไฟล์นี้ออกแบบให้รันซ้ำได้ ถ้าล้มกลางทางให้รันใหม่ทั้งไฟล์ได้เลย
+alter table staff add column if not exists username text;
 
 -- เทียบ username แบบไม่สนตัวพิมพ์ แต่เก็บตามที่พิมพ์มา
-create unique index staff_username_key on staff (lower(username));
+create unique index if not exists staff_username_key on staff (lower(username));
 
 -- บัญชีที่มีอยู่แล้วต้องยังล็อกอินได้ ตั้ง username จากส่วนหน้า @ ของอีเมล
 -- ถ้าชนกันให้ต่อเลขท้าย เพื่อให้ unique index ผ่าน
@@ -33,8 +34,10 @@ with numbered as (
 update staff s
    set username = case when n.n = 1 then n.base else n.base || n.n::text end
   from numbered n
- where n.user_id = s.user_id;
+ where n.user_id = s.user_id
+   and s.username is null;   -- รันซ้ำแล้วไม่ทับของเดิม
 
+alter table staff drop constraint if exists staff_username_format;
 alter table staff
   add constraint staff_username_format
   check (username is null or username ~ '^[a-z0-9][a-z0-9._-]{2,29}$');
@@ -47,7 +50,7 @@ alter table staff
 -- เป็น null คนนั้นจะล็อกอินด้วยชื่อผู้ใช้ไม่ได้เลย และไม่มีอะไรบอกว่าทำไม
 -- (เติมย้อนหลังครั้งเดียวตอน migration ไม่พอ เพราะครอบเฉพาะแถวที่มีอยู่ตอนนั้น)
 -- ---------------------------------------------------------------------------
-create function staff_default_username() returns trigger
+create or replace function staff_default_username() returns trigger
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   v_base text;
@@ -79,6 +82,7 @@ begin
 end;
 $$;
 
+drop trigger if exists staff_username_default on staff;
 create trigger staff_username_default
   before insert on staff
   for each row execute function staff_default_username();
@@ -90,7 +94,7 @@ create trigger staff_username_default
 -- คืนอีเมลปลอมเมื่อหาไม่เจอ เพื่อไม่ให้ใครไล่เดาได้ว่ามี username ไหนอยู่บ้าง
 -- — ไม่ว่าจะใส่ชื่อถูกหรือผิด ผลที่ได้คือ "รหัสผ่านไม่ถูกต้อง" เหมือนกัน
 -- ---------------------------------------------------------------------------
-create function login_email_for(p_username text)
+create or replace function login_email_for(p_username text)
 returns text
 language plpgsql stable security definer set search_path = public, pg_temp as $$
 declare
@@ -117,7 +121,7 @@ $$;
 -- อีเมลอยู่ใน auth.users ซึ่ง client อ่านตรงไม่ได้ จึงต้องผ่าน SECURITY DEFINER
 -- ที่ตรวจสิทธิ์เองก่อน
 -- ---------------------------------------------------------------------------
-create function list_staff()
+create or replace function list_staff()
 returns jsonb
 language plpgsql stable security definer set search_path = public, pg_temp as $$
 begin
@@ -148,7 +152,7 @@ $$;
 -- ไม่งั้นจะไม่มีใครเข้าไปแก้อะไรได้อีก และกู้คืนได้ทางเดียวคือเข้า Dashboard
 -- ไปแก้ SQL เอง
 -- ---------------------------------------------------------------------------
-create function assert_owner_remains(p_user_id uuid)
+create or replace function assert_owner_remains(p_user_id uuid)
 returns void
 language plpgsql stable security definer set search_path = public, pg_temp as $$
 begin
@@ -161,7 +165,7 @@ begin
 end;
 $$;
 
-create function set_staff_role(p_user_id uuid, p_role text)
+create or replace function set_staff_role(p_user_id uuid, p_role text)
 returns staff
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_row staff;
@@ -201,7 +205,7 @@ begin
 end;
 $$;
 
-create function set_staff_active(p_user_id uuid, p_active boolean)
+create or replace function set_staff_active(p_user_id uuid, p_active boolean)
 returns staff
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_row staff;
@@ -228,7 +232,7 @@ begin
 end;
 $$;
 
-create function rename_staff(p_user_id uuid, p_name text)
+create or replace function rename_staff(p_user_id uuid, p_name text)
 returns staff
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_row staff;
@@ -257,7 +261,7 @@ $$;
 -- p_actor ส่งมาจาก Edge Function เพราะเวลาเรียกด้วย service_role นั้น
 -- auth.uid() เป็น null — ถ้าไม่บอกว่าใครสั่ง audit_log จะว่างเปล่า
 -- ---------------------------------------------------------------------------
-create function register_staff(
+create or replace function register_staff(
   p_user_id  uuid,
   p_username text,
   p_name     text,

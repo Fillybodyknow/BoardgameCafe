@@ -17,6 +17,8 @@
  *         ตั้งชื่อ create-staff แล้ววางไฟล์นี้ทั้งไฟล์
  */
 
+// type ของ runtime (Deno.serve ฯลฯ) — ไม่มีผลตอนรัน มีไว้ให้ตัวแก้ไขไม่ขีดแดง
+import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
 /** โดเมนของอีเมลภายใน พนักงานไม่เคยเห็นและไม่มีการส่งเมลไปที่นี่ */

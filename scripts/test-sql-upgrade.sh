@@ -45,6 +45,13 @@ run supabase/patch-menu-images.sql
 run supabase/patch-staff.sql
 run supabase/patch-roles.sql
 
+# ผู้ใช้วาง SQL ทีละไฟล์ในหน้าเว็บ ถ้าล้มกลางไฟล์จะค้างครึ่ง ๆ แล้วต้องรันใหม่
+# patch ที่ยังต้องใช้จึงต้องรันซ้ำได้โดยไม่พัง — พิสูจน์ด้วยการรันซ้ำจริง
+echo "--- รัน patch ล่าสุดซ้ำอีกรอบ ต้องไม่พัง ---"
+run supabase/patch-menu-images.sql
+run supabase/patch-staff.sql
+run supabase/patch-roles.sql
+
 echo "--- เทสต์ชุดเดียวกับการติดตั้งใหม่ ---"
 run supabase/tests/05_test_grants.sql
 run supabase/tests/10_pricing_test.sql

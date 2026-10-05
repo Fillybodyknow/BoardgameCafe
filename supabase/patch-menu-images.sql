@@ -22,13 +22,14 @@
 -- เป็นเรื่องประสบการณ์ใช้งานและค่า egress ไม่ใช่ความปลอดภัย
 -- ============================================================================
 
-alter table menu_items add column image_path text;
+-- ไฟล์นี้ออกแบบให้รันซ้ำได้ ถ้าล้มกลางทางให้รันใหม่ทั้งไฟล์ได้เลย
+alter table menu_items add column if not exists image_path text;
 
 -- ---------------------------------------------------------------------------
 -- is_manager() คืนค่า boolean ไว้ใช้ใน policy ของ storage
 -- (assert_manager() โยน exception ซึ่งใช้ใน policy ไม่ได้)
 -- ---------------------------------------------------------------------------
-create function is_manager() returns boolean
+create or replace function is_manager() returns boolean
 language sql stable security definer set search_path = public, pg_temp as $$
   select exists (
     select 1 from staff
@@ -51,7 +52,7 @@ $$;
 -- คืน path เดิมกลับไปให้หน้าจอเอาไปลบไฟล์เก่าทิ้ง ถ้าไม่คืน ไฟล์เก่าจะค้าง
 -- เป็นขยะทุกครั้งที่เปลี่ยนรูป
 -- ---------------------------------------------------------------------------
-create function set_menu_image(p_id uuid, p_path text)
+create or replace function set_menu_image(p_id uuid, p_path text)
 returns text
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_old text;

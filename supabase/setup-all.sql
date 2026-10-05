@@ -2802,13 +2802,14 @@ grant execute on function update_tax_config(numeric, numeric, boolean)        to
 -- เป็นเรื่องประสบการณ์ใช้งานและค่า egress ไม่ใช่ความปลอดภัย
 -- ============================================================================
 
-alter table menu_items add column image_path text;
+-- ไฟล์นี้ออกแบบให้รันซ้ำได้ ถ้าล้มกลางทางให้รันใหม่ทั้งไฟล์ได้เลย
+alter table menu_items add column if not exists image_path text;
 
 -- ---------------------------------------------------------------------------
 -- is_manager() คืนค่า boolean ไว้ใช้ใน policy ของ storage
 -- (assert_manager() โยน exception ซึ่งใช้ใน policy ไม่ได้)
 -- ---------------------------------------------------------------------------
-create function is_manager() returns boolean
+create or replace function is_manager() returns boolean
 language sql stable security definer set search_path = public, pg_temp as $$
   select exists (
     select 1 from staff
@@ -2831,7 +2832,7 @@ $$;
 -- คืน path เดิมกลับไปให้หน้าจอเอาไปลบไฟล์เก่าทิ้ง ถ้าไม่คืน ไฟล์เก่าจะค้าง
 -- เป็นขยะทุกครั้งที่เปลี่ยนรูป
 -- ---------------------------------------------------------------------------
-create function set_menu_image(p_id uuid, p_path text)
+create or replace function set_menu_image(p_id uuid, p_path text)
 returns text
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_old text;
@@ -2976,10 +2977,11 @@ $$;
 -- จึงอยู่ใน Edge Function — ดู supabase/functions/create-staff/
 -- ============================================================================
 
-alter table staff add column username text;
+-- ไฟล์นี้ออกแบบให้รันซ้ำได้ ถ้าล้มกลางทางให้รันใหม่ทั้งไฟล์ได้เลย
+alter table staff add column if not exists username text;
 
 -- เทียบ username แบบไม่สนตัวพิมพ์ แต่เก็บตามที่พิมพ์มา
-create unique index staff_username_key on staff (lower(username));
+create unique index if not exists staff_username_key on staff (lower(username));
 
 -- บัญชีที่มีอยู่แล้วต้องยังล็อกอินได้ ตั้ง username จากส่วนหน้า @ ของอีเมล
 -- ถ้าชนกันให้ต่อเลขท้าย เพื่อให้ unique index ผ่าน
@@ -2996,8 +2998,10 @@ with numbered as (
 update staff s
    set username = case when n.n = 1 then n.base else n.base || n.n::text end
   from numbered n
- where n.user_id = s.user_id;
+ where n.user_id = s.user_id
+   and s.username is null;   -- รันซ้ำแล้วไม่ทับของเดิม
 
+alter table staff drop constraint if exists staff_username_format;
 alter table staff
   add constraint staff_username_format
   check (username is null or username ~ '^[a-z0-9][a-z0-9._-]{2,29}$');
@@ -3010,7 +3014,7 @@ alter table staff
 -- เป็น null คนนั้นจะล็อกอินด้วยชื่อผู้ใช้ไม่ได้เลย และไม่มีอะไรบอกว่าทำไม
 -- (เติมย้อนหลังครั้งเดียวตอน migration ไม่พอ เพราะครอบเฉพาะแถวที่มีอยู่ตอนนั้น)
 -- ---------------------------------------------------------------------------
-create function staff_default_username() returns trigger
+create or replace function staff_default_username() returns trigger
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare
   v_base text;
@@ -3042,6 +3046,7 @@ begin
 end;
 $$;
 
+drop trigger if exists staff_username_default on staff;
 create trigger staff_username_default
   before insert on staff
   for each row execute function staff_default_username();
@@ -3053,7 +3058,7 @@ create trigger staff_username_default
 -- คืนอีเมลปลอมเมื่อหาไม่เจอ เพื่อไม่ให้ใครไล่เดาได้ว่ามี username ไหนอยู่บ้าง
 -- — ไม่ว่าจะใส่ชื่อถูกหรือผิด ผลที่ได้คือ "รหัสผ่านไม่ถูกต้อง" เหมือนกัน
 -- ---------------------------------------------------------------------------
-create function login_email_for(p_username text)
+create or replace function login_email_for(p_username text)
 returns text
 language plpgsql stable security definer set search_path = public, pg_temp as $$
 declare
@@ -3080,7 +3085,7 @@ $$;
 -- อีเมลอยู่ใน auth.users ซึ่ง client อ่านตรงไม่ได้ จึงต้องผ่าน SECURITY DEFINER
 -- ที่ตรวจสิทธิ์เองก่อน
 -- ---------------------------------------------------------------------------
-create function list_staff()
+create or replace function list_staff()
 returns jsonb
 language plpgsql stable security definer set search_path = public, pg_temp as $$
 begin
@@ -3111,7 +3116,7 @@ $$;
 -- ไม่งั้นจะไม่มีใครเข้าไปแก้อะไรได้อีก และกู้คืนได้ทางเดียวคือเข้า Dashboard
 -- ไปแก้ SQL เอง
 -- ---------------------------------------------------------------------------
-create function assert_owner_remains(p_user_id uuid)
+create or replace function assert_owner_remains(p_user_id uuid)
 returns void
 language plpgsql stable security definer set search_path = public, pg_temp as $$
 begin
@@ -3124,7 +3129,7 @@ begin
 end;
 $$;
 
-create function set_staff_role(p_user_id uuid, p_role text)
+create or replace function set_staff_role(p_user_id uuid, p_role text)
 returns staff
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_row staff;
@@ -3164,7 +3169,7 @@ begin
 end;
 $$;
 
-create function set_staff_active(p_user_id uuid, p_active boolean)
+create or replace function set_staff_active(p_user_id uuid, p_active boolean)
 returns staff
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_row staff;
@@ -3191,7 +3196,7 @@ begin
 end;
 $$;
 
-create function rename_staff(p_user_id uuid, p_name text)
+create or replace function rename_staff(p_user_id uuid, p_name text)
 returns staff
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare v_row staff;
@@ -3220,7 +3225,7 @@ $$;
 -- p_actor ส่งมาจาก Edge Function เพราะเวลาเรียกด้วย service_role นั้น
 -- auth.uid() เป็น null — ถ้าไม่บอกว่าใครสั่ง audit_log จะว่างเปล่า
 -- ---------------------------------------------------------------------------
-create function register_staff(
+create or replace function register_staff(
   p_user_id  uuid,
   p_username text,
   p_name     text,
@@ -3317,7 +3322,8 @@ grant execute on function rename_staff(uuid, text)        to authenticated;
 -- ระดับเดิมทั้งสามได้สิทธิ์เท่าเดิมเป๊ะ ไม่มีใครได้เพิ่มหรือถูกตัดจากการ migrate
 -- ============================================================================
 
-create table role_capabilities (
+-- ไฟล์นี้ออกแบบให้รันซ้ำได้ ถ้าล้มกลางทางให้รันใหม่ทั้งไฟล์ได้เลย
+create table if not exists role_capabilities (
   role       text not null,
   capability text not null check (capability in ('floor', 'kitchen', 'settings', 'accounts')),
   primary key (role, capability)
@@ -3333,16 +3339,17 @@ insert into role_capabilities (role, capability) values
   -- เพิ่มการตั้งค่าร้าน (ความหมายเดิมของ manager)
   ('manager', 'floor'), ('manager', 'kitchen'), ('manager', 'settings'),
   -- เพิ่มการจัดการบัญชีพนักงาน (ความหมายเดิมของ owner)
-  ('owner',   'floor'), ('owner',   'kitchen'), ('owner',   'settings'), ('owner', 'accounts');
+  ('owner',   'floor'), ('owner',   'kitchen'), ('owner',   'settings'), ('owner', 'accounts')
+on conflict do nothing;
 
-alter table staff drop constraint staff_role_check;
+alter table staff drop constraint if exists staff_role_check;
 alter table staff add constraint staff_role_check
   check (role in ('floor', 'kitchen', 'staff', 'manager', 'owner'));
 
 -- ---------------------------------------------------------------------------
 -- ตรวจสิทธิ์รายข้อ
 -- ---------------------------------------------------------------------------
-create function has_cap(p_cap text) returns boolean
+create or replace function has_cap(p_cap text) returns boolean
 language sql stable security definer set search_path = public, pg_temp as $$
   select exists (
     select 1
@@ -3352,7 +3359,7 @@ language sql stable security definer set search_path = public, pg_temp as $$
   );
 $$;
 
-create function assert_cap(p_cap text) returns void
+create or replace function assert_cap(p_cap text) returns void
 language plpgsql stable security definer set search_path = public, pg_temp as $$
 begin
   if not has_cap(p_cap) then
@@ -3368,7 +3375,7 @@ end;
 $$;
 
 /** หน้าจอใช้ซ่อน/แสดงเมนู — การซ่อนเมนูไม่ใช่กำแพง ด่านจริงอยู่ที่ RPC */
-create function my_capabilities() returns text[]
+create or replace function my_capabilities() returns text[]
 language sql stable security definer set search_path = public, pg_temp as $$
   select coalesce(array_agg(rc.capability order by rc.capability), '{}')
     from staff s
@@ -3518,7 +3525,7 @@ $$;
 -- เดิมผูกกับ role 'owner' ตรง ๆ ตอนนี้ผูกกับ "สิทธิ์จัดการบัญชี" แทน
 -- เพราะระดับที่ถือสิทธิ์นั้นอาจมีมากกว่าหนึ่งชื่อในอนาคต
 -- ---------------------------------------------------------------------------
-create function assert_admin_remains(p_user_id uuid)
+create or replace function assert_admin_remains(p_user_id uuid)
 returns void
 language plpgsql stable security definer set search_path = public, pg_temp as $$
 declare v_is_admin boolean;
@@ -3655,6 +3662,7 @@ grant execute on function has_cap(text)     to authenticated;
 
 grant select on role_capabilities to authenticated;
 alter table role_capabilities enable row level security;
+drop policy if exists staff_read_capabilities on role_capabilities;
 create policy staff_read_capabilities on role_capabilities
   for select to authenticated using (is_staff());
 
