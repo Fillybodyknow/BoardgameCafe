@@ -50,6 +50,8 @@ export default function FloorMap() {
       passes,
       orders: data!.orders.filter((o) => o.visitId === visit.id),
       ratePlans,
+      sharedSettled: visit.sharedSettled,
+      tax: data!.tax,
       now,
     })
     const longest = Math.max(0, ...active.map((p) => billableMinutes(p, now)))
@@ -63,6 +65,8 @@ export default function FloorMap() {
       passes: data.passes.filter((p) => p.visitId === v.id),
       orders: data.orders.filter((o) => o.visitId === v.id),
       ratePlans,
+      sharedSettled: v.sharedSettled,
+      tax: data.tax,
       now,
     })
     return sum + bill.total

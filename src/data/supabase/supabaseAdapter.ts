@@ -30,7 +30,7 @@ class SupabaseAdapter implements DataPort {
 
     const [
       tables, visits, occupancies, passes, orders, orderLines,
-      menu, ratePlans, reservations,
+      menu, ratePlans, reservations, tax,
     ] = await Promise.all([
       sb.from('cafe_tables').select('*').eq('archived', false).order('sort_order'),
       sb.from('visits').select('*').eq('status', 'open'),
@@ -41,9 +41,10 @@ class SupabaseAdapter implements DataPort {
       sb.from('menu_items').select('*').eq('archived', false).order('sort_order'),
       sb.from('rate_plans').select('*').eq('active', true).order('sort_order'),
       sb.from('reservations').select('*').in('status', ['pending', 'confirmed', 'seated']),
+      sb.from('tax_config').select('*').eq('id', 1).single(),
     ])
 
-    for (const res of [tables, visits, occupancies, passes, orders, orderLines, menu, ratePlans, reservations]) {
+    for (const res of [tables, visits, occupancies, passes, orders, orderLines, menu, ratePlans, reservations, tax]) {
       if (res.error) throw new Error(res.error.message)
     }
 
@@ -71,6 +72,11 @@ class SupabaseAdapter implements DataPort {
       menu: (menu.data ?? []).map(toMenuItem),
       ratePlans: (ratePlans.data ?? []).map(toRatePlan),
       reservations: (reservations.data ?? []).map(toReservation),
+      tax: {
+        serviceChargeRate: Number(tax.data!.service_charge_rate),
+        vatRate: Number(tax.data!.vat_rate),
+        vatIncluded: tax.data!.vat_included,
+      },
     }
   }
 

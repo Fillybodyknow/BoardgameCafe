@@ -72,7 +72,17 @@ export default function VisitDetail() {
     .filter((t): t is NonNullable<typeof t> => Boolean(t))
 
   const history = data.occupancies.filter((o) => o.visitId === visit.id && o.toAt !== null)
-  const bill = computeBill({ visitId: visit.id, passes, orders, ratePlans, now })
+  // ต้องส่ง tax กับ sharedSettled เข้าไป ไม่งั้นตัวเลขบนจอจะไม่ตรงกับยอดที่
+  // ฐานข้อมูลคิดตอนปิดบิล — หน้าจอรับเงินก็อ่านยอดจากตรงนี้
+  const bill = computeBill({
+    visitId: visit.id,
+    passes,
+    orders,
+    ratePlans,
+    sharedSettled: visit.sharedSettled,
+    tax: data.tax,
+    now,
+  })
   const billable = passes.filter((p) => p.status !== 'billed')
   const split = splitByOwner(bill, billable)
   const isOpen = visit.status === 'open'
@@ -215,7 +225,20 @@ export default function VisitDetail() {
               </ul>
               <div className="mt-4 space-y-1 border-t border-double border-line-strong pt-3 text-sm">
                 <Row label="รวม" value={bill.subtotal} />
-                <Row label="VAT 7% (รวมในราคาแล้ว)" value={bill.vat} muted />
+                {data.tax.serviceChargeRate > 0 && (
+                  <Row
+                    label={`ค่าบริการ ${round1(data.tax.serviceChargeRate * 100)}%`}
+                    value={bill.serviceCharge}
+                    muted
+                  />
+                )}
+                <Row
+                  label={`VAT ${round1(data.tax.vatRate * 100)}%${
+                    data.tax.vatIncluded ? ' (รวมในราคาแล้ว)' : ''
+                  }`}
+                  value={bill.vat}
+                  muted
+                />
                 <div className="mt-2 flex items-baseline justify-between text-lg font-bold">
                   <span className="font-display">ยอดสุทธิ</span>
                   <span className="tabular text-gold-deep">฿{formatBaht(bill.total)}</span>
@@ -350,6 +373,11 @@ function PassCard({ pass, plan, now }: { pass: GuestPass; plan?: RatePlan; now: 
       )}
     </Card>
   )
+}
+
+/** ตัดทศนิยมให้เหลือหลักเดียวเมื่อจำเป็น — 7 ไม่ใช่ 7.0 แต่ 7.5 ต้องไม่กลายเป็น 8 */
+function round1(n: number) {
+  return Number(n.toFixed(1))
 }
 
 /** อักษรแรกของชื่อสำหรับโล่ — ข้ามสระหน้า (เ แ โ ใ ไ) ไม่งั้น "เมย์" ได้ "เ" */

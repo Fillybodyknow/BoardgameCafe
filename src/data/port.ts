@@ -24,6 +24,8 @@ export interface Snapshot {
   menu: MenuItem[]
   ratePlans: RatePlan[]
   reservations: Reservation[]
+  /** VAT/ค่าบริการที่ตั้งไว้ — หน้าจอต้องใช้ค่านี้คิดเลข ไม่ใช่ค่าตายตัวในโค้ด */
+  tax: TaxConfig
 }
 
 export interface DataPort {

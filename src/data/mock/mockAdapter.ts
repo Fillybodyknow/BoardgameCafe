@@ -6,7 +6,7 @@ import type {
 } from '../../domain/types'
 import { computeBill, settlementFor } from '../../domain/pricing'
 import { seed, businessDateOf } from './seed'
-import { bangkokParts, loadHours, toMinutes } from './shopStore'
+import { bangkokParts, loadHours, loadTax, toMinutes } from './shopStore'
 
 const STORAGE_KEY = 'bgcafe.mock.v1'
 
@@ -36,6 +36,7 @@ class MockAdapter implements DataPort {
     // หน้าร้านต้องไม่เห็นของที่เก็บเข้ากรุ — หน้าตั้งค่าใช้ *ForAdmin() แทน
     snap.menu = snap.menu.filter((m) => !m.archived)
     snap.tables = snap.tables.filter((t) => !t.archived)
+    snap.tax = loadTax()
     return snap
   }
 
@@ -198,7 +199,7 @@ class MockAdapter implements DataPort {
       (p) => p.visitId === pass.visitId && p.status !== 'billed',
     ).length
 
-    return { ...settlementFor(preview, passId, heads), displayName: pass.displayName }
+    return { ...settlementFor(preview, passId, heads, loadTax()), displayName: pass.displayName }
   }
 
   async settlePass(passId: ID, payments: PaymentInput[] = []) {
@@ -592,6 +593,7 @@ class MockAdapter implements DataPort {
       orders: this.state.orders.filter((o) => o.visitId === visitId),
       ratePlans,
       sharedSettled: this.state.visits.find((v) => v.id === visitId)?.sharedSettled ?? 0,
+      tax: loadTax(),
       now,
     })
   }

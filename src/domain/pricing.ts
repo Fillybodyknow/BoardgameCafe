@@ -1,5 +1,5 @@
 import type {
-  BillLine, BillPreview, GuestPass, Order, RatePlan, RateSnapshot, Timestamp,
+  BillLine, BillPreview, GuestPass, Order, RatePlan, RateSnapshot, TaxConfig, Timestamp,
 } from './types'
 
 /**
@@ -13,10 +13,16 @@ import type {
  * ไฟล์นี้จะกลายเป็น "สเปกอ้างอิง" สำหรับเขียน SQL ฝั่งเซิร์ฟเวอร์
  */
 
-export const TAX = {
-  serviceChargeRate: 0,   // ยังไม่เก็บ service charge
+/**
+ * ใช้เมื่อยังโหลดค่าจริงจากร้านไม่ทัน เท่านั้น
+ *
+ * ค่าจริงอยู่ในตาราง tax_config และมากับ snapshot ทุกครั้ง — หน้าจอต้องส่ง
+ * ค่านั้นเข้ามา ไม่งั้นตัวเลขบนจอจะไม่ตรงกับยอดที่ฐานข้อมูลคิดตอนปิดบิล
+ */
+export const TAX: TaxConfig = {
+  serviceChargeRate: 0,
   vatRate: 0.07,
-  vatIncluded: true,      // ราคาที่แสดงรวม VAT แล้ว
+  vatIncluded: true,
 }
 
 const MS_PER_MIN = 60_000
@@ -52,17 +58,17 @@ function round2(n: number) {
 }
 
 /** ภาษีและค่าบริการคิดจากยอดรวม — รวมไว้ที่เดียวเพราะมีหลายที่ต้องใช้สูตรนี้ */
-function applyTax(subtotal: number) {
-  const serviceCharge = round2(subtotal * TAX.serviceChargeRate)
+function applyTax(subtotal: number, tax: TaxConfig = TAX) {
+  const serviceCharge = round2(subtotal * tax.serviceChargeRate)
   const base = subtotal + serviceCharge
-  const vat = TAX.vatIncluded
-    ? round2(base - base / (1 + TAX.vatRate))
-    : round2(base * TAX.vatRate)
+  const vat = tax.vatIncluded
+    ? round2(base - base / (1 + tax.vatRate))
+    : round2(base * tax.vatRate)
   return {
     subtotal,
     serviceCharge,
     vat,
-    total: TAX.vatIncluded ? round2(base) : round2(base + vat),
+    total: tax.vatIncluded ? round2(base) : round2(base + vat),
   }
 }
 
@@ -74,6 +80,8 @@ export interface BillInput {
   ratePlans?: Record<string, RatePlan>
   /** ยอดของที่หารกันซึ่งคนที่กลับก่อนจ่ายไปแล้ว */
   sharedSettled?: number
+  /** VAT/ค่าบริการที่เจ้าของร้านตั้งไว้ — ไม่ส่งมาจะใช้ค่าสำรองซึ่งอาจไม่ตรง */
+  tax?: TaxConfig
   now: Date
 }
 
@@ -157,7 +165,7 @@ export function computeBill(input: BillInput): BillPreview {
   return {
     visitId,
     lines,
-    ...applyTax(subtotal),
+    ...applyTax(subtotal, input.tax),
     computedAt: now.toISOString() as Timestamp,
   }
 }
@@ -168,7 +176,12 @@ export function computeBill(input: BillInput): BillPreview {
  * ต้องให้ผลเท่ากับ pass_settlement() ฝั่ง SQL — คนสุดท้ายที่เหลือรับเศษไป
  * ทั้งหมด ยอดรวมของทุกบิลย่อยจึงเท่ากับยอดเต็มเสมอ
  */
-export function settlementFor(preview: BillPreview, passId: string, unsettledCount: number) {
+export function settlementFor(
+  preview: BillPreview,
+  passId: string,
+  unsettledCount: number,
+  tax?: TaxConfig,
+) {
   const ownLines = preview.lines.filter((l) => l.guestPassId === passId)
   const ownTotal = round2(ownLines.reduce((s, l) => s + l.amount, 0))
 
@@ -184,7 +197,7 @@ export function settlementFor(preview: BillPreview, passId: string, unsettledCou
     ownLines,
     sharedShare,
     headcount: unsettledCount,
-    ...applyTax(round2(ownTotal + sharedShare)),
+    ...applyTax(round2(ownTotal + sharedShare), tax),
     computedAt: preview.computedAt,
   }
 }
