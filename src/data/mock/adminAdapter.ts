@@ -83,6 +83,15 @@ export const mockAdminAdapter: AdminPort = {
     if (!input.closed && input.closeTime <= input.openTime) {
       throw new Error('เวลาปิดต้องหลังเวลาเปิด (ยังไม่รองรับร้านที่ปิดข้ามวัน)')
     }
+    // กติกาเดียวกับ upsert_shop_hours() ฝั่ง SQL — ถ้าโหมดจำลองหลวมกว่า
+    // บั๊กจะไม่โผล่จนกว่าจะขึ้นฐานข้อมูลจริง
+    if (
+      !input.closed &&
+      input.kitchenCloseTime !== null &&
+      (input.kitchenCloseTime > input.closeTime || input.kitchenCloseTime <= input.openTime)
+    ) {
+      throw new Error(`เวลาปิดครัวต้องอยู่ระหว่าง ${input.openTime} ถึง ${input.closeTime} น.`)
+    }
     saveHours(loadHours().map((h) => (h.weekday === input.weekday ? { ...input } : h)))
   },
 

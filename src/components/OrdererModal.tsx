@@ -28,6 +28,7 @@ export default function OrdererModal({
   count,
   total,
   busy = false,
+  kitchenWarning,
   onPick,
   onClose,
 }: {
@@ -36,11 +37,17 @@ export default function OrdererModal({
   count: number
   total: number
   busy?: boolean
+  /**
+   * ข้อความเตือนว่าเลยเวลาปิดครัวแล้ว — มีค่าเมื่อไร ต้องติ๊กยืนยันก่อนส่ง
+   * ให้พนักงานตัดสินใจเอง เพราะหน้างานรู้ดีกว่าว่าครัวยังอยู่ไหม
+   */
+  kitchenWarning?: string | null
   /** null = แชร์ทั้งโต๊ะ หารกันตอนเช็คบิล */
   onPick: (ordererId: string | null) => void
   onClose: () => void
 }) {
   const [choice, setChoice] = useState('')
+  const [kitchenOk, setKitchenOk] = useState(false)
 
   return (
     <Modal
@@ -56,7 +63,7 @@ export default function OrdererModal({
           <Button
             className="flex-1"
             variant="primary"
-            disabled={busy || choice === ''}
+            disabled={busy || choice === '' || (!!kitchenWarning && !kitchenOk)}
             onClick={() => onPick(choice === SHARED ? null : choice)}
           >
             {busy ? 'กำลังส่ง…' : 'ยืนยันส่งเข้าครัว'}
@@ -64,6 +71,19 @@ export default function OrdererModal({
         </div>
       }
     >
+      {kitchenWarning && (
+        <label className="mb-4 flex items-start gap-2 rounded-lg border border-ember/40 bg-ember/10 p-3 text-sm text-ember-deep">
+          <input
+            type="checkbox"
+            checked={kitchenOk}
+            disabled={busy}
+            onChange={(e) => setKitchenOk(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-[#a85c23]"
+          />
+          <span>{kitchenWarning} — ติ๊กเพื่อยืนยันว่าครัวยังทำให้ได้</span>
+        </label>
+      )}
+
       <label className="text-xs font-medium text-ink-soft" htmlFor="orderer">
         ลงชื่อผู้สั่ง
       </label>

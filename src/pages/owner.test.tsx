@@ -150,6 +150,7 @@ describe('ตั้งค่าร้าน (ระดับ adapter)', () => {
     await expect(
       mockAdminAdapter.saveShopHours({
         weekday: 1, openTime: '20:00', closeTime: '02:00', closed: false,
+      kitchenCloseTime: null,
       }),
     ).rejects.toThrow(/ข้ามวัน/)
 
@@ -181,6 +182,7 @@ describe('ตั้งค่าร้าน (ระดับ adapter)', () => {
   it('บันทึกเวลาทำการแล้วอ่านกลับได้', async () => {
     await mockAdminAdapter.saveShopHours({
       weekday: 2, openTime: '12:00', closeTime: '22:00', closed: false,
+      kitchenCloseTime: null,
     })
     const hours = await mockAdminAdapter.shopHours()
     expect(hours.find((h) => h.weekday === 2)!.openTime).toBe('12:00')

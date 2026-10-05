@@ -30,7 +30,7 @@ class SupabaseAdapter implements DataPort {
 
     const [
       tables, visits, occupancies, passes, orders, orderLines,
-      menu, ratePlans, reservations, tax,
+      menu, ratePlans, reservations, tax, hours,
     ] = await Promise.all([
       sb.from('cafe_tables').select('*').eq('archived', false).order('sort_order'),
       sb.from('visits').select('*').eq('status', 'open'),
@@ -42,9 +42,10 @@ class SupabaseAdapter implements DataPort {
       sb.from('rate_plans').select('*').eq('active', true).order('sort_order'),
       sb.from('reservations').select('*').in('status', ['pending', 'confirmed', 'seated']),
       sb.from('tax_config').select('*').eq('id', 1).single(),
+      sb.from('shop_hours').select('*').order('weekday'),
     ])
 
-    for (const res of [tables, visits, occupancies, passes, orders, orderLines, menu, ratePlans, reservations, tax]) {
+    for (const res of [tables, visits, occupancies, passes, orders, orderLines, menu, ratePlans, reservations, tax, hours]) {
       if (res.error) throw new Error(res.error.message)
     }
 
@@ -77,6 +78,7 @@ class SupabaseAdapter implements DataPort {
         vatRate: Number(tax.data!.vat_rate),
         vatIncluded: tax.data!.vat_included,
       },
+      hours: (hours.data ?? []).map(toHours),
     }
   }
 
@@ -175,6 +177,7 @@ class SupabaseAdapter implements DataPort {
       p_ordered_by_pass_id: input.orderedByPassId,
       p_split_mode: input.splitMode,
       p_placed_by: input.placedBy,
+      p_allow_closed_kitchen: input.allowClosedKitchen ?? false,
       p_items: input.items.map((i) => ({ menuItemId: i.menuItemId, qty: i.qty, note: i.note ?? null })),
     })
 
@@ -258,6 +261,16 @@ function toVisit(r: Record<string, any>): Visit {
   }
 }
 
+function toHours(r: Record<string, any>): ShopHours {
+  return {
+    weekday: r.weekday,
+    openTime: String(r.open_time).slice(0, 5),
+    closeTime: String(r.close_time).slice(0, 5),
+    closed: r.closed,
+    kitchenCloseTime: r.kitchen_close_time ? String(r.kitchen_close_time).slice(0, 5) : null,
+  }
+}
+
 function toOccupancy(r: Record<string, any>): Occupancy {
   return { id: r.id, visitId: r.visit_id, tableId: r.table_id, fromAt: r.from_at, toAt: r.to_at }
 }
@@ -336,12 +349,7 @@ export const supabaseBookingAdapter: BookingPort = {
     const sb = requireClient()
     const { data, error } = await sb.from('shop_hours').select('*').order('weekday')
     if (error) throw new Error(error.message)
-    return (data ?? []).map((r) => ({
-      weekday: r.weekday,
-      openTime: String(r.open_time).slice(0, 5),
-      closeTime: String(r.close_time).slice(0, 5),
-      closed: r.closed,
-    })) as ShopHours[]
+    return (data ?? []).map(toHours)
   },
 
   async config() {

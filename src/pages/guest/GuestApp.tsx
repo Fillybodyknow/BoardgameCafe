@@ -9,6 +9,7 @@ import { Badge, Button, Card, Empty } from '../../components/ui'
 import OrdererModal from '../../components/OrdererModal'
 import type { Tone } from '../../components/ui'
 import { Stepper } from '../OrderDialog'
+import { needsKitchen } from '../../domain/kitchen'
 
 const CATEGORY_LABEL: Record<MenuItem['category'], string> = {
   drink: 'เครื่องดื่ม', snack: 'ของกินเล่น', food: 'อาหารจานหลัก', dessert: 'ของหวาน',
@@ -210,6 +211,18 @@ export default function GuestApp() {
         <div key={tab} className="animate-page">
           {tab === 'menu' && (
             <>
+              {!s.kitchen.open && (
+                <div className="mb-4 flex items-center gap-3 rounded-xl border border-ember/40 bg-ember/10 p-3 text-sm text-ember-deep">
+                  <span className="text-xl" aria-hidden>
+                    🍳
+                  </span>
+                  <span>
+                    {s.kitchen.reason} ตอนนี้สั่งได้เฉพาะเครื่องดื่มและของกินเล่น
+                    {' '}ถ้าอยากได้อาหาร ลองแจ้งพนักงานดูได้
+                  </span>
+                </div>
+              )}
+
               {/* ทางลัดไปแต่ละหมวด */}
               <div className="-mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1">
                 {groups.map(([category]) => (
@@ -234,11 +247,14 @@ export default function GuestApp() {
                       {items.map((item) => {
                         const qty = cart[item.id] ?? 0
                         const img = menuImageUrl(item.imagePath)
+                        // ครัวปิดแล้วก็ยังสั่งเครื่องดื่มได้ แค่ของที่ต้องเข้าครัวสั่งไม่ได้
+                        const kitchenClosed = !s.kitchen.open && needsKitchen(item)
+                        const orderable = item.available && !kitchenClosed
                         return (
                           <div
                             key={item.id}
                             className={`panel flex items-center justify-between gap-3 rounded-xl p-2.5 transition ${
-                              item.available ? '' : 'opacity-50'
+                              orderable ? '' : 'opacity-50'
                             } ${qty > 0 ? '!border-gold/60' : ''}`}
                           >
                             <div className="flex min-w-0 items-center gap-3">
@@ -255,11 +271,14 @@ export default function GuestApp() {
                                   ฿{formatBaht(item.price)}
                                 </div>
                                 {!item.available && <div className="text-xs text-crimson">ของหมด</div>}
+                                {item.available && kitchenClosed && (
+                                  <div className="text-xs text-ember-deep">ครัวปิดแล้ว</div>
+                                )}
                               </div>
                             </div>
                             <Stepper
                               qty={qty}
-                              disabled={!item.available}
+                              disabled={!orderable}
                               onAdd={flyCoin}
                               onChange={(n) => setCart((c) => setCartQty(c, item.id, n))}
                             />

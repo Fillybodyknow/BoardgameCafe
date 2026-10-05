@@ -115,3 +115,6 @@ make_patch supabase/patch-push.sql "patch แจ้งเตือนออเ�
 
 make_patch supabase/patch-settle.sql "patch จ่ายตอนกลับก่อน" \
   supabase/migrations/20260930001500_settle_pass.sql
+
+make_patch supabase/patch-kitchen-hours.sql "patch เวลาปิดครัว" \
+  supabase/migrations/20260930001600_kitchen_hours.sql

@@ -150,10 +150,12 @@ describe('หน้าจองต้องเคารพเวลาทำก�
   it('เวลาทำการที่เจ้าของบันทึก ต้องเป็นชุดเดียวกับที่หน้าจองอ่าน', async () => {
     await mockAdminAdapter.saveShopHours({
       weekday: 3, openTime: '14:00', closeTime: '22:00', closed: false,
+      kitchenCloseTime: null,
     })
     const hours = await mockBookingAdapter.hours()
     expect(hours.find((h) => h.weekday === 3)).toEqual({
       weekday: 3, openTime: '14:00', closeTime: '22:00', closed: false,
+      kitchenCloseTime: null,
     })
   })
 
@@ -164,6 +166,7 @@ describe('หน้าจองต้องเคารพเวลาทำก�
 
     await mockAdminAdapter.saveShopHours({
       weekday, openTime: '16:00', closeTime: '23:00', closed: false,
+      kitchenCloseTime: null,
     })
 
     const early = new Date(`${day}T12:00:00+07:00`).toISOString()
@@ -192,6 +195,7 @@ describe('หน้าจองต้องเคารพเวลาทำก�
 
     await mockAdminAdapter.saveShopHours({
       weekday, openTime: '11:00', closeTime: '23:00', closed: true,
+      kitchenCloseTime: null,
     })
 
     const when = new Date(`${day}T18:00:00+07:00`).toISOString()
@@ -211,6 +215,7 @@ describe('หน้าจองต้องเคารพเวลาทำก�
 
     await mockAdminAdapter.saveShopHours({
       weekday, openTime: '11:00', closeTime: '20:00', closed: false,
+      kitchenCloseTime: null,
     })
 
     const when = new Date(`${day}T19:00:00+07:00`).toISOString()

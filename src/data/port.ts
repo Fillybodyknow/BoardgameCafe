@@ -26,6 +26,8 @@ export interface Snapshot {
   reservations: Reservation[]
   /** VAT/ค่าบริการที่ตั้งไว้ — หน้าจอต้องใช้ค่านี้คิดเลข ไม่ใช่ค่าตายตัวในโค้ด */
   tax: TaxConfig
+  /** เวลาทำการรายวัน — ใช้บอกว่าตอนนี้ครัวเปิดอยู่ไหม */
+  hours: ShopHours[]
 }
 
 export interface DataPort {
@@ -69,6 +71,8 @@ export interface DataPort {
     splitMode: 'owner' | 'shared'
     placedBy: 'guest' | 'staff'
     items: { menuItemId: ID; qty: number; note?: string }[]
+    /** พนักงานยืนยันว่าครัวยังทำให้ได้ ทั้งที่เลยเวลาปิดครัวแล้ว */
+    allowClosedKitchen?: boolean
   }): Promise<Order>
   updateOrderStatus(orderId: ID, status: OrderStatus): Promise<void>
 
@@ -169,6 +173,8 @@ export interface AdminPort {
     openTime: string
     closeTime: string
     closed: boolean
+    /** null = ครัวปิดพร้อมร้าน */
+    kitchenCloseTime: string | null
   }): Promise<void>
   saveTaxConfig(input: TaxConfig): Promise<void>
 

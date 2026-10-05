@@ -5,6 +5,7 @@ import type {
   Reservation, Visit,
 } from '../../domain/types'
 import { computeBill, settlementFor } from '../../domain/pricing'
+import { cartNeedsKitchen, kitchenWindow } from '../../domain/kitchen'
 import { seed, businessDateOf } from './seed'
 import { bangkokParts, loadHours, loadTax, toMinutes } from './shopStore'
 
@@ -37,6 +38,7 @@ class MockAdapter implements DataPort {
     snap.menu = snap.menu.filter((m) => !m.archived)
     snap.tables = snap.tables.filter((t) => !t.archived)
     snap.tax = loadTax()
+    snap.hours = loadHours()
     return snap
   }
 
@@ -229,6 +231,13 @@ class MockAdapter implements DataPort {
     const visit = this.state.visits.find((v) => v.id === input.visitId)
     if (!visit || visit.status !== 'open') {
       throw new Error('visit นี้ปิดแล้ว สั่งเพิ่มไม่ได้')
+    }
+
+    if (!input.allowClosedKitchen) {
+      const window = kitchenWindow(loadHours())
+      if (!window.open && cartNeedsKitchen(this.state.menu, input.items)) {
+        throw new Error(`${window.reason} ยืนยันอีกครั้งถ้าครัวยังทำให้ได้`)
+      }
     }
 
     // ต้องตรวจให้ตรงกับ place_order_core() ฝั่ง SQL ไม่งั้นโหมดเดโมจะหละหลวมกว่า
@@ -539,6 +548,7 @@ class MockAdapter implements DataPort {
         .filter((p) => p.visitId === visitId && (p.status === 'active' || p.status === 'paused'))
         .map((p) => ({ id: p.id, displayName: p.displayName })),
       menu: structuredClone(this.state.menu),
+      kitchen: kitchenWindow(loadHours()),
     }
   }
 
@@ -570,6 +580,12 @@ class MockAdapter implements DataPort {
   async guestPlaceOrder(input: Parameters<GuestPort['placeOrder']>[0]) {
     const { visitId } = this.visitForToken(input.token)
     if (!visitId) throw new Error('โต๊ะนี้ยังไม่ได้เปิด กรุณาแจ้งพนักงาน')
+
+    // ด่านเดียวกับ guest_place_order() ฝั่ง SQL — ลูกค้าข้ามไม่ได้ ต่างจากพนักงาน
+    const window = kitchenWindow(loadHours())
+    if (!window.open && cartNeedsKitchen(this.state.menu, input.items)) {
+      throw new Error(`${window.reason} สั่งได้เฉพาะเครื่องดื่มและของกินเล่น`)
+    }
     const order = await this.placeOrder({
       idempotencyKey: input.idempotencyKey,
       visitId,

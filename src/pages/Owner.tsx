@@ -755,9 +755,30 @@ function HoursTab() {
                 />
               </div>
             )}
+
+            {!h.closed && (
+              <label className="flex items-center gap-2 text-sm text-ink-soft">
+                ครัวปิด
+                <input
+                  type="time"
+                  value={h.kitchenCloseTime ?? ''}
+                  onChange={(e) =>
+                    saveHours.mutate({ ...h, kitchenCloseTime: e.target.value || null })
+                  }
+                  className={`${INPUT} !w-auto !py-1`}
+                />
+                {h.kitchenCloseTime === null && (
+                  <span className="text-xs text-ink-faint">(ปิดพร้อมร้าน)</span>
+                )}
+              </label>
+            )}
           </Card>
         ))}
         <Err error={saveHours.error} />
+        <p className="text-xs text-ink-faint">
+          เวลาปิดครัวว่างไว้ = ครัวปิดพร้อมร้าน · หลังครัวปิด ลูกค้าสั่งได้เฉพาะเครื่องดื่ม
+          และของกินเล่น ส่วนพนักงานสั่งแทนได้ถ้ายืนยัน
+        </p>
         <p className="text-xs text-ink-faint">
           ยังไม่รองรับร้านที่ปิดหลังเที่ยงคืน เพราะระบบจองยังไม่อนุญาตให้รอบเล่นข้ามวัน
         </p>

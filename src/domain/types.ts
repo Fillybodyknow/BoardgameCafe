@@ -235,7 +235,21 @@ export interface ShopHours {
   openTime: string
   closeTime: string
   closed: boolean
+  /** null = ครัวปิดพร้อมร้าน */
+  kitchenCloseTime: string | null
 }
+
+/** ครัวเปิดอยู่ไหม — ต้องตรงกับ kitchen_window() ฝั่ง SQL */
+export interface KitchenWindow {
+  open: boolean
+  /** เวลาที่ครัวปิดของวันนั้น เช่น "22:00" */
+  closeAt: string | null
+  /** เหตุผลที่ปิด สำหรับแสดงให้ผู้ใช้ — null เมื่อเปิดอยู่ */
+  reason: string | null
+}
+
+/** หมวดที่ต้องให้ครัวทำ — ต้องตรงกับ needs_kitchen() ฝั่ง SQL */
+export const KITCHEN_CATEGORIES: MenuCategory[] = ['food', 'dessert']
 
 export interface BookingConfig {
   slotMinutes: number
@@ -298,6 +312,7 @@ export interface GuestSession {
   visitId: ID | null
   passes: { id: ID; displayName: string }[]
   menu: MenuItem[]
+  kitchen: KitchenWindow
 }
 
 export interface GuestOrderLine {

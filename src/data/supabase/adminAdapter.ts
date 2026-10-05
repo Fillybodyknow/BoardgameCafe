@@ -172,6 +172,7 @@ export const supabaseAdminAdapter: AdminPort = {
       p_open: input.openTime,
       p_close: input.closeTime,
       p_closed: input.closed,
+      p_kitchen_close: input.kitchenCloseTime,
     })
   },
 

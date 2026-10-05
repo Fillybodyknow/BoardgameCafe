@@ -6,6 +6,7 @@ import { formatBaht } from '../domain/pricing'
 import type { GuestPass, MenuItem } from '../domain/types'
 import { Button, Modal } from '../components/ui'
 import OrdererModal from '../components/OrdererModal'
+import { cartNeedsKitchen, kitchenWindow } from '../domain/kitchen'
 
 const CATEGORY_LABEL: Record<MenuItem['category'], string> = {
   drink: 'เครื่องดื่ม',
@@ -48,6 +49,11 @@ export default function OrderDialog({
   }, 0)
 
   const count = Object.values(cart).reduce((a, b) => a + b, 0)
+
+  // เตือนตั้งแต่ก่อนกดส่ง ไม่ใช่ปล่อยให้ฐานข้อมูลปฏิเสธแล้วค่อยงง
+  const kitchen = kitchenWindow(data?.hours ?? [])
+  const blockedByKitchen =
+    !kitchen.open && cartNeedsKitchen(data?.menu ?? [], cartItems(cart))
   const activePasses = passes.filter((p) => p.status === 'active' || p.status === 'paused')
 
   async function submit(ordererId: string | null) {
@@ -61,6 +67,7 @@ export default function OrderDialog({
         splitMode: ordererId ? 'owner' : 'shared',
         placedBy: 'staff',
         items: cartItems(cart),
+        allowClosedKitchen: blockedByKitchen,
       })
       onClose()
     } catch (e) {
@@ -153,6 +160,7 @@ export default function OrderDialog({
           count={count}
           total={total}
           busy={busy}
+          kitchenWarning={blockedByKitchen ? kitchen.reason : null}
           onPick={submit}
           onClose={() => setPicking(false)}
         />

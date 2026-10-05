@@ -17,6 +17,7 @@ export const DEFAULT_HOURS: ShopHours[] = Array.from({ length: 7 }, (_, weekday)
   openTime: '11:00',
   closeTime: '23:00',
   closed: false,
+  kitchenCloseTime: null,
 }))
 
 export const DEFAULT_TAX: TaxConfig = {
