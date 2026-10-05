@@ -33,12 +33,23 @@ const ALLOWED = (Deno.env.get('ALLOWED_ORIGINS') ?? '')
 const USERNAME_RE = /^[a-z0-9][a-z0-9._-]{2,29}$/
 const MIN_PASSWORD = 8
 
-function corsHeaders(origin: string | null): Record<string, string> {
+/**
+ * supabase-js แนบ x-client-info กับ apikey มาด้วยเสมอ ไม่ใช่แค่ authorization
+ * ถ้าไม่อนุญาตครบ เบราว์เซอร์จะบล็อกตั้งแต่ preflight แล้วฝั่งหน้าจอจะเห็นแค่
+ * "fetch failed" โดยไม่มีรายละเอียดว่าเพราะอะไร
+ *
+ * สะท้อนหัวข้อที่เบราว์เซอร์ขอมากลับไปด้วย เผื่อ supabase-js เพิ่มหัวข้อใหม่
+ * ในเวอร์ชันถัดไป จะได้ไม่พังเงียบ ๆ อีก
+ */
+const BASE_ALLOWED_HEADERS = 'authorization, x-client-info, apikey, content-type'
+
+function corsHeaders(origin: string | null, requested?: string | null): Record<string, string> {
   const allow = ALLOWED.length === 0 ? '*' : ALLOWED.includes(origin ?? '') ? origin! : ALLOWED[0]
   return {
     'Access-Control-Allow-Origin': allow,
-    'Access-Control-Allow-Headers': 'authorization, content-type',
+    'Access-Control-Allow-Headers': requested || BASE_ALLOWED_HEADERS,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
   }
 }
@@ -54,7 +65,9 @@ Deno.serve(async (req) => {
   const origin = req.headers.get('origin')
 
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders(origin) })
+    return new Response('ok', {
+      headers: corsHeaders(origin, req.headers.get('access-control-request-headers')),
+    })
   }
   if (req.method !== 'POST') {
     return json({ error: 'ต้องเรียกด้วย POST' }, 405, origin)

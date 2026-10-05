@@ -196,18 +196,24 @@ export const supabaseAdminAdapter: AdminPort = {
     if (error) {
       // functions.invoke ซ่อนข้อความจริงไว้ใน response ถ้าไม่แกะออกมา
       // ผู้ใช้จะเห็นแค่ "Edge Function returned a non-2xx status code"
-      let detail = ''
       const res = (error as { context?: Response }).context
+
       if (res && typeof res.json === 'function') {
+        let detail = ''
         try {
           detail = ((await res.json()) as { error?: string }).error ?? ''
         } catch {
           detail = ''
         }
+        throw new Error(detail || `สร้างบัญชีไม่สำเร็จ (HTTP ${res.status})`)
       }
-      if (detail) throw new Error(detail)
+
+      // ไม่มี response กลับมาเลย = ไปไม่ถึงเซิร์ฟเวอร์ ซึ่งแทบทุกครั้งคือ CORS
+      // หรือยังไม่ได้ deploy — ต้องแยกจากกรณีเซิร์ฟเวอร์ตอบ error เพราะวิธีแก้
+      // คนละเรื่องกันสิ้นเชิง
       throw new Error(
-        'เรียกบริการสร้างบัญชีไม่สำเร็จ — ตรวจว่า deploy Edge Function create-staff แล้วหรือยัง',
+        'ติดต่อบริการสร้างบัญชีไม่ได้ — ตรวจว่า deploy Edge Function ชื่อ create-staff ' +
+          'แล้วหรือยัง และเป็นเวอร์ชันล่าสุด (ดูรายละเอียดใน console ของเบราว์เซอร์)',
       )
     }
     if (data && typeof data === 'object' && 'error' in data) {
