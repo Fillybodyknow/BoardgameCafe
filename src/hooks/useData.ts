@@ -9,7 +9,7 @@ export const SNAPSHOT_KEY = ['snapshot'] as const
  * สถานะทั้งร้าน + สมัครรับการเปลี่ยนแปลง
  * ตอนต่อ Supabase แล้ว subscribe จะกลายเป็น Realtime channel โดยหน้าจอไม่ต้องแก้
  */
-export function useSnapshot() {
+export function useSnapshot(options?: { refetchInterval?: number }) {
   const qc = useQueryClient()
 
   useEffect(() => {
@@ -22,6 +22,8 @@ export function useSnapshot() {
     queryKey: SNAPSHOT_KEY,
     queryFn: () => db.getSnapshot(),
     staleTime: 0,
+    // หน้าที่เปิดค้างทั้งวันควรตั้งค่านี้ไว้ เผื่อ realtime หลุดแล้วไม่มีใครรู้
+    refetchInterval: options?.refetchInterval,
   })
 }
 

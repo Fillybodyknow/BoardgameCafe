@@ -3,6 +3,14 @@ import { useNow, useSnapshot } from '../hooks/useData'
 import { db } from '../data'
 import type { Order, OrderStatus } from '../domain/types'
 import { Badge, Button, Empty, Icon, PageHeader } from '../components/ui'
+import {
+  disableSound,
+  enableSound,
+  playNewOrderChime,
+  setTabBadge,
+  soundEnabled,
+  soundSupported,
+} from '../lib/alert'
 
 /** SLA — เกินแล้วการ์ดเปลี่ยนสี ให้ครัวเห็นแต่ไกล */
 const SLA_MINUTES = 12
@@ -23,7 +31,9 @@ const COLUMNS: { status: OrderStatus; title: string; accent: string }[] = [
 ]
 
 export default function Kitchen() {
-  const { data } = useSnapshot()
+  // จอครัวเปิดค้างทั้งวัน ถ้า realtime หลุดตอนเน็ตสะดุดแล้วไม่มีอะไรดึงซ้ำ
+  // ออเดอร์จะหายไปเงียบ ๆ — ดึงซ้ำทุก 20 วินาทีเป็นตาข่ายรองรับ
+  const { data } = useSnapshot({ refetchInterval: 20_000 })
   const now = useNow(1000)
 
   const active = (data?.orders ?? []).filter((o) =>
@@ -31,13 +41,38 @@ export default function Kitchen() {
   )
   const incoming = active.filter((o) => o.status === 'placed').length
 
-  // ออเดอร์ใหม่เข้ามา → กระดิ่งสั่น (ไม่สั่นตอนเปิดหน้าครั้งแรก)
+  // ออเดอร์ใหม่เข้ามา → กระดิ่งสั่น + เสียงเตือน (ไม่เตือนตอนเปิดหน้าครั้งแรก)
   const prevIncoming = useRef<number | null>(null)
   const [ring, setRing] = useState(0)
   useEffect(() => {
-    if (prevIncoming.current !== null && incoming > prevIncoming.current) setRing((n) => n + 1)
+    if (prevIncoming.current !== null && incoming > prevIncoming.current) {
+      setRing((n) => n + 1)
+      playNewOrderChime()
+    }
     prevIncoming.current = incoming
   }, [incoming])
+
+  // ตัวเลขบนแท็บ — คนครัวสลับไปแท็บอื่นแล้วยังเห็นว่ามีงานเข้า
+  useEffect(() => {
+    setTabBadge(incoming)
+    return () => setTabBadge(0)
+  }, [incoming])
+
+  const [sound, setSound] = useState(soundEnabled)
+  const [soundError, setSoundError] = useState(false)
+
+  async function toggleSound() {
+    if (sound) {
+      disableSound()
+      setSound(false)
+      return
+    }
+    // ต้องปลดล็อกจากในเหตุการณ์กดเท่านั้น เบราว์เซอร์ถึงจะยอมให้เล่นเสียง
+    const ok = await enableSound()
+    setSound(ok)
+    setSoundError(!ok)
+    if (ok) playNewOrderChime()
+  }
 
   if (!data) return null
 
@@ -62,6 +97,19 @@ export default function Kitchen() {
         actions={
           <div className="flex items-center gap-2">
             {late > 0 && <Badge tone="crimson">เลยเวลา {late} ใบ</Badge>}
+            {soundSupported() && (
+              <Button
+                variant={sound ? 'primary' : 'ghost'}
+                onClick={toggleSound}
+                title={
+                  sound
+                    ? 'ปิดเสียงเตือน'
+                    : 'เปิดเสียงเตือน — เบราว์เซอร์ต้องให้กดก่อนถึงจะเล่นเสียงได้'
+                }
+              >
+                {sound ? '🔔 เสียงเปิด' : '🔕 เสียงปิด'}
+              </Button>
+            )}
             <div
               key={ring}
               className={`grid h-11 w-11 place-items-center rounded-full border border-gold/50 bg-gold/10 text-gold-deep ${
@@ -74,6 +122,19 @@ export default function Kitchen() {
           </div>
         }
       />
+
+      {soundError && (
+        <p className="mb-3 rounded-lg border border-crimson/40 bg-crimson/10 p-3 text-sm text-crimson">
+          เบราว์เซอร์ไม่ยอมเปิดเสียง ลองกดปุ่มอีกครั้ง หรือตรวจการตั้งค่าเสียงของเว็บนี้
+        </p>
+      )}
+
+      {!sound && soundSupported() && (
+        <p className="mb-3 rounded-lg border border-ember/40 bg-ember/10 p-3 text-sm text-ember-deep">
+          เสียงเตือนยังปิดอยู่ — กด “เสียงปิด” ด้านบนหนึ่งครั้งเพื่อเปิด
+          (เบราว์เซอร์บังคับให้ผู้ใช้กดก่อน ถึงจะเล่นเสียงได้)
+        </p>
+      )}
 
       {active.length === 0 ? (
         <Empty icon="🍲">ไม่มีออเดอร์ค้าง 🎉</Empty>
