@@ -17,14 +17,15 @@ import SettleDialog from './SettleDialog'
 const PASS_TONE: Record<GuestPass['status'], Tone> = {
   active: 'forest',
   paused: 'ember',
-  checked_out: 'neutral',
+  // ค้างชำระต้องสะดุดตา ไม่งั้นตอนปิดโต๊ะจะมีคนหลุด
+  checked_out: 'ember',
   billed: 'neutral',
 }
 
 const PASS_LABEL: Record<GuestPass['status'], string> = {
   active: 'กำลังเล่น',
   paused: 'ออกไปข้างนอก',
-  checked_out: 'กลับแล้ว',
+  checked_out: 'ค้างชำระ',
   billed: 'จ่ายแล้ว',
 }
 

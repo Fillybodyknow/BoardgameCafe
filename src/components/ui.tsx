@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 
 // ============================================================== พื้นผิว ====
 
@@ -246,7 +247,12 @@ export function Modal({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose, dismissible])
 
-  return (
+  // แขวนที่ body ไม่ใช่ตรงที่ถูกเรียก — ถ้า element แม่ชั้นไหนมี opacity, transform
+  // หรือ overflow หน้าต่างจะโดนด้วย แม้จะเป็น position: fixed ก็ตาม
+  //
+  // เกิดขึ้นจริงมาแล้ว: การ์ดของคนที่กลับไปแล้วมี opacity-60 หน้าต่างเก็บเงิน
+  // ที่เด้งจากการ์ดนั้นจึงจางจนมองทะลุได้
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4">
       <div
         className="absolute inset-0 animate-fade bg-[#2a1c12]/45 backdrop-blur-[2px]"
@@ -279,7 +285,8 @@ export function Modal({
           <div className="rounded-b-2xl border-t border-line bg-parchment/70 px-6 py-4">{footer}</div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

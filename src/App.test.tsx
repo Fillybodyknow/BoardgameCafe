@@ -47,7 +47,7 @@ describe('แอปเปิดได้', () => {
     render(<App />)
     expect(await screen.findByText('ต้น')).toBeTruthy()
     expect(await screen.findByText('บอส')).toBeTruthy()
-    expect(await screen.findByText('กลับแล้ว')).toBeTruthy()
+    expect(await screen.findByText('ค้างชำระ')).toBeTruthy()
     expect(await screen.findByText('ออกไปข้างนอก')).toBeTruthy()
     // v-1 ย้ายโต๊ะมาแล้ว 1 ครั้ง — ต้องขึ้นเตือน
     expect(await screen.findByText(/ย้ายโต๊ะมาแล้ว 1 ครั้ง/)).toBeTruthy()

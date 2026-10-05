@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import App from '../App'
 import SettleDialog from './SettleDialog'
 import { mockAdapter } from '../data/mock/mockAdapter'
 import { db } from '../data'
 import type { GuestPass } from '../domain/types'
+
 
 /**
  * เก็บเงินคนที่กลับก่อน — เส้นทางเต็มผ่าน adapter จริง (โหมดจำลอง)
@@ -105,5 +107,32 @@ describe('เก็บเงินคนที่กลับก่อน', () =
         items: [{ menuItemId: snap.menu[0]!.id, qty: 1 }],
       }),
     ).rejects.toThrow()
+  })
+})
+
+/**
+ * เกิดขึ้นจริงบนหน้าร้าน: การ์ดของคนที่กดกลับก่อนไปแล้วมี opacity-60
+ * หน้าต่างเก็บเงินถูก render อยู่ข้างในการ์ดนั้น เลยจางจนมองทะลุได้
+ * — CSS opacity ส่งผลถึงลูกหลานทุกชั้น แม้จะเป็น position: fixed ก็ตาม
+ */
+describe('หน้าต่างต้องไม่โดน opacity ของการ์ดแม่', () => {
+  beforeEach(() => {
+    cleanup()
+    localStorage.clear()
+    mockAdapter.reset()
+    window.location.hash = '#/visit/v-1'
+  })
+
+  it('หน้าต่างแขวนที่ body ไม่ใช่ในการ์ดคนที่กลับไปแล้ว', async () => {
+    render(<App />)
+    const badge = await screen.findByText('ค้างชำระ')
+    const card = badge.closest('.opacity-60')
+    expect(card).toBeTruthy()
+
+    fireEvent.click(within(card as HTMLElement).getByText('จ่ายแล้วกลับ'))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog.closest('.opacity-60')).toBeNull()
+    expect(dialog.closest('[role="dialog"]')!.parentElement!.parentElement).toBe(document.body)
   })
 })
