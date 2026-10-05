@@ -5,6 +5,7 @@ import App from '../App'
 import { adminDb } from '../data'
 import { mockAdapter } from '../data/mock/mockAdapter'
 import { CAPABILITIES } from '../data/mock/adminAdapter'
+import { ROLE_LABEL, ROLE_ORDER } from './StaffTab'
 import type { Capability, StaffRole } from '../domain/types'
 
 /** ชื่อเมนูซ้ำกับหัวหน้าเพจได้ จึงต้องค้นเฉพาะในแถบเมนู ไม่ใช่ทั้งหน้า */
@@ -43,6 +44,24 @@ describe('ชุดสิทธิ์ของแต่ละระดับ', (
     for (const [role, caps] of Object.entries(CAPABILITIES)) {
       expect(caps.length, role).toBeGreaterThan(0)
     }
+  })
+})
+
+// เคยพังจริง: Edge Function เก็บรายชื่อระดับไว้เองอีกชุด พอเพิ่มระดับใหม่
+// ในฐานข้อมูลแล้วลืมแก้ที่นั่น การสร้างบัญชีระดับใหม่จึงถูกปฏิเสธตั้งแต่ยังไม่
+// ถึงฐานข้อมูล — ที่นี่กันการหลุดซิงก์แบบเดียวกันฝั่งหน้าจอ
+describe('รายชื่อระดับต้องตรงกันทุกที่', () => {
+  it('หน้าจัดการพนักงานรู้จักทุกระดับที่มีอยู่', () => {
+    const roles = Object.keys(CAPABILITIES) as StaffRole[]
+    for (const r of roles) {
+      expect(ROLE_ORDER, `ROLE_ORDER ขาด ${r}`).toContain(r)
+      expect(ROLE_LABEL[r], `ROLE_LABEL ขาด ${r}`).toBeTruthy()
+    }
+  })
+
+  it('ไม่มีระดับในหน้าจอที่ไม่มีอยู่จริง', () => {
+    const roles = Object.keys(CAPABILITIES)
+    for (const r of ROLE_ORDER) expect(roles).toContain(r)
   })
 })
 

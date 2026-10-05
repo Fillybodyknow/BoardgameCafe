@@ -5,7 +5,7 @@ import type { StaffMember, StaffRole } from '../domain/types'
 import { Badge, Button, Card, Empty } from '../components/ui'
 import type { Tone } from '../components/ui'
 
-const ROLE_LABEL: Record<StaffRole, string> = {
+export const ROLE_LABEL: Record<StaffRole, string> = {
   owner: 'เจ้าของร้าน',
   manager: 'ผู้จัดการ',
   staff: 'พนักงานทั่วไป',
@@ -22,7 +22,7 @@ const ROLE_HINT: Record<StaffRole, string> = {
 }
 
 /** เรียงจากสิทธิ์น้อยไปมาก ให้คนเลือกไล่อ่านได้ */
-const ROLE_ORDER: StaffRole[] = ['floor', 'kitchen', 'staff', 'manager', 'owner']
+export const ROLE_ORDER: StaffRole[] = ['floor', 'kitchen', 'staff', 'manager', 'owner']
 
 const ROLE_TONE: Record<StaffRole, Tone> = {
   owner: 'royal',

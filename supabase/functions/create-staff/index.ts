@@ -1,6 +1,9 @@
 /**
  * สร้างบัญชีพนักงาน
  *
+ * ไฟล์นี้ตั้งใจไม่เก็บกติกาเรื่องระดับ/สิทธิ์ไว้เอง ถามฐานข้อมูลทุกครั้ง
+ * เพราะเคยตกค้างเป็นรายชื่อระดับชุดเก่าแล้วปฏิเสธระดับใหม่โดยที่ไม่มีใครรู้
+ *
  * ทำไมต้องมีไฟล์นี้: การสร้างบัญชีใน Supabase Auth ต้องใช้ service_role key
  * ซึ่งมีอำนาจข้าม RLS ทั้งหมด ถ้าเอาไปไว้ในเว็บ static ใครก็เปิด devtools
  * อ่านแล้วยึดฐานข้อมูลทั้งก้อนได้ คีย์นั้นจึงต้องอยู่ฝั่งเซิร์ฟเวอร์เท่านั้น
@@ -93,12 +96,14 @@ Deno.serve(async (req) => {
     return json({ error: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่' }, 401, origin)
   }
 
-  const { data: role, error: roleErr } = await caller.rpc('my_staff_role')
-  if (roleErr) {
-    return json({ error: roleErr.message }, 500, origin)
+  // ถามด้วย "สิทธิ์" ไม่ใช่ชื่อระดับ เพราะระดับที่ถือสิทธิ์จัดการบัญชี
+  // อาจมีมากกว่าหนึ่งชื่อ และร้านเพิ่มระดับใหม่ได้เองในตาราง role_capabilities
+  const { data: caps, error: capErr } = await caller.rpc('my_capabilities')
+  if (capErr) {
+    return json({ error: capErr.message }, 500, origin)
   }
-  if (role !== 'manager' && role !== 'owner') {
-    return json({ error: 'ต้องเป็นผู้จัดการหรือเจ้าของร้าน' }, 403, origin)
+  if (!Array.isArray(caps) || !caps.includes('accounts')) {
+    return json({ error: 'ต้องมีสิทธิ์จัดการบัญชีพนักงาน' }, 403, origin)
   }
 
   // ---- 2. ตรวจข้อมูลก่อนสร้าง เพื่อไม่ให้เหลือบัญชีลอยถ้าข้อมูลผิด ----
@@ -135,11 +140,21 @@ Deno.serve(async (req) => {
   if (!displayName) {
     return json({ error: 'ต้องใส่ชื่อพนักงาน' }, 400, origin)
   }
-  if (!['staff', 'manager', 'owner'].includes(newRole)) {
-    return json({ error: 'ระดับสิทธิ์ไม่ถูกต้อง' }, 400, origin)
-  }
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false } })
+
+  // ถามตาราง role_capabilities ว่ามีระดับนี้จริงไหม แทนที่จะเก็บรายชื่อระดับ
+  // ไว้ที่นี่อีกชุด — ของเดิมตกค้างเป็น staff/manager/owner ทำให้ระดับใหม่
+  // ที่เพิ่มในฐานข้อมูลถูกปฏิเสธตั้งแต่ยังไม่ถึงฐานข้อมูล
+  const { data: roleRow } = await admin
+    .from('role_capabilities')
+    .select('role')
+    .eq('role', newRole)
+    .limit(1)
+    .maybeSingle()
+  if (!roleRow) {
+    return json({ error: `ไม่รู้จักระดับสิทธิ์ "${newRole}"` }, 400, origin)
+  }
 
   // เช็คชื่อซ้ำก่อน เพื่อให้ได้ข้อความที่อ่านรู้เรื่อง แทนที่จะไปล้มตอน insert
   const { data: taken } = await admin
