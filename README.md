@@ -45,6 +45,7 @@
 | Router | HashRouter (GH Pages ไม่มี rewrite rule) |
 | Auth | Supabase Auth (ล็อกอินพนักงาน) |
 | Backend | Supabase — Postgres + Realtime + RLS + RPC |
+| Edge Function | `create-staff` — จุดเดียวที่ต้องใช้ service_role key |
 | Test | Vitest (client) + Postgres ใน Docker (SQL) |
 
 ---
@@ -140,6 +141,7 @@ token ใช้สั่งของได้เฉพาะตอนที่�
 - [x] **Phase 2.5** — จองโต๊ะออนไลน์ + คิวจองฝั่งพนักงาน + ปล่อยโต๊ะอัตโนมัติ
 - [x] **Phase 2.6** — หน้าตั้งค่าเจ้าของร้าน (เมนู โต๊ะ เรตราคา เวลาทำการ)
 - [x] **Phase 2.7** — รูปประกอบเมนู (ย่อฝั่ง client + Supabase Storage)
+- [x] **Phase 2.8** — จัดการบัญชีพนักงานในแอป + ล็อกอินด้วยชื่อผู้ใช้
 - [ ] **Phase 3** — ยืม-คืนเกม + PWA/ใช้งานตอนเน็ตหลุด
 - [ ] **Phase 3** — ยืม-คืนเกม + ค่าปรับชิ้นส่วนหาย, รวมบิลข้ามกลุ่ม, offline queue
 - [ ] **Phase 4** — สมาชิก/แต้ม, โปรโมชัน, รายงาน, สต็อก

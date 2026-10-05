@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { hasSupabase, supabase } from '../data'
+import { emailForLogin } from '../data/supabase/client'
 import { Button, Card, Icon, INPUT } from '../components/ui'
 
 /**
@@ -42,7 +43,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
 }
 
 function LoginForm() {
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -52,9 +53,24 @@ function LoginForm() {
     if (!supabase) return
     setBusy(true)
     setError(null)
-    const { error: err } = await supabase.auth.signInWithPassword({ email, password })
-    if (err) setError(err.message)
-    setBusy(false)
+    try {
+      // Supabase ล็อกอินด้วยอีเมลเท่านั้น จึงต้องแปลงชื่อผู้ใช้เป็นอีเมลก่อน
+      // ชื่อที่ไม่มีอยู่จะได้อีเมลปลอมกลับมา แล้วไปล้มที่ขั้นรหัสผ่าน —
+      // ตั้งใจให้เป็นแบบนั้น จะได้ไม่บอกคนนอกว่ามีชื่อผู้ใช้ไหนอยู่บ้าง
+      const email = await emailForLogin(username)
+      const { error: err } = await supabase.auth.signInWithPassword({ email, password })
+      if (err) {
+        setError(
+          err.message.toLowerCase().includes('invalid')
+            ? 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'
+            : err.message,
+        )
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'เข้าสู่ระบบไม่สำเร็จ')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -69,11 +85,14 @@ function LoginForm() {
           <p className="mt-1 text-center text-xs text-ink-faint">แสดงตราผ่านทางก่อนเข้าโรงเตี๊ยม</p>
           <form onSubmit={submit} className="mt-5 space-y-3">
             <input
-              type="email"
+              type="text"
               autoComplete="username"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="อีเมล"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="ชื่อผู้ใช้"
               required
               className={INPUT}
             />
@@ -92,7 +111,7 @@ function LoginForm() {
             </Button>
           </form>
           <p className="mt-5 text-xs text-ink-faint">
-            บัญชีถูกสร้างโดยเจ้าของร้านใน Supabase แล้วเพิ่มลงตาราง <code>staff</code>
+            ลืมรหัสผ่าน หรือยังไม่มีบัญชี ให้แจ้งเจ้าของร้านเพิ่มให้ในหน้าตั้งค่า
           </p>
         </Card>
       </div>

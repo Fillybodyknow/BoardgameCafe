@@ -313,6 +313,20 @@ export interface GuestOrder {
 
 export type StaffRole = 'staff' | 'manager' | 'owner'
 
+export interface StaffMember {
+  userId: ID
+  /** ชื่อที่ใช้ล็อกอิน */
+  username: string
+  displayName: string
+  role: StaffRole
+  active: boolean
+  /** อีเมลภายในที่ผูกกับบัญชี พนักงานไม่ได้ใช้ล็อกอิน */
+  email: string
+  createdAt: Timestamp
+  /** ตัวเราเอง — หน้าจอใช้ปิดปุ่มที่ทำกับตัวเองไม่ได้ */
+  isSelf: boolean
+}
+
 export interface TaxConfig {
   serviceChargeRate: number
   vatRate: number

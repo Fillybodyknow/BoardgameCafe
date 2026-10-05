@@ -1,4 +1,4 @@
-import type { ShopHours, TaxConfig } from '../../domain/types'
+import type { ShopHours, StaffMember, TaxConfig } from '../../domain/types'
 
 /**
  * ที่เก็บเวลาทำการและภาษีของโหมดเดโม
@@ -9,6 +9,7 @@ import type { ShopHours, TaxConfig } from '../../domain/types'
  */
 
 const HOURS_KEY = 'bgcafe.mock.hours.v1'
+const STAFF_KEY = 'bgcafe.mock.staff.v1'
 const TAX_KEY = 'bgcafe.mock.tax.v1'
 
 export const DEFAULT_HOURS: ShopHours[] = Array.from({ length: 7 }, (_, weekday) => ({
@@ -70,4 +71,36 @@ export function bangkokParts(iso: string): { weekday: number; minutes: number; d
 export function toMinutes(hhmm: string): number {
   const [h, m] = hhmm.split(':')
   return Number(h) * 60 + Number(m)
+}
+
+/** รายชื่อพนักงานตั้งต้นของโหมดเดโม — มีเจ้าของร้านหนึ่งคนคือตัวเราเอง */
+export const DEFAULT_STAFF: StaffMember[] = [
+  {
+    userId: 'u-owner',
+    username: 'owner',
+    displayName: 'เจ้าของร้าน (เดโม)',
+    role: 'owner',
+    active: true,
+    email: 'owner@staff.boardgamecafe.local',
+    createdAt: new Date(0).toISOString(),
+    isSelf: true,
+  },
+  {
+    userId: 'u-nid',
+    username: 'nid',
+    displayName: 'นิด',
+    role: 'staff',
+    active: true,
+    email: 'nid@staff.boardgamecafe.local',
+    createdAt: new Date(0).toISOString(),
+    isSelf: false,
+  },
+]
+
+export function loadStaff(): StaffMember[] {
+  return read(STAFF_KEY, DEFAULT_STAFF)
+}
+
+export function saveStaff(list: StaffMember[]) {
+  write(STAFF_KEY, list)
 }

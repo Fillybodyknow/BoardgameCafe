@@ -46,3 +46,5 @@ make_patch supabase/patch-booking.sql "patch จองโต๊ะออนไ�
 make_patch supabase/patch-owner.sql "patch หน้าตั้งค่าเจ้าของร้าน"   supabase/migrations/20260930000900_owner_settings.sql
 
 make_patch supabase/patch-menu-images.sql "patch รูปประกอบเมนู"   supabase/migrations/20260930001000_menu_images.sql
+
+make_patch supabase/patch-staff.sql "patch จัดการบัญชีพนักงาน + ล็อกอินด้วย username"   supabase/migrations/20260930001100_staff_management.sql

@@ -1,6 +1,6 @@
 import type { AdminPort } from '../port'
 import type {
-  CafeTable, MenuItem, RatePlan, ShopHours, StaffRole, TaxConfig,
+  CafeTable, MenuItem, RatePlan, ShopHours, StaffMember, StaffRole, TaxConfig,
 } from '../../domain/types'
 import { requireClient } from './client'
 
@@ -168,6 +168,58 @@ export const supabaseAdminAdapter: AdminPort = {
       p_close: input.closeTime,
       p_closed: input.closed,
     })
+  },
+
+  async listStaff() {
+    return await rpc<StaffMember[]>('list_staff', {})
+  },
+
+  /**
+   * เรียก Edge Function แทน RPC เพราะต้องใช้ service_role สร้างบัญชี Auth
+   * ซึ่งอยู่ฝั่งเบราว์เซอร์ไม่ได้
+   */
+  async createStaff(input) {
+    const { data, error } = await requireClient().functions.invoke('create-staff', {
+      body: {
+        username: input.username,
+        password: input.password,
+        displayName: input.displayName,
+        role: input.role,
+      },
+    })
+
+    if (error) {
+      // functions.invoke ซ่อนข้อความจริงไว้ใน response ถ้าไม่แกะออกมา
+      // ผู้ใช้จะเห็นแค่ "Edge Function returned a non-2xx status code"
+      let detail = ''
+      const res = (error as { context?: Response }).context
+      if (res && typeof res.json === 'function') {
+        try {
+          detail = ((await res.json()) as { error?: string }).error ?? ''
+        } catch {
+          detail = ''
+        }
+      }
+      if (detail) throw new Error(detail)
+      throw new Error(
+        'เรียกบริการสร้างบัญชีไม่สำเร็จ — ตรวจว่า deploy Edge Function create-staff แล้วหรือยัง',
+      )
+    }
+    if (data && typeof data === 'object' && 'error' in data) {
+      throw new Error(String((data as { error: unknown }).error))
+    }
+  },
+
+  async setStaffRole(userId, role) {
+    await rpc('set_staff_role', { p_user_id: userId, p_role: role })
+  },
+
+  async setStaffActive(userId, active) {
+    await rpc('set_staff_active', { p_user_id: userId, p_active: active })
+  },
+
+  async renameStaff(userId, name) {
+    await rpc('rename_staff', { p_user_id: userId, p_name: name })
   },
 
   async saveTaxConfig(input) {

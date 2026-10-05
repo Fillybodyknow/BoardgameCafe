@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { adminDb, menuImageUrl } from '../data'
 import { formatBytes, resizeToJpeg } from '../lib/image'
+import StaffTab from './StaffTab'
 import { SNAPSHOT_KEY } from '../hooks/useData'
 import { formatBaht } from '../domain/pricing'
 import type { MenuCategory, ShopHours, TaxConfig } from '../domain/types'
@@ -15,13 +16,14 @@ const CATEGORY_LABEL: Record<MenuCategory, string> = {
 
 const WEEKDAY = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์']
 
-type Tab = 'menu' | 'tables' | 'rates' | 'hours'
+type Tab = 'menu' | 'tables' | 'rates' | 'hours' | 'staff'
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'menu', label: 'เมนู' },
   { key: 'tables', label: 'โต๊ะ' },
   { key: 'rates', label: 'เรตราคา' },
   { key: 'hours', label: 'เวลาทำการ' },
+  { key: 'staff', label: 'พนักงาน' },
 ]
 
 export default function Owner() {
@@ -64,6 +66,7 @@ export default function Owner() {
       {tab === 'tables' && <TablesTab />}
       {tab === 'rates' && <RatesTab />}
       {tab === 'hours' && <HoursTab />}
+      {tab === 'staff' && <StaffTab myRole={role.data} />}
       </div>
     </div>
   )

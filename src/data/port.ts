@@ -2,7 +2,7 @@ import type {
   AvailableTable, BillPreview, BookingConfig, BookingLookup, BookingReceipt,
   CafeTable, GameTitle, GuestOrder, GuestPass, GuestSession, ID, MenuCategory,
   MenuItem, Occupancy, Order, OrderStatus, PaymentInput, RatePlan, Reservation,
-  ShopHours, StaffRole, TaxConfig, Visit,
+  ShopHours, StaffMember, StaffRole, TaxConfig, Visit,
 } from '../domain/types'
 
 /**
@@ -164,6 +164,24 @@ export interface AdminPort {
     closed: boolean
   }): Promise<void>
   saveTaxConfig(input: TaxConfig): Promise<void>
+
+  // --- บัญชีพนักงาน ---
+  listStaff(): Promise<StaffMember[]>
+  /**
+   * สร้างบัญชีใหม่
+   *
+   * ต้องผ่าน Edge Function เพราะการสร้างบัญชี Auth ใช้ service_role key
+   * ซึ่งอยู่ในเว็บ static ไม่ได้
+   */
+  createStaff(input: {
+    username: string
+    password: string
+    displayName: string
+    role: StaffRole
+  }): Promise<void>
+  setStaffRole(userId: ID, role: StaffRole): Promise<void>
+  setStaffActive(userId: ID, active: boolean): Promise<void>
+  renameStaff(userId: ID, name: string): Promise<void>
 }
 
 export interface GuestPort {

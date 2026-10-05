@@ -287,10 +287,20 @@ reset role;
 do $$
 declare
   r          record;
+  -- รายชื่อฟังก์ชันที่ตั้งใจเปิดให้คนไม่ล็อกอินเรียก ทุกตัวต้องมีเหตุผลรองรับ
+  --   guest_*            — ลูกค้าสแกน QR ที่โต๊ะ ใช้ token แทนการล็อกอิน
+  --   available_tables   — ดูโต๊ะว่างก่อนจอง
+  --   create_reservation — จองโต๊ะโดยไม่ต้องมีบัญชี
+  --   *_by_code          — เปิดดู/ยกเลิกการจองด้วยรหัส + เบอร์โทร
+  --   login_email_for    — แปลง username เป็นอีเมล ต้องเรียกก่อนล็อกอินจึงเลี่ยง
+  --                        ไม่ได้ และคืนอีเมลปลอมเมื่อหาไม่เจอ จึงไม่บอกว่ามี
+  --                        ชื่อผู้ใช้ไหนอยู่บ้าง
+  --   assert_eq          — ตัวช่วยของชุดทดสอบเอง ไม่มีในของจริง
   v_allowed  text[] := array['guest_session', 'guest_orders', 'guest_bill',
                              'guest_place_order', 'available_tables',
                              'create_reservation', 'reservation_by_code',
-                             'cancel_reservation_by_code', 'assert_eq'];
+                             'cancel_reservation_by_code', 'login_email_for',
+                             'assert_eq'];
   v_leaked   text[] := '{}';
   v_missing  text[] := '{}';
 begin
