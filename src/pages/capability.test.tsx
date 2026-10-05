@@ -74,14 +74,13 @@ describe('เมนูที่เห็นในแต่ละระดับ'
     window.location.hash = ''
   })
 
-  it('ระดับหน้าร้าน เห็นโต๊ะ/จอง/เกม/QR แต่ไม่เห็นครัวและตั้งค่า', async () => {
+  it('ระดับหน้าร้าน เห็นโต๊ะ/จอง/QR แต่ไม่เห็นครัวและตั้งค่า', async () => {
     loginAs('floor')
     render(<App />)
     const menu = await nav()
 
     expect(menu.getByText('ผังโต๊ะ')).toBeTruthy()
     expect(menu.getByText('การจอง')).toBeTruthy()
-    expect(menu.getByText('คลังเกม')).toBeTruthy()
     expect(menu.queryByText('ครัว')).toBeNull()
     expect(menu.queryByText('ตั้งค่า')).toBeNull()
   })

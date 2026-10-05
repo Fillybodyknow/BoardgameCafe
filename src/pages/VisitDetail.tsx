@@ -12,6 +12,7 @@ import {
 import type { Tone } from '../components/ui'
 import OrderDialog from './OrderDialog'
 import PaymentDialog from './PaymentDialog'
+import SettleDialog from './SettleDialog'
 
 const PASS_TONE: Record<GuestPass['status'], Tone> = {
   active: 'forest',
@@ -24,7 +25,7 @@ const PASS_LABEL: Record<GuestPass['status'], string> = {
   active: 'กำลังเล่น',
   paused: 'ออกไปข้างนอก',
   checked_out: 'กลับแล้ว',
-  billed: 'ปิดบิลแล้ว',
+  billed: 'จ่ายแล้ว',
 }
 
 const ORDER_TONE: Record<Order['status'], Tone> = {
@@ -272,6 +273,7 @@ export default function VisitDetail() {
 }
 
 function PassCard({ pass, plan, now }: { pass: GuestPass; plan?: RatePlan; now: Date }) {
+  const [settling, setSettling] = useState(false)
   const mins = billableMinutes(pass, now)
   const charge = plan ? playTimeCharge(mins, plan) : 0
   const live = pass.status === 'active'
@@ -311,8 +313,8 @@ function PassCard({ pass, plan, now }: { pass: GuestPass; plan?: RatePlan; now: 
         <div className="tabular text-base font-semibold">฿{formatBaht(charge)}</div>
       </div>
 
-      {(pass.status === 'active' || pass.status === 'paused') && (
-        <div className="flex gap-1.5">
+      {pass.status !== 'billed' && (
+        <div className="flex flex-wrap gap-1.5">
           {pass.status === 'active' && (
             <Button className="flex-1" onClick={() => db.pausePass(pass.id)}>
               พัก
@@ -323,10 +325,27 @@ function PassCard({ pass, plan, now }: { pass: GuestPass; plan?: RatePlan; now: 
               กลับมาแล้ว
             </Button>
           )}
-          <Button className="flex-1" variant="danger" onClick={() => db.checkOutPass(pass.id)}>
-            กลับก่อน
+          {pass.status !== 'checked_out' && (
+            <Button className="flex-1" variant="danger" onClick={() => db.checkOutPass(pass.id)}>
+              กลับก่อน
+            </Button>
+          )}
+          {/* เก็บเงินทีละคนได้โดยไม่ต้องปิดทั้งโต๊ะ คนที่เหลือยังเล่นต่อ */}
+          <Button className="flex-1" variant="primary" onClick={() => setSettling(true)}>
+            จ่ายแล้วกลับ
           </Button>
         </div>
+      )}
+
+      {settling && (
+        <SettleDialog
+          pass={pass}
+          onClose={() => setSettling(false)}
+          onSettled={(name) => {
+            setSettling(false)
+            celebrate(`เก็บเงิน ${name} เรียบร้อย`)
+          }}
+        />
       )}
     </Card>
   )

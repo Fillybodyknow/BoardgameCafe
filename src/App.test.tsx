@@ -53,14 +53,6 @@ describe('แอปเปิดได้', () => {
     expect(await screen.findByText(/ย้ายโต๊ะมาแล้ว 1 ครั้ง/)).toBeTruthy()
   })
 
-  it('คลังเกมกรองตามจำนวนผู้เล่นได้', async () => {
-    window.location.hash = '#/games'
-    render(<App />)
-    expect(await screen.findByText('Codenames')).toBeTruthy()
-    // Terraforming Mars ถูกยืมอยู่ทุกกล่อง (copies 1 / onLoan 1) จึงถูกกรองออกโดยค่าเริ่มต้น
-    expect(screen.queryByText('Terraforming Mars')).toBeNull()
-  })
-
   // เคยพังจริง: หน้าจอ hardcode 'rp-std' ไว้ ซึ่งมีแค่ในข้อมูลจำลอง
   // พอต่อฐานข้อมูลจริงที่ใช้ UUID จึงได้ 22P02 ตอนกดเปิดโต๊ะ
   //

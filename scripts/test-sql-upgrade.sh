@@ -45,12 +45,13 @@ run supabase/patch-menu-images.sql
 run supabase/patch-staff.sql
 run supabase/patch-roles.sql
 run supabase/patch-push.sql
+run supabase/patch-settle.sql
 
 # ผู้ใช้วาง SQL ทีละไฟล์ในหน้าเว็บ ถ้าล้มกลางไฟล์จะค้างครึ่ง ๆ แล้วต้องรันใหม่
 # patch ที่ยังต้องใช้จึงต้องรันซ้ำได้โดยไม่พัง — พิสูจน์ด้วยการรันซ้ำจริง
 # รันซ้ำเฉพาะตัวล่าสุดได้ ส่วนตัวเก่ากว่าจะโดนการ์ดบล็อก (ทดสอบด้านล่าง)
 echo "--- รัน patch ล่าสุดซ้ำอีกรอบ ต้องไม่พัง ---"
-run supabase/patch-push.sql
+run supabase/patch-settle.sql
 
 # patch หลายไฟล์ประกาศฟังก์ชันชื่อเดียวกัน ถ้ารันไฟล์เก่าทีหลังไฟล์ใหม่
 # ของเก่าจะทับของใหม่เงียบ ๆ แล้วฟีเจอร์หายโดยไม่มีอะไรบอก — เคยเกิดจริง
@@ -62,16 +63,10 @@ fi
 echo "PASS  รัน patch-staff หลัง patch-roles ถูกปฏิเสธ"
 
 echo "--- เทสต์ชุดเดียวกับการติดตั้งใหม่ ---"
-run supabase/tests/05_test_grants.sql
-run supabase/tests/10_pricing_test.sql
-run supabase/tests/20_operations_test.sql
-run supabase/tests/30_guest_test.sql
-run supabase/tests/40_reservation_test.sql
-run supabase/tests/50_owner_test.sql
-run supabase/tests/60_menu_image_test.sql
-run supabase/tests/70_staff_test.sql
-run supabase/tests/80_capability_test.sql
-run supabase/tests/90_push_test.sql
+for f in supabase/tests/[0-9]*_*.sql; do
+  [ "$f" = "supabase/tests/00_harness.sql" ] && continue
+  run "$f"
+done
 
 echo
 echo "เส้นทางอัปเกรดผ่านทั้งหมด"

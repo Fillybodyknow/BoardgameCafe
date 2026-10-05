@@ -47,16 +47,11 @@ run() {
 run supabase/tests/00_harness.sql
 for f in supabase/migrations/*.sql; do run "$f"; done
 run supabase/seed.sql
-run supabase/tests/05_test_grants.sql
-run supabase/tests/10_pricing_test.sql
-run supabase/tests/20_operations_test.sql
-run supabase/tests/30_guest_test.sql
-run supabase/tests/40_reservation_test.sql
-run supabase/tests/50_owner_test.sql
-run supabase/tests/60_menu_image_test.sql
-run supabase/tests/70_staff_test.sql
-run supabase/tests/80_capability_test.sql
-run supabase/tests/90_push_test.sql
+# ไล่ทุกไฟล์เอง — ก่อนหน้านี้เคยไล่ตามรายชื่อ แล้วเทสต์ใหม่ที่ลืมใส่ก็ไม่ถูกรันโดยไม่มีใครรู้
+for f in supabase/tests/[0-9]*_*.sql; do
+  [ "$f" = "supabase/tests/00_harness.sql" ] && continue
+  run "$f"
+done
 
 echo
 echo "เทสต์ SQL ผ่านทั้งหมด"

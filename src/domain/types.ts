@@ -45,6 +45,8 @@ export interface Visit {
   /** ตัดรอบขายตามวันทำการ ไม่ใช่วันที่ปฏิทิน (ร้านปิดหลังเที่ยงคืน) */
   businessDate: string
   note?: string
+  /** ยอดของที่หารกันซึ่งคนที่กลับก่อนจ่ายไปแล้ว */
+  sharedSettled: number
 }
 
 /** ประวัติการครองโต๊ะ — ย้ายโต๊ะ = ปิดแถวเดิม เปิดแถวใหม่ */
@@ -141,17 +143,6 @@ export interface Order {
 }
 
 // ---------- เกม ----------
-
-export interface GameTitle {
-  id: ID
-  name: string
-  minPlayers: number
-  maxPlayers: number
-  playMinutes: number
-  weight: 1 | 2 | 3 | 4 | 5
-  copies: number
-  onLoan: number
-}
 
 export interface GameLoan {
   id: ID
@@ -273,6 +264,22 @@ export interface BookingLookup extends BookingReceipt {
 // ---------- การชำระเงิน ----------
 
 export type PaymentMethod = 'cash' | 'transfer'
+
+/** ยอดของคนที่จะกลับก่อน — ต้องตรงกับ pass_settlement() ฝั่ง SQL */
+export interface PassSettlement {
+  passId: ID
+  displayName?: string
+  ownLines: BillLine[]
+  /** ส่วนแบ่งของรายการที่หารกัน */
+  sharedShare: number
+  /** จำนวนคนที่ยังไม่ได้จ่าย ณ ตอนคิด */
+  headcount: number
+  subtotal: number
+  serviceCharge: number
+  vat: number
+  total: number
+  computedAt: Timestamp
+}
 
 export interface PaymentInput {
   method: PaymentMethod

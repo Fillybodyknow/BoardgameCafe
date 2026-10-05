@@ -1,10 +1,10 @@
 import type { BookingPort, DataPort, GuestPort, Snapshot } from '../port'
 import type {
   AvailableTable, BillPreview, BookingLookup, BookingReceipt, GuestOrder, GuestPass,
-  GuestSession, ID, MenuItem, Order, OrderStatus, PaymentInput, RatePlan, Reservation,
-  Visit,
+  GuestSession, ID, MenuItem, Order, OrderStatus, PassSettlement, PaymentInput, RatePlan,
+  Reservation, Visit,
 } from '../../domain/types'
-import { computeBill } from '../../domain/pricing'
+import { computeBill, settlementFor } from '../../domain/pricing'
 import { seed, businessDateOf } from './seed'
 import { bangkokParts, loadHours, toMinutes } from './shopStore'
 
@@ -70,6 +70,7 @@ class MockAdapter implements DataPort {
       openedAt: nowIso,
       closedAt: null,
       businessDate: businessDateOf(new Date()),
+      sharedSettled: 0,
     }
     this.state.visits.push(visit)
 
@@ -185,6 +186,36 @@ class MockAdapter implements DataPort {
         if (table) table.status = 'free'
       }
     }
+    this.commit()
+  }
+
+  async passSettlement(passId: ID): Promise<PassSettlement> {
+    const pass = this.mustPass(passId)
+    if (pass.status === 'billed') throw new Error('คนนี้ชำระเงินไปแล้ว')
+
+    const preview = await this.previewBill(pass.visitId)
+    const heads = this.state.passes.filter(
+      (p) => p.visitId === pass.visitId && p.status !== 'billed',
+    ).length
+
+    return { ...settlementFor(preview, passId, heads), displayName: pass.displayName }
+  }
+
+  async settlePass(passId: ID, payments: PaymentInput[] = []) {
+    void payments // โหมดจำลองไม่เก็บประวัติการชำระเงิน ของจริงบันทึกใน settle_pass()
+    const pass = this.mustPass(passId)
+    if (pass.status === 'billed') throw new Error('คนนี้ชำระเงินไปแล้ว')
+
+    const visit = this.state.visits.find((v) => v.id === pass.visitId)
+    if (!visit) throw new Error(`ไม่พบ visit ${pass.visitId}`)
+    if (visit.status !== 'open') throw new Error('visit นี้ปิดไปแล้ว')
+
+    // คิดยอดก่อนหยุดนาฬิกา แล้วค่อยเช็คเอาต์ ลำดับเดียวกับฝั่ง SQL
+    await this.checkOutPass(passId)
+    const calc = await this.passSettlement(passId)
+
+    visit.sharedSettled = Math.round((visit.sharedSettled + calc.sharedShare) * 100) / 100
+    pass.status = 'billed'
     this.commit()
   }
 
@@ -560,6 +591,7 @@ class MockAdapter implements DataPort {
       passes: this.state.passes.filter((p) => p.visitId === visitId),
       orders: this.state.orders.filter((o) => o.visitId === visitId),
       ratePlans,
+      sharedSettled: this.state.visits.find((v) => v.id === visitId)?.sharedSettled ?? 0,
       now,
     })
   }

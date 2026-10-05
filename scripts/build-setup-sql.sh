@@ -112,3 +112,6 @@ make_patch supabase/patch-staff.sql "patch จัดการบัญชีพ�
 make_patch supabase/patch-roles.sql "patch ระดับพนักงานแบบแยกสิทธิ์"   supabase/migrations/20260930001200_role_capabilities.sql
 
 make_patch supabase/patch-push.sql "patch แจ้งเตือนออเดอร์เข้าครัว"   supabase/migrations/20260930001300_push_notifications.sql   supabase/migrations/20260930001400_push_payload.sql
+
+make_patch supabase/patch-settle.sql "patch จ่ายตอนกลับก่อน" \
+  supabase/migrations/20260930001500_settle_pass.sql

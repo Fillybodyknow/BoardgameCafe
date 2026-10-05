@@ -86,7 +86,7 @@ export async function importVapidKeys(
  * จำเป็นเพราะการ import สำเร็จไม่ได้แปลว่าคู่กุญแจตรงกัน ถ้าตั้ง Secret ไว้
  * คนละคู่ ทุกอย่างจะดูปกติจนถึงตอนปลายทางปฏิเสธ
  */
-async function assertKeysMatch(signingKey: CryptoKey, pub: Uint8Array) {
+async function assertKeysMatch(signingKey: CryptoKey, pub: Uint8Array<ArrayBuffer>) {
   const verifyKey = await crypto.subtle.importKey('raw', pub, ALG, false, ['verify'])
   const probe = new TextEncoder().encode('vapid-keypair-check')
   const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, signingKey, probe)

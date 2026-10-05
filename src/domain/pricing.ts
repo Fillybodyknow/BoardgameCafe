@@ -51,21 +51,49 @@ function round2(n: number) {
   return Math.round(n * 100) / 100
 }
 
+/** ภาษีและค่าบริการคิดจากยอดรวม — รวมไว้ที่เดียวเพราะมีหลายที่ต้องใช้สูตรนี้ */
+function applyTax(subtotal: number) {
+  const serviceCharge = round2(subtotal * TAX.serviceChargeRate)
+  const base = subtotal + serviceCharge
+  const vat = TAX.vatIncluded
+    ? round2(base - base / (1 + TAX.vatRate))
+    : round2(base * TAX.vatRate)
+  return {
+    subtotal,
+    serviceCharge,
+    vat,
+    total: TAX.vatIncluded ? round2(base) : round2(base + vat),
+  }
+}
+
 export interface BillInput {
   visitId: string
   passes: GuestPass[]
   orders: Order[]
   /** เผื่อไว้สำหรับ pass เก่าที่ยังไม่มี snapshot — ปกติไม่ได้ใช้แล้ว */
   ratePlans?: Record<string, RatePlan>
+  /** ยอดของที่หารกันซึ่งคนที่กลับก่อนจ่ายไปแล้ว */
+  sharedSettled?: number
   now: Date
 }
 
+/**
+ * ยอดที่ "ยังค้างอยู่" ของโต๊ะ ไม่ใช่ยอดดิบทั้งหมด
+ *
+ * คนที่จ่ายแล้วกลับไป (status 'billed') ถูกตัดออกทั้งค่าเล่นและของที่สั่งเอง
+ * ส่วนของที่หารกันยังแสดงเต็มจำนวนแล้วหักด้วยบรรทัดติดลบ เพื่อให้ไล่ตัวเลขได้
+ * ว่าหายไปไหน — ต้องตรงกับ preview_bill() ฝั่ง SQL เป๊ะ ๆ ไม่งั้นโหมดจำลอง
+ * จะหลวมกว่าของจริงแล้วบั๊กจะหลุดผ่านเทสต์ไปได้
+ */
 export function computeBill(input: BillInput): BillPreview {
   const { visitId, passes, orders, ratePlans, now } = input
+  const sharedSettled = input.sharedSettled ?? 0
+  const settledPasses = new Set(passes.filter((p) => p.status === 'billed').map((p) => p.id))
   const lines: BillLine[] = []
 
   // 1) ค่าเล่นรายคน — ใช้เรตที่ pass ถือติดตัวมา ไม่ใช่เรตปัจจุบันของร้าน
   for (const pass of passes) {
+    if (settledPasses.has(pass.id)) continue
     const plan = pass.rate ?? ratePlans?.[pass.ratePlanId]
     if (!plan) continue
     const mins = billableMinutes(pass, now)
@@ -86,6 +114,14 @@ export function computeBill(input: BillInput): BillPreview {
   const countable: Order['status'][] = ['placed', 'accepted', 'preparing', 'ready', 'served']
   for (const order of orders) {
     if (!countable.includes(order.status)) continue
+    // ของที่คนจ่ายแล้วสั่งเองอยู่ในบิลของเขาแล้ว แต่ของที่หารกันยังอยู่
+    if (
+      order.splitMode === 'owner' &&
+      order.orderedByPassId !== null &&
+      settledPasses.has(order.orderedByPassId)
+    ) {
+      continue
+    }
     for (const line of order.lines) {
       const amount = round2(line.unitPriceSnapshot * line.qty)
       lines.push({
@@ -102,22 +138,54 @@ export function computeBill(input: BillInput): BillPreview {
     }
   }
 
+  // 3) หักส่วนที่คนกลับก่อนจ่ายไปแล้ว — แสดงเป็นบรรทัดติดลบ ไม่ลดตัวเลขเงียบ ๆ
+  if (sharedSettled > 0) {
+    lines.push({
+      id: `bl-settled-${visitId}`,
+      source: 'adjustment',
+      sourceId: null,
+      guestPassId: null,
+      label: 'หักส่วนที่ชำระแล้ว',
+      qty: 1,
+      unitPrice: -sharedSettled,
+      amount: -sharedSettled,
+    })
+  }
+
   const subtotal = round2(lines.reduce((s, l) => s + l.amount, 0))
-  const serviceCharge = round2(subtotal * TAX.serviceChargeRate)
-  const base = subtotal + serviceCharge
-  const vat = TAX.vatIncluded
-    ? round2(base - base / (1 + TAX.vatRate))
-    : round2(base * TAX.vatRate)
-  const total = TAX.vatIncluded ? round2(base) : round2(base + vat)
 
   return {
     visitId,
     lines,
-    subtotal,
-    serviceCharge,
-    vat,
-    total,
+    ...applyTax(subtotal),
     computedAt: now.toISOString() as Timestamp,
+  }
+}
+
+/**
+ * ยอดที่คนหนึ่งต้องจ่ายถ้ากลับตอนนี้
+ *
+ * ต้องให้ผลเท่ากับ pass_settlement() ฝั่ง SQL — คนสุดท้ายที่เหลือรับเศษไป
+ * ทั้งหมด ยอดรวมของทุกบิลย่อยจึงเท่ากับยอดเต็มเสมอ
+ */
+export function settlementFor(preview: BillPreview, passId: string, unsettledCount: number) {
+  const ownLines = preview.lines.filter((l) => l.guestPassId === passId)
+  const ownTotal = round2(ownLines.reduce((s, l) => s + l.amount, 0))
+
+  // บรรทัดไม่มีเจ้าของ = ของที่หารกัน รวมบรรทัดหักส่วนที่ชำระแล้วด้วย
+  // จึงเป็นยอดสุทธิที่ยังไม่มีใครรับผิดชอบ
+  const shared = round2(
+    preview.lines.filter((l) => l.guestPassId === null).reduce((s, l) => s + l.amount, 0),
+  )
+  const sharedShare = unsettledCount <= 1 ? shared : round2(shared / unsettledCount)
+
+  return {
+    passId,
+    ownLines,
+    sharedShare,
+    headcount: unsettledCount,
+    ...applyTax(round2(ownTotal + sharedShare)),
+    computedAt: preview.computedAt,
   }
 }
 

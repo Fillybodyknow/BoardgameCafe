@@ -2,8 +2,9 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import type { BookingPort, DataPort, GuestPort, Snapshot } from '../port'
 import type {
   AvailableTable, BillPreview, BookingConfig, BookingLookup, BookingReceipt,
-  CafeTable, GameTitle, GuestOrder, GuestPass, GuestSession, ID, MenuItem,
-  Occupancy, Order, OrderStatus, PaymentInput, RatePlan, Reservation, ShopHours, Visit,
+  CafeTable, GuestOrder, GuestPass, GuestSession, ID, MenuItem,
+  Occupancy, Order, OrderStatus, PassSettlement, PaymentInput, RatePlan, Reservation,
+  ShopHours, Visit,
 } from '../../domain/types'
 import { requireClient } from './client'
 
@@ -29,7 +30,7 @@ class SupabaseAdapter implements DataPort {
 
     const [
       tables, visits, occupancies, passes, orders, orderLines,
-      menu, games, loans, ratePlans, reservations,
+      menu, ratePlans, reservations,
     ] = await Promise.all([
       sb.from('cafe_tables').select('*').eq('archived', false).order('sort_order'),
       sb.from('visits').select('*').eq('status', 'open'),
@@ -38,21 +39,12 @@ class SupabaseAdapter implements DataPort {
       sb.from('orders').select('*'),
       sb.from('order_lines').select('*'),
       sb.from('menu_items').select('*').eq('archived', false).order('sort_order'),
-      sb.from('game_titles').select('*').order('name'),
-      sb.from('game_loans').select('game_title_id').is('returned_at', null),
       sb.from('rate_plans').select('*').eq('active', true).order('sort_order'),
       sb.from('reservations').select('*').in('status', ['pending', 'confirmed', 'seated']),
     ])
 
-    for (const res of [tables, visits, occupancies, passes, orders, orderLines, menu, games, loans, ratePlans, reservations]) {
+    for (const res of [tables, visits, occupancies, passes, orders, orderLines, menu, ratePlans, reservations]) {
       if (res.error) throw new Error(res.error.message)
-    }
-
-    // นับกล่องที่ถูกยืมอยู่ต่อชื่อเกม
-    const onLoan = new Map<string, number>()
-    for (const row of loans.data ?? []) {
-      const id = row.game_title_id as string
-      onLoan.set(id, (onLoan.get(id) ?? 0) + 1)
     }
 
     // จับ order_lines เข้ากับ order ของมัน
@@ -77,7 +69,6 @@ class SupabaseAdapter implements DataPort {
       passes: (passes.data ?? []).map(toPass),
       orders: (orders.data ?? []).map((row) => toOrder(row, linesByOrder.get(row.id) ?? [])),
       menu: (menu.data ?? []).map(toMenuItem),
-      games: (games.data ?? []).map((row) => toGame(row, onLoan.get(row.id) ?? 0)),
       ratePlans: (ratePlans.data ?? []).map(toRatePlan),
       reservations: (reservations.data ?? []).map(toReservation),
     }
@@ -137,6 +128,17 @@ class SupabaseAdapter implements DataPort {
 
   async checkOutPass(passId: ID) {
     await rpc('check_out_pass', { p_pass_id: passId })
+  }
+
+  async passSettlement(passId: ID): Promise<PassSettlement> {
+    return await rpc<PassSettlement>('pass_settlement', { p_pass_id: passId })
+  }
+
+  async settlePass(passId: ID, payments: PaymentInput[] = []) {
+    await rpc('settle_pass', {
+      p_pass_id: passId,
+      p_payments: payments.map((p) => ({ method: p.method, amount: p.amount })),
+    })
   }
 
   async moveVisitToTables(visitId: ID, tableIds: ID[]) {
@@ -246,6 +248,7 @@ function toVisit(r: Record<string, any>): Visit {
     id: r.id, code: r.code, source: r.source, status: r.status,
     openedAt: r.opened_at, closedAt: r.closed_at,
     businessDate: r.business_date, note: r.note ?? undefined,
+    sharedSettled: Number(r.shared_settled ?? 0),
   }
 }
 
@@ -284,15 +287,6 @@ function toMenuItem(r: Record<string, any>): MenuItem {
     price: Number(r.price), available: r.available,
     sortOrder: r.sort_order, archived: r.archived ?? false,
     imagePath: r.image_path ?? null,
-  }
-}
-
-function toGame(r: Record<string, any>, onLoan: number): GameTitle {
-  return {
-    id: r.id, name: r.name,
-    minPlayers: r.min_players, maxPlayers: r.max_players,
-    playMinutes: r.play_minutes, weight: r.weight,
-    copies: r.copies, onLoan,
   }
 }
 

@@ -34,9 +34,9 @@ export function seed(): Snapshot {
     ],
 
     visits: [
-      { id: 'v-1', code: 'V-014', source: 'walkin', status: 'open', openedAt: ago(135), closedAt: null, businessDate: businessDateOf(new Date()) },
-      { id: 'v-2', code: 'V-015', source: 'reservation', status: 'open', openedAt: ago(52), closedAt: null, businessDate: businessDateOf(new Date()) },
-      { id: 'v-3', code: 'V-016', source: 'walkin', status: 'open', openedAt: ago(18), closedAt: null, businessDate: businessDateOf(new Date()) },
+      { id: 'v-1', code: 'V-014', source: 'walkin', status: 'open', openedAt: ago(135), closedAt: null, businessDate: businessDateOf(new Date()), sharedSettled: 0 },
+      { id: 'v-2', code: 'V-015', source: 'reservation', status: 'open', openedAt: ago(52), closedAt: null, businessDate: businessDateOf(new Date()), sharedSettled: 0 },
+      { id: 'v-3', code: 'V-016', source: 'walkin', status: 'open', openedAt: ago(18), closedAt: null, businessDate: businessDateOf(new Date()), sharedSettled: 0 },
     ],
 
     // v-1 ย้ายโต๊ะกลางคัน A1 → B1 (เกมใหญ่ ต้องการโต๊ะกว้างกว่า)
@@ -92,15 +92,6 @@ export function seed(): Snapshot {
         splitMode: 'owner', tableIdSnapshot: 't-a2', status: 'placed', placedAt: ago(4),
         lines: [{ id: 'ol-4', menuItemId: 'm-8', nameSnapshot: 'สปาเก็ตตี้คาโบนาร่า', unitPriceSnapshot: 149, qty: 1 }],
       },
-    ],
-
-    games: [
-      { id: 'g-1', name: 'Wingspan', minPlayers: 1, maxPlayers: 5, playMinutes: 70, weight: 3, copies: 2, onLoan: 1 },
-      { id: 'g-2', name: 'Codenames', minPlayers: 4, maxPlayers: 8, playMinutes: 20, weight: 1, copies: 3, onLoan: 0 },
-      { id: 'g-3', name: 'Terraforming Mars', minPlayers: 1, maxPlayers: 5, playMinutes: 120, weight: 5, copies: 1, onLoan: 1 },
-      { id: 'g-4', name: 'Splendor', minPlayers: 2, maxPlayers: 4, playMinutes: 30, weight: 2, copies: 2, onLoan: 0 },
-      { id: 'g-5', name: 'Everdell', minPlayers: 1, maxPlayers: 4, playMinutes: 80, weight: 4, copies: 1, onLoan: 0 },
-      { id: 'g-6', name: 'The Crew', minPlayers: 3, maxPlayers: 5, playMinutes: 20, weight: 2, copies: 2, onLoan: 0 },
     ],
 
     reservations: [

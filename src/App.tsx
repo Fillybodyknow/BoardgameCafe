@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import FloorMap from './pages/FloorMap'
 import VisitDetail from './pages/VisitDetail'
 import Kitchen from './pages/Kitchen'
-import Games from './pages/Games'
 import Reservations from './pages/Reservations'
 import TableQR from './pages/TableQR'
 import Owner from './pages/Owner'
@@ -30,7 +29,6 @@ const NAV: { to: string; label: string; icon: IconName; cap: Capability; end?: b
   { to: '/', label: 'ผังโต๊ะ', icon: 'castle', cap: 'floor', end: true },
   { to: '/kitchen', label: 'ครัว', icon: 'cauldron', cap: 'kitchen' },
   { to: '/reservations', label: 'การจอง', icon: 'scroll', cap: 'floor' },
-  { to: '/games', label: 'คลังเกม', icon: 'dice', cap: 'floor' },
   { to: '/qr', label: 'QR โต๊ะ', icon: 'qr', cap: 'floor' },
   { to: '/owner', label: 'ตั้งค่า', icon: 'crown', cap: 'settings' },
 ]
@@ -161,7 +159,6 @@ function StaffShell() {
             <Route path="/visit/:visitId" element={<Guard ok={can('floor')} loading={caps.isPending}><VisitDetail /></Guard>} />
             <Route path="/kitchen" element={<Guard ok={can('kitchen')} loading={caps.isPending}><Kitchen /></Guard>} />
             <Route path="/reservations" element={<Guard ok={can('floor')} loading={caps.isPending}><Reservations /></Guard>} />
-            <Route path="/games" element={<Guard ok={can('floor')} loading={caps.isPending}><Games /></Guard>} />
             <Route path="/qr" element={<Guard ok={can('floor')} loading={caps.isPending}><TableQR /></Guard>} />
             <Route path="/owner" element={<Guard ok={can('settings')} loading={caps.isPending}><Owner /></Guard>} />
             <Route path="*" element={<Empty icon="⚔">ไม่พบหน้านี้ — ทางนี้ไม่มีปราสาท</Empty>} />

@@ -1,7 +1,7 @@
 import type {
   AvailableTable, BillPreview, BookingConfig, BookingLookup, BookingReceipt,
-  CafeTable, GameTitle, GuestOrder, GuestPass, GuestSession, ID, MenuCategory,
-  MenuItem, Occupancy, Order, OrderStatus, PaymentInput, RatePlan, Reservation,
+  CafeTable, GuestOrder, GuestPass, GuestSession, ID, MenuCategory,
+  MenuItem, Occupancy, Order, OrderStatus, PassSettlement, PaymentInput, RatePlan, Reservation,
   Capability, ShopHours, StaffMember, StaffRole, TaxConfig, Visit,
 } from '../domain/types'
 
@@ -22,7 +22,6 @@ export interface Snapshot {
   passes: GuestPass[]
   orders: Order[]
   menu: MenuItem[]
-  games: GameTitle[]
   ratePlans: RatePlan[]
   reservations: Reservation[]
 }
@@ -39,6 +38,10 @@ export interface DataPort {
   pausePass(passId: ID): Promise<void>
   resumePass(passId: ID): Promise<void>
   checkOutPass(passId: ID): Promise<void>
+  /** ยอดที่คนนี้ต้องจ่ายถ้ากลับตอนนี้ — ดูก่อนกดเก็บเงิน */
+  passSettlement(passId: ID): Promise<PassSettlement>
+  /** เก็บเงินคนที่กลับก่อน แล้วออกบิลย่อย — คนที่เหลือยังเล่นต่อได้ */
+  settlePass(passId: ID, payments?: PaymentInput[]): Promise<void>
   moveVisitToTables(visitId: ID, tableIds: ID[]): Promise<void>
   /** ปิดบิล พร้อมบันทึกการชำระเงิน (ว่าง = ปิดโดยยังไม่เก็บเงิน) */
   closeVisit(visitId: ID, payments?: PaymentInput[]): Promise<void>
