@@ -352,7 +352,7 @@ export const supabaseBookingAdapter: BookingPort = {
     return (data ?? []).map(toHours)
   },
 
-  async config() {
+  async config(): Promise<BookingConfig> {
     const sb = requireClient()
     const { data, error } = await sb.from('reservation_config').select('*').eq('id', 1).single()
     if (error) throw new Error(error.message)
@@ -363,7 +363,7 @@ export const supabaseBookingAdapter: BookingPort = {
       maxDurationMinutes: data.max_duration_minutes,
       maxAdvanceDays: data.max_advance_days,
       minAdvanceMinutes: data.min_advance_minutes,
-    } as BookingConfig
+    }
   },
 
   async availableTables(startAt, durationMinutes) {

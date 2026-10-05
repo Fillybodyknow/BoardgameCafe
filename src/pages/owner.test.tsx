@@ -255,6 +255,8 @@ describe('หน้าตั้งค่าร้าน', () => {
     fireEvent.click(await screen.findByText('เวลาทำการ'))
 
     const field = (await screen.findByLabelText('เวลาปิดครัว จันทร์')) as HTMLInputElement
+    await waitFor(() => expect(field.value).toBe(''))
+
     fireEvent.focus(field)
     fireEvent.change(field, { target: { value: '' } })
     fireEvent.change(field, { target: { value: '22:00' } })
@@ -274,6 +276,43 @@ describe('หน้าตั้งค่าร้าน', () => {
       const hours = await mockAdminAdapter.shopHours()
       expect(hours.find((h) => h.weekday === 1)!.kitchenCloseTime).toBe('22:00')
     })
+  })
+
+  // ★ อาการที่เจอหน้างาน: กรอกวันหนึ่งเสร็จ ไปกรอกอีกวัน
+  // แล้ววันแรกกลับเป็นค่าว่าง
+  it('กรอกหลายวันต่อกัน ค่าของวันก่อนหน้าต้องไม่หาย', async () => {
+    window.location.hash = '#/owner'
+    render(<App />)
+    fireEvent.click(await screen.findByText('เวลาทำการ'))
+
+    const mon = (await screen.findByLabelText('เวลาปิดครัว จันทร์')) as HTMLInputElement
+    // react-query คืนค่าที่แคชไว้จากเทสต์ก่อนหน้าก่อนจะดึงใหม่ ต้องรอให้นิ่ง
+    // ไม่งั้นจะพิมพ์ค่าเดิมทับค่าเดิม แล้วไม่เกิดการบันทึก
+    await waitFor(() => expect(mon.value).toBe(''))
+
+    fireEvent.focus(mon)
+    fireEvent.change(mon, { target: { value: '22:00' } })
+    fireEvent.blur(mon)
+
+    await waitFor(async () => {
+      const hours = await mockAdminAdapter.shopHours()
+      expect(hours.find((h) => h.weekday === 1)!.kitchenCloseTime).toBe('22:00')
+    })
+
+    const tue = (await screen.findByLabelText('เวลาปิดครัว อังคาร')) as HTMLInputElement
+    fireEvent.focus(tue)
+    fireEvent.change(tue, { target: { value: '21:00' } })
+    fireEvent.blur(tue)
+
+    await waitFor(async () => {
+      const hours = await mockAdminAdapter.shopHours()
+      expect(hours.find((h) => h.weekday === 2)!.kitchenCloseTime).toBe('21:00')
+    })
+
+    // วันจันทร์ต้องยังอยู่ ทั้งในฐานข้อมูลและบนหน้าจอ
+    const hours = await mockAdminAdapter.shopHours()
+    expect(hours.find((h) => h.weekday === 1)!.kitchenCloseTime).toBe('22:00')
+    await waitFor(() => expect(mon.value).toBe('22:00'))
   })
 
   it('ล้างช่องเวลาปิดครัวแล้วกลับไปปิดพร้อมร้าน', async () => {

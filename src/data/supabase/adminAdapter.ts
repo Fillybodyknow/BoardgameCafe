@@ -33,27 +33,27 @@ export const supabaseAdminAdapter: AdminPort = {
   },
 
   // หน้าตั้งค่าต้องเห็นของที่เก็บเข้ากรุด้วย ต่างจากหน้าร้านที่กรองออก
-  async allMenuItems() {
+  async allMenuItems(): Promise<MenuItem[]> {
     const rows = await all<Record<string, any>>('menu_items', 'sort_order')
     return rows.map((r) => ({
       id: r.id, sku: r.sku, name: r.name, category: r.category,
       price: Number(r.price), available: r.available,
       sortOrder: r.sort_order, archived: r.archived,
       imagePath: r.image_path ?? null,
-    })) as MenuItem[]
+    }))
   },
 
-  async allTables() {
+  async allTables(): Promise<CafeTable[]> {
     const rows = await all<Record<string, any>>('cafe_tables', 'sort_order')
     return rows.map((r) => ({
       id: r.id, code: r.code, zone: r.zone,
       seatMin: r.seat_min, seatMax: r.seat_max,
       allowShare: r.allow_share, status: r.status,
       sortOrder: r.sort_order, archived: r.archived, qrToken: r.qr_token,
-    })) as CafeTable[]
+    }))
   },
 
-  async allRatePlans() {
+  async allRatePlans(): Promise<RatePlan[]> {
     const rows = await all<Record<string, any>>('rate_plans', 'sort_order')
     return rows.map((r) => ({
       id: r.id, name: r.name,
@@ -62,20 +62,24 @@ export const supabaseAdminAdapter: AdminPort = {
       minimumMinutes: r.minimum_minutes,
       dayPassCap: r.day_pass_cap === null ? null : Number(r.day_pass_cap),
       active: r.active, sortOrder: r.sort_order,
-    })) as RatePlan[]
+    }))
   },
 
-  async shopHours() {
+  async shopHours(): Promise<ShopHours[]> {
     const rows = await all<Record<string, any>>('shop_hours', 'weekday')
+    // ไม่ cast ด้วย `as ShopHours[]` โดยเด็ดขาด — ของเดิม cast ไว้ แล้วตอน
+    // เพิ่มฟิลด์ใหม่ TypeScript เลยไม่ฟ้องว่าลืมแปลง ผลคือหน้าตั้งค่าแสดง
+    // เวลาปิดครัวเป็นค่าว่างตลอด และเผลอล้างค่าทิ้งเมื่อแก้ช่องอื่นของวันนั้น
     return rows.map((r) => ({
       weekday: r.weekday,
       openTime: String(r.open_time).slice(0, 5),
       closeTime: String(r.close_time).slice(0, 5),
       closed: r.closed,
-    })) as ShopHours[]
+      kitchenCloseTime: r.kitchen_close_time ? String(r.kitchen_close_time).slice(0, 5) : null,
+    }))
   },
 
-  async taxConfig() {
+  async taxConfig(): Promise<TaxConfig> {
     const { data, error } = await requireClient()
       .from('tax_config').select('*').eq('id', 1).single()
     if (error) throw new Error(error.message)
@@ -83,7 +87,7 @@ export const supabaseAdminAdapter: AdminPort = {
       serviceChargeRate: Number(data.service_charge_rate),
       vatRate: Number(data.vat_rate),
       vatIncluded: data.vat_included,
-    } as TaxConfig
+    }
   },
 
   async saveMenuItem(input) {
