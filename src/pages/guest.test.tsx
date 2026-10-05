@@ -52,6 +52,38 @@ describe('ลูกค้าสแกน QR', () => {
     expect(await screen.findByText('QR นี้ใช้ไม่ได้')).toBeTruthy()
   })
 
+  // เคสที่เจอหน้าร้าน: เลือก 2 เมนู อย่างละชิ้น แล้วสั่งไม่ได้
+  // เพราะเคยกด + แล้วกด − ใส่เมนูอีกอัน ทำให้เหลือรายการ qty=0 ค้างในตะกร้า
+  // หน้าจอยังขึ้นว่า 2 รายการ (0 ไม่ถูกนับ) ลูกค้าจึงเดาไม่ออกว่าอะไรผิด
+  it('กดเพิ่มแล้วกดลดจนเหลือศูนย์ ต้องไม่ทำให้สั่งทั้งออเดอร์ไม่ได้', async () => {
+    window.location.hash = '#/t/qr-b1'
+    render(<App />)
+    await screen.findByText('โต๊ะ B1')
+
+    const before = (await mockAdapter.getSnapshot()).orders.length
+    const plus = screen.getAllByRole('button', { name: 'เพิ่ม' })
+
+    fireEvent.click(plus[0]!) // เมนู 1
+    fireEvent.click(plus[1]!) // เมนู 2
+    fireEvent.click(plus[2]!) // เมนู 3 แล้วเปลี่ยนใจ
+
+    // ปุ่มลดจะโผล่เฉพาะรายการที่มีจำนวน > 0 ตอนนี้จึงมี 3 ปุ่ม
+    const minus = await screen.findAllByRole('button', { name: 'ลด' })
+    expect(minus).toHaveLength(3)
+    fireEvent.click(minus[2]!) // เอาเมนู 3 ออกจนเหลือ 0
+
+    fireEvent.click(await screen.findByText('ส่งเข้าครัว'))
+
+    await waitFor(async () => {
+      const snap = await mockAdapter.getSnapshot()
+      expect(snap.orders.length).toBe(before + 1)
+      const created = snap.orders[snap.orders.length - 1]!
+      // ต้องส่งไปแค่ 2 รายการ และต้องไม่มี qty 0 ติดไปด้วย
+      expect(created.lines).toHaveLength(2)
+      expect(created.lines.every((l) => l.qty > 0)).toBe(true)
+    })
+  })
+
   it('สั่งของแล้วเข้าครัวทันที และผูกกับโต๊ะที่สแกน', async () => {
     window.location.hash = '#/t/qr-b1'
     render(<App />)

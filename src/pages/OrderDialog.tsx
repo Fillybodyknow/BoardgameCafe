@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useSnapshot } from '../hooks/useData'
 import { db, menuImageUrl } from '../data'
+import { cartItems, setCartQty, type Cart } from '../lib/cart'
 import { formatBaht } from '../domain/pricing'
 import type { GuestPass, MenuItem } from '../domain/types'
 import { Button, INPUT, Modal, Segmented } from '../components/ui'
@@ -22,7 +23,7 @@ export default function OrderDialog({
   onClose: () => void
 }) {
   const { data } = useSnapshot()
-  const [cart, setCart] = useState<Record<string, number>>({})
+  const [cart, setCart] = useState<Cart>({})
   const [splitMode, setSplitMode] = useState<'owner' | 'shared'>('owner')
   const [ownerId, setOwnerId] = useState<string>(passes[0]?.id ?? '')
   const [busy, setBusy] = useState(false)
@@ -59,7 +60,7 @@ export default function OrderDialog({
         orderedByPassId: splitMode === 'owner' ? ownerId : null,
         splitMode,
         placedBy: 'staff',
-        items: Object.entries(cart).map(([menuItemId, qty]) => ({ menuItemId, qty })),
+        items: cartItems(cart),
       })
       onClose()
     } catch (e) {
@@ -158,7 +159,7 @@ export default function OrderDialog({
                     <Stepper
                       qty={qty}
                       disabled={!item.available}
-                      onChange={(n) => setCart((c) => ({ ...c, [item.id]: n }))}
+                      onChange={(n) => setCart((c) => setCartQty(c, item.id, n))}
                     />
                   </div>
                 )
@@ -207,6 +208,7 @@ export function Stepper({
       )}
       <button
         type="button"
+        aria-label="เพิ่ม"
         disabled={disabled}
         onClick={(e) => {
           onAdd?.(e.currentTarget)

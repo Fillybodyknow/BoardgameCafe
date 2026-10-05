@@ -225,6 +225,11 @@ class MockAdapter implements DataPort {
         const menuItem = this.state.menu.find((m) => m.id === item.menuItemId)
         if (!menuItem) throw new Error(`ไม่พบเมนู ${item.menuItemId}`)
         if (!menuItem.available) throw new Error(`${menuItem.name} หมด`)
+        // ตรงกับ place_order_core() ฝั่ง SQL ถ้าไม่ตรวจ บั๊กรายการ qty=0
+        // จะผ่านโหมดเดโมไปโผล่ตอนขึ้นฐานข้อมูลจริง (เคยเกิดมาแล้ว)
+        if (!Number.isInteger(item.qty) || item.qty <= 0) {
+          throw new Error('จำนวนต้องมากกว่า 0')
+        }
         return {
           id: newId('ol'),
           menuItemId: menuItem.id,

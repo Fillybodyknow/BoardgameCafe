@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { guestDb, menuImageUrl } from '../../data'
+import { cartItems, setCartQty, type Cart } from '../../lib/cart'
 import { formatBaht } from '../../domain/pricing'
 import type { GuestOrder, MenuItem, OrderStatus } from '../../domain/types'
 import { Badge, Button, Card, Empty, INPUT } from '../../components/ui'
@@ -50,7 +51,7 @@ export default function GuestApp() {
   const qc = useQueryClient()
   const [tab, setTab] = useState<Tab>('menu')
   const [passId, setPassId] = useState<string>('')
-  const [cart, setCart] = useState<Record<string, number>>({})
+  const [cart, setCart] = useState<Cart>({})
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [justSent, setJustSent] = useState(false)
@@ -150,7 +151,7 @@ export default function GuestApp() {
         idempotencyKey: `g-${token}-${Date.now()}`,
         orderedByPassId: passId || null,
         splitMode: passId ? 'owner' : 'shared',
-        items: Object.entries(cart).map(([menuItemId, qty]) => ({ menuItemId, qty })),
+        items: cartItems(cart),
       })
       setCart({})
       setJustSent(true)
@@ -271,7 +272,7 @@ export default function GuestApp() {
                               qty={qty}
                               disabled={!item.available}
                               onAdd={flyCoin}
-                              onChange={(n) => setCart((c) => ({ ...c, [item.id]: n }))}
+                              onChange={(n) => setCart((c) => setCartQty(c, item.id, n))}
                             />
                           </div>
                         )
