@@ -5,6 +5,7 @@ import { bookingDb } from '../../data'
 import type { AvailableTable, BookingLookup, BookingReceipt, ShopHours } from '../../domain/types'
 import { Badge, Button, Card, Empty, Field, INPUT, Segmented } from '../../components/ui'
 import type { Tone } from '../../components/ui'
+import ShopLogo, { ShopName } from '../../components/ShopLogo'
 import {
   forgetBooking,
   myBookings,
@@ -63,8 +64,11 @@ export default function BookingApp() {
   return (
     <div className="mx-auto flex min-h-screen max-w-lg flex-col">
       <header className="tapestry pennant px-5 pt-6 pb-12 text-center">
-        <div className="wax-seal mx-auto h-12 w-12 text-xl">⚜</div>
-        <h1 className="brand mt-3 text-2xl">⚜ จองโต๊ะ</h1>
+        <ShopLogo className="mx-auto h-14 w-14" seal="text-xl" />
+        <div className="brand mt-2 text-xs">
+          <ShopName />
+        </div>
+        <h1 className="brand mt-1 text-2xl">⚜ จองโต๊ะ</h1>
         <ShopHoursLine />
       </header>
 

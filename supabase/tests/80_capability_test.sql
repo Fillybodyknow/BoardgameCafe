@@ -19,9 +19,9 @@ begin
     (select array_agg(capability order by capability) from role_capabilities where role = 'manager'),
     array['floor', 'kitchen', 'settings']);
 
-  perform assert_eq('owner = manager + จัดการบัญชี',
+  perform assert_eq('owner = manager + จัดการบัญชี + หน้าตาร้าน',
     (select array_agg(capability order by capability) from role_capabilities where role = 'owner'),
-    array['accounts', 'floor', 'kitchen', 'settings']);
+    array['accounts', 'branding', 'floor', 'kitchen', 'settings']);
 
   perform assert_eq('ระดับใหม่: ดูโต๊ะและการจอง',
     (select array_agg(capability) from role_capabilities where role = 'floor'),

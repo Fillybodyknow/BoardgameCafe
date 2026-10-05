@@ -1,4 +1,6 @@
-import type { AdminPort, BookingPort, DataPort, GuestPort } from './port'
+import type { AdminPort, BookingPort, DataPort, GuestPort, ShopPort } from './port'
+import { loadShopProfile } from './mock/shopStore'
+import { SHOP_BUCKET, supabaseShopAdapter } from './supabase/shopAdapter'
 import { mockAdapter, mockBookingAdapter, mockGuestAdapter } from './mock/mockAdapter'
 import { mockAdminAdapter } from './mock/adminAdapter'
 import { supabaseAdminAdapter } from './supabase/adminAdapter'
@@ -25,6 +27,11 @@ export const guestDb: GuestPort = hasSupabase ? supabaseGuestAdapter : mockGuest
 /** จองโต๊ะออนไลน์ — ลูกค้ายังไม่ได้มาร้าน ไม่มีทั้งบัญชีและ QR token */
 export const bookingDb: BookingPort = hasSupabase ? supabaseBookingAdapter : mockBookingAdapter
 
+/** ชื่อร้านและโลโก้ — อ่านได้โดยไม่ต้องล็อกอิน */
+export const shopDb: ShopPort = hasSupabase
+  ? supabaseShopAdapter
+  : { profile: async () => loadShopProfile() }
+
 /** ตั้งค่าร้าน — ระดับผู้จัดการขึ้นไป */
 export const adminDb: AdminPort = hasSupabase ? supabaseAdminAdapter : mockAdminAdapter
 
@@ -40,6 +47,14 @@ export function menuImageUrl(path?: string | null): string | null {
   if (path.startsWith('data:')) return path
   const base = import.meta.env.VITE_SUPABASE_URL as string | undefined
   return base ? `${base}/storage/v1/object/public/menu-images/${path}` : null
+}
+
+/** URL ของโลโก้ร้าน — กติกาเดียวกับ menuImageUrl แต่คนละ bucket */
+export function shopLogoUrl(path?: string | null): string | null {
+  if (!path) return null
+  if (path.startsWith('data:')) return path
+  const base = import.meta.env.VITE_SUPABASE_URL as string | undefined
+  return base ? `${base}/storage/v1/object/public/${SHOP_BUCKET}/${path}` : null
 }
 
 export { mockAdapter }

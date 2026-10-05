@@ -3,6 +3,7 @@ import type { Session } from '@supabase/supabase-js'
 import { hasSupabase, supabase } from '../data'
 import { emailForLogin } from '../data/supabase/client'
 import { Button, Card, Icon, INPUT } from '../components/ui'
+import ShopLogo, { ShopName } from '../components/ShopLogo'
 
 /**
  * ด่านล็อกอินพนักงาน
@@ -77,8 +78,10 @@ function LoginForm() {
     <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-sm animate-unroll">
         <div className="tapestry pennant relative z-10 mx-auto -mb-6 w-44 px-4 pt-6 pb-10 text-center">
-          <div className="wax-seal mx-auto h-16 w-16 text-3xl">⚜</div>
-          <div className="brand mt-3 text-sm">Boardgame Cafe</div>
+          <ShopLogo className="mx-auto h-16 w-16" seal="text-3xl" />
+          <div className="brand mt-3 text-sm">
+            <ShopName />
+          </div>
         </div>
         <Card ornate className="pt-10">
           <h1 className="text-center text-lg font-bold">เข้าสู่ระบบพนักงาน</h1>

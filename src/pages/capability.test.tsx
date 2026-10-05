@@ -32,7 +32,12 @@ describe('ชุดสิทธิ์ของแต่ละระดับ', (
   it('ระดับเดิมทั้งสามได้สิทธิ์เท่าเดิม ไม่มีใครถูกตัด', () => {
     expect(CAPABILITIES.staff).toEqual(['floor', 'kitchen'])
     expect(CAPABILITIES.manager).toEqual(['floor', 'kitchen', 'settings'])
-    expect(CAPABILITIES.owner).toEqual(['floor', 'kitchen', 'settings', 'accounts'])
+    // เจ้าของร้านได้เพิ่มแค่ branding (ชื่อร้าน/โลโก้ — migration 2000)
+    expect(CAPABILITIES.owner).toEqual(['floor', 'kitchen', 'settings', 'accounts', 'branding'])
+  })
+
+  it('ชื่อร้านและโลโก้เป็นของเจ้าของร้านคนเดียว ผู้จัดการไม่ได้', () => {
+    expect(CAPABILITIES.manager).not.toContain('branding')
   })
 
   it('ระดับใหม่มีสิทธิ์เดียวตามชื่อ', () => {
@@ -186,7 +191,7 @@ describe('แท็บจัดการบัญชีแยกจากกา�
 
 describe('สิทธิ์ที่ใช้จริงต้องเป็นชนิดที่รู้จัก', () => {
   it('ไม่มีสิทธิ์แปลกปลอมหลุดเข้ามาในตาราง', () => {
-    const known: Capability[] = ['floor', 'kitchen', 'settings', 'accounts']
+    const known: Capability[] = ['floor', 'kitchen', 'settings', 'accounts', 'branding']
     for (const caps of Object.values(CAPABILITIES)) {
       for (const c of caps) expect(known).toContain(c)
     }

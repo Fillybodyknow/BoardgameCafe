@@ -19,7 +19,6 @@ export interface PrinterSettings {
   paper: PaperWidth
   /** เปิดโต๊ะแล้วสั่งพิมพ์ทันที ไม่ต้องกดปุ่มพิมพ์ */
   autoPrint: boolean
-  shopName: string
   /** บรรทัดท้ายใบ เช่น ชื่อ Wi-Fi หรือคำขอบคุณ */
   footer: string
 }
@@ -27,7 +26,6 @@ export interface PrinterSettings {
 export const DEFAULT_PRINTER: PrinterSettings = {
   paper: 80,
   autoPrint: false,
-  shopName: 'Boardgame Cafe',
   footer: 'ขอให้สนุกกับเกม!',
 }
 
@@ -73,6 +71,9 @@ export interface TableSlip {
   visitCode: string
   openedAt: string
   url: string
+  /** ชื่อร้านและโลโก้จากหน้าตั้งค่าร้าน — ที่เดียวกับที่ลูกค้าเห็นบนจอ */
+  shopName: string
+  logoUrl?: string | null
   /** ใบทดสอบจากหน้าตั้งค่า — พิมพ์คำว่า "ทดสอบ" กำกับ กันเอาไปใช้จริง */
   test?: boolean
 }
@@ -114,11 +115,14 @@ export function slipHtml(slip: TableSlip, settings: PrinterSettings, svg: string
   .steps { text-align: left; margin: 0 auto; padding-left: 5mm; font-size: ${small ? 9 : 10}pt; }
   .steps li { margin: .5mm 0; }
   .note { font-size: ${small ? 8 : 8.5}pt; margin-top: 2mm; }
+  /* หัวพิมพ์ความร้อนพิมพ์ได้แค่ขาวดำ — แปลงโลโก้เป็นขาวดำเอง จะได้เห็นตรงกับตัวอย่าง */
+  .logo { display: block; max-width: ${small ? 18 : 24}mm; max-height: ${small ? 14 : 18}mm; margin: 0 auto 1.5mm; filter: grayscale(1) contrast(1.6); }
   .test { border: 2px solid #000; font-weight: 700; padding: 1mm; margin-bottom: 2mm; }
   b { font-weight: 700; }
 </style></head><body>
   ${slip.test ? '<div class="test">ใบทดสอบ — ใช้สั่งของไม่ได้</div>' : ''}
-  <div class="shop">⚜ ${esc(settings.shopName)} ⚜</div>
+  ${slip.logoUrl ? `<img class="logo" src="${esc(slip.logoUrl)}" alt="">` : ''}
+  <div class="shop">${slip.logoUrl ? '' : '⚜ '}${esc(slip.shopName)}${slip.logoUrl ? '' : ' ⚜'}</div>
   <div class="rule"></div>
   <div class="label">โต๊ะ</div>
   <div class="table">${esc(slip.tableCode)}</div>
@@ -169,9 +173,20 @@ function printHtml(html: string): Promise<void> {
     // บางเบราว์เซอร์ไม่ยิง afterprint — กันค้างไว้ใน DOM
     setTimeout(() => frame.remove(), 120_000)
 
-    // รอฟอนต์ไทยโหลดก่อน ไม่งั้นใบแรกออกมาเป็นฟอนต์ระบบ — แต่ไม่รอนานถ้าออฟไลน์
+    // รอฟอนต์ไทยและโลโก้โหลดก่อน ไม่งั้นใบแรกออกมาเป็นฟอนต์ระบบ/ไม่มีโลโก้ — แต่ไม่รอนานถ้าออฟไลน์
     const fontsReady = doc.fonts?.ready ?? Promise.resolve()
-    void Promise.race([fontsReady, new Promise((r) => setTimeout(r, 1500))]).then(() => {
+    const imagesReady = Promise.all(
+      Array.from(doc.images).map((img) =>
+        img.complete
+          ? null
+          : new Promise((r) => {
+              // โลโก้โหลดไม่ขึ้นก็ยังพิมพ์ใบต่อได้ ไม่ต้องค้างรอ
+              img.addEventListener('load', r)
+              img.addEventListener('error', r)
+            }),
+      ),
+    )
+    void Promise.race([Promise.all([fontsReady, imagesReady]), new Promise((r) => setTimeout(r, 2500))]).then(() => {
       fitPageToContent(doc)
       try {
         win.focus()

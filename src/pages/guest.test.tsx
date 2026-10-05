@@ -379,3 +379,25 @@ describe('รับชื่อที่พนักงานสร้างไ�
     expect(snap.passes.filter((p) => p.visitId === visit.id)).toHaveLength(5)
   })
 })
+
+// ใบหาย/เพื่อนมาทีหลัง — สแกน QR จากจอคนในโต๊ะได้ ไม่ต้องไปขอที่เคาน์เตอร์
+describe('QR โต๊ะบนจอลูกค้า', () => {
+  beforeEach(() => {
+    cleanup()
+    localStorage.clear()
+    mockAdapter.reset()
+    window.location.hash = ''
+  })
+
+  it('กดปุ่ม QR แล้วเห็น QR ของรอบนี้ให้เพื่อนสแกน', async () => {
+    await signedInAs('qr-v1', 'คุณมีมือถือ')
+    window.location.hash = '#/t/qr-v1'
+    render(<App />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'QR โต๊ะให้เพื่อนสแกน' }))
+
+    const qr = await screen.findByRole('img', { name: 'QR โต๊ะ B1' })
+    await waitFor(() => expect(qr.querySelector('svg')).toBeTruthy())
+    expect(screen.getByText(/ใช้ได้เฉพาะรอบนี้/)).toBeTruthy()
+  })
+})

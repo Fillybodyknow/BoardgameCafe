@@ -16,8 +16,13 @@ import AuthGate, { SignOutButton } from './auth/AuthGate'
 import { Button, Empty, Icon, SealStamp, onCelebrate } from './components/ui'
 import type { IconName } from './components/ui'
 import { useNow } from './hooks/useData'
+import { useShopProfile } from './hooks/useShop'
+import ShopLogo from './components/ShopLogo'
+import { setShopTitle } from './lib/alert'
 
-const qc = new QueryClient({
+// export ไว้ให้เทสต์ล้าง cache ระหว่างเคส — ไม่งั้นสิทธิ์/ชื่อร้านที่เคสก่อนโหลดไว้
+// จะค้างข้ามไปเคสถัดไป (ชื่อร้าน cache 5 นาที)
+export const qc = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false, retry: 1 } },
 })
 
@@ -80,6 +85,13 @@ function StaffShell() {
   })
   const can = (c: Capability) => caps.data?.includes(c) ?? false
   const nav = NAV.filter((item) => can(item.cap))
+  const shop = useShopProfile()
+
+  // ชื่อบนแท็บเบราว์เซอร์ตามชื่อร้านจริง (ครัวต่อท้ายจำนวนออเดอร์เอง)
+  useEffect(() => {
+    setShopTitle(shop.name)
+    document.title = shop.name
+  }, [shop.name])
 
   useEffect(
     () =>
@@ -94,12 +106,14 @@ function StaffShell() {
     <div className="min-h-screen lg:pl-64">
       <aside className="tapestry sticky top-0 z-40 flex items-center gap-3 px-4 py-3 shadow-[0_4px_20px_-8px_rgb(40_10_12/0.6)] lg:fixed lg:inset-y-0 lg:left-0 lg:w-64 lg:flex-col lg:items-stretch lg:gap-0 lg:p-0">
         <div className="flex min-w-0 flex-1 items-center gap-3 lg:flex-none lg:flex-col lg:px-6 lg:pt-8 lg:pb-6 lg:text-center">
-          <div className="wax-seal h-10 w-10 shrink-0 text-xl lg:h-16 lg:w-16 lg:text-3xl">⚜</div>
+          <ShopLogo className="h-10 w-10 lg:h-16 lg:w-16" seal="text-xl lg:text-3xl" />
           <div className="min-w-0">
-            <div className="brand truncate text-lg lg:text-xl">Boardgame Cafe</div>
-            <div className="hidden font-display text-[0.65rem] tracking-[0.3em] text-gold-light/60 uppercase lg:block">
-              โรงเตี๊ยมนักเล่น
-            </div>
+            <div className="brand truncate text-lg lg:text-xl">{shop.name}</div>
+            {shop.tagline && (
+              <div className="hidden font-display text-[0.65rem] tracking-[0.3em] text-gold-light/60 uppercase lg:block">
+                {shop.tagline}
+              </div>
+            )}
           </div>
         </div>
 

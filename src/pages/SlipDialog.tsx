@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { db } from '../data'
+import { db, shopLogoUrl } from '../data'
+import { useShopProfile } from '../hooks/useShop'
 import type { Visit } from '../domain/types'
 import { Button, Icon, Modal, Segmented } from '../components/ui'
 import {
@@ -36,7 +37,11 @@ export default function SlipDialog({
   const autoPrinted = useRef(false)
 
   const url = token ? guestUrl(token) : ''
-  const slip: TableSlip = { tableCode, zone, visitCode: visit.code, openedAt: visit.openedAt, url }
+  const shop = useShopProfile()
+  const slip: TableSlip = {
+    tableCode, zone, visitCode: visit.code, openedAt: visit.openedAt, url,
+    shopName: shop.name, logoUrl: shopLogoUrl(shop.logoPath),
+  }
 
   useEffect(() => {
     if (!url) return

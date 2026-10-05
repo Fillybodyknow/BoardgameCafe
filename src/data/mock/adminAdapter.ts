@@ -2,7 +2,7 @@ import type { AdminPort } from '../port'
 import type { Capability, StaffMember, StaffRole } from '../../domain/types'
 import { loadStaff, saveStaff } from './shopStore'
 import { mockAdapter } from './mockAdapter'
-import { loadHours, loadTax, saveHours, saveTax } from './shopStore'
+import { loadHours, loadShopProfile, loadTax, saveHours, saveShopProfile, saveTax } from './shopStore'
 
 /**
  * โหมดเดโม — ตรวจกติกาเดียวกับ RPC ฝั่ง SQL
@@ -162,6 +162,24 @@ export const mockAdminAdapter: AdminPort = {
     saveStaff(list.map((s) => (s.userId === userId ? { ...s, displayName: name.trim() } : s)))
   },
 
+  async saveShopProfile(input) {
+    const name = input.name.trim()
+    if (!name) throw new Error('กรุณาใส่ชื่อร้าน')
+    if (name.length > 60) throw new Error('ชื่อร้านยาวเกิน 60 ตัวอักษร')
+    const tagline = input.tagline.trim()
+    if (tagline.length > 80) throw new Error('คำโปรยยาวเกิน 80 ตัวอักษร')
+    saveShopProfile({ ...loadShopProfile(), name, tagline })
+  },
+
+  // โหมดเดโมไม่มี Storage — เก็บ data URL ไว้ใน localStorage แทน (เหมือนรูปเมนู)
+  async uploadShopLogo(image) {
+    saveShopProfile({ ...loadShopProfile(), logoPath: image.dataUrl })
+  },
+
+  async removeShopLogo() {
+    saveShopProfile({ ...loadShopProfile(), logoPath: null })
+  },
+
   async saveTaxConfig(input) {
     if (
       input.serviceChargeRate < 0 || input.serviceChargeRate > 1 ||
@@ -179,7 +197,7 @@ export const CAPABILITIES: Record<StaffRole, Capability[]> = {
   kitchen: ['kitchen'],
   staff: ['floor', 'kitchen'],
   manager: ['floor', 'kitchen', 'settings'],
-  owner: ['floor', 'kitchen', 'settings', 'accounts'],
+  owner: ['floor', 'kitchen', 'settings', 'accounts', 'branding'],
 }
 
 function mustStaff(list: StaffMember[], userId: string): StaffMember {

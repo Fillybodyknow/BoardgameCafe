@@ -1,4 +1,4 @@
-import type { ShopHours, StaffMember, TaxConfig } from '../../domain/types'
+import type { ShopHours, ShopProfile, StaffMember, TaxConfig } from '../../domain/types'
 
 /**
  * ที่เก็บเวลาทำการและภาษีของโหมดเดโม
@@ -11,6 +11,14 @@ import type { ShopHours, StaffMember, TaxConfig } from '../../domain/types'
 const HOURS_KEY = 'bgcafe.mock.hours.v1'
 const STAFF_KEY = 'bgcafe.mock.staff.v1'
 const TAX_KEY = 'bgcafe.mock.tax.v1'
+const PROFILE_KEY = 'bgcafe.mock.profile.v1'
+
+/** ค่าตั้งต้นเหมือนแถวแรกของตาราง shop_profile ฝั่ง SQL */
+export const DEFAULT_PROFILE: ShopProfile = {
+  name: 'Boardgame Cafe',
+  tagline: 'โรงเตี๊ยมนักเล่น',
+  logoPath: null,
+}
 
 export const DEFAULT_HOURS: ShopHours[] = Array.from({ length: 7 }, (_, weekday) => ({
   weekday,
@@ -60,6 +68,14 @@ export function saveTax(tax: TaxConfig) {
 }
 
 /** เวลาไทยของวันนั้น ใช้ตัดสินว่าอยู่ในเวลาทำการหรือยัง */
+export function loadShopProfile(): ShopProfile {
+  return { ...DEFAULT_PROFILE, ...read<Partial<ShopProfile>>(PROFILE_KEY, {}) }
+}
+
+export function saveShopProfile(profile: ShopProfile) {
+  write(PROFILE_KEY, profile)
+}
+
 export function bangkokParts(iso: string): { weekday: number; minutes: number; date: string } {
   const d = new Date(new Date(iso).getTime() + 7 * 3600_000)
   return {

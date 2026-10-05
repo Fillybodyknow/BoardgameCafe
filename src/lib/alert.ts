@@ -152,6 +152,13 @@ function synthChime() {
  *
  * ครัวมักเปิดหลายแท็บ ถ้าไม่ขึ้นตรงนี้ คนที่สลับไปแท็บอื่นจะไม่รู้เลยว่ามีงานเข้า
  */
-export function setTabBadge(count: number, base = 'ครัว · Boardgame Cafe') {
+let shopTitle = 'Boardgame Cafe'
+
+/** ชื่อร้านจริง — App ตั้งให้ทุกครั้งที่โหลดชื่อร้านได้ */
+export function setShopTitle(name: string) {
+  shopTitle = name
+}
+
+export function setTabBadge(count: number, base = `ครัว · ${shopTitle}`) {
   document.title = count > 0 ? `(${count}) ${base}` : base
 }

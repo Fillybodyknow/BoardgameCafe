@@ -5,12 +5,14 @@ import { guestDb, menuImageUrl } from '../../data'
 import { cartItems, setCartQty, type Cart } from '../../lib/cart'
 import { formatBaht } from '../../domain/pricing'
 import type { GuestOrder, MenuItem, OrderStatus } from '../../domain/types'
-import { Badge, Button, Card, Empty, INPUT } from '../../components/ui'
+import { Badge, Button, Card, Empty, Icon, INPUT } from '../../components/ui'
 import { myPass, rememberMyPass, type MyPass } from '../../lib/myPass'
 import { isPlaceholderName } from '../../lib/placeholderName'
 import type { Tone } from '../../components/ui'
 import { Stepper } from '../OrderDialog'
 import { needsKitchen } from '../../domain/kitchen'
+import ShopLogo, { ShopName } from '../../components/ShopLogo'
+import TableQRSheet from './TableQRSheet'
 
 const CATEGORY_LABEL: Record<MenuItem['category'], string> = {
   drink: 'เครื่องดื่ม',
@@ -67,6 +69,8 @@ export default function GuestApp() {
   const [error, setError] = useState<string | null>(null)
   const [justSent, setJustSent] = useState(false)
   const [coins, setCoins] = useState<Coin[]>([])
+  // QR ของโต๊ะบนจอ — ใบหายหรือเพื่อนมาทีหลังก็สแกนจากจอนี้ได้
+  const [showQR, setShowQR] = useState(false)
   const bagRef = useRef<HTMLDivElement>(null)
 
   const session = useQuery({
@@ -216,8 +220,20 @@ export default function GuestApp() {
   return (
     <div className="mx-auto flex min-h-screen max-w-lg flex-col">
       {/* ธงประจำโต๊ะ */}
-      <header className="tapestry pennant px-5 pt-5 pb-10 text-center">
-        <div className="brand text-xs">⚜ Boardgame Cafe</div>
+      <header className="tapestry pennant relative px-5 pt-5 pb-10 text-center">
+        <button
+          type="button"
+          onClick={() => setShowQR(true)}
+          aria-label="QR โต๊ะให้เพื่อนสแกน"
+          className="absolute top-3 right-3 flex flex-col items-center gap-0.5 rounded-lg border border-gold-light/30 bg-black/15 px-2 py-1.5 text-[0.6rem] text-gold-light transition hover:bg-black/25"
+        >
+          <Icon name="qr" className="h-5 w-5" />
+          QR
+        </button>
+        <div className="brand flex items-center justify-center gap-1.5 text-xs">
+          <ShopLogo className="h-6 w-6" seal="text-[0.6rem]" />
+          <ShopName />
+        </div>
         <h1 className="mt-2 font-sans text-3xl font-bold text-gold-light">โต๊ะ {s.tableCode}</h1>
         <p className="mt-1 text-xs text-[#f3e6c8]/70">
           {s.zone} · ยินดีต้อนรับสู่โรงเตี๊ยม ขอให้สนุกกับเกมนะ
@@ -381,6 +397,8 @@ export default function GuestApp() {
           )}
         </div>
       </main>
+
+      {showQR && <TableQRSheet token={token} tableCode={s.tableCode} onClose={() => setShowQR(false)} />}
 
       {tab === 'menu' && cartCount > 0 && (
         <div className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-lg animate-unroll px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">

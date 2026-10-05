@@ -2,7 +2,7 @@ import type {
   AvailableTable, BillPreview, BookingConfig, BookingLookup, BookingReceipt,
   CafeTable, GuestOrder, GuestPass, GuestSession, ID, MenuCategory,
   MenuItem, Occupancy, Order, OrderStatus, PassSettlement, PaymentInput, RatePlan, Reservation,
-  Capability, ShopHours, StaffMember, StaffRole, TaxConfig, Visit,
+  Capability, ShopHours, ShopProfile, StaffMember, StaffRole, TaxConfig, Visit,
 } from '../domain/types'
 
 /**
@@ -198,6 +198,12 @@ export interface AdminPort {
   setStaffRole(userId: ID, role: StaffRole): Promise<void>
   setStaffActive(userId: ID, active: boolean): Promise<void>
   renameStaff(userId: ID, name: string): Promise<void>
+
+  /** ชื่อร้านและโลโก้ — เฉพาะเจ้าของร้าน (สิทธิ์ branding) */
+  saveShopProfile(input: { name: string; tagline: string }): Promise<void>
+  /** อัปโหลดโลโก้ที่ย่อแล้ว และเก็บกวาดไฟล์เดิมให้ด้วย */
+  uploadShopLogo(image: { blob: Blob; dataUrl: string }): Promise<void>
+  removeShopLogo(): Promise<void>
 }
 
 export interface GuestPort {
@@ -218,4 +224,12 @@ export interface GuestPort {
     splitMode: 'owner' | 'shared'
     items: { menuItemId: ID; qty: number; note?: string }[]
   }): Promise<{ orderId: ID; status: OrderStatus }>
+}
+
+/**
+ * ชื่อร้านและโลโก้ — อ่านได้โดยไม่ต้องล็อกอิน
+ * หน้าล็อกอิน หน้าจอง และหน้าลูกค้าสแกน QR ต้องใช้ก่อนที่จะมีใครล็อกอิน
+ */
+export interface ShopPort {
+  profile(): Promise<ShopProfile>
 }

@@ -351,7 +351,16 @@ export interface GuestOrder {
  *
  * เก็บชุดไว้ในตาราง role_capabilities ฝั่งฐานข้อมูล ปรับได้โดยไม่ต้องแก้โค้ด
  */
-export type Capability = 'floor' | 'kitchen' | 'settings' | 'accounts'
+export type Capability = 'floor' | 'kitchen' | 'settings' | 'accounts' | 'branding'
+
+/** หน้าตาร้านที่ลูกค้าเห็น — เจ้าของร้านแก้ได้ (สิทธิ์ branding) */
+export interface ShopProfile {
+  name: string
+  /** คำโปรยใต้ชื่อร้าน ว่างได้ */
+  tagline: string
+  /** path ใน bucket shop-assets (โหมดเดโมเก็บเป็น data URL) — null = ใช้ตราครั่งแทน */
+  logoPath: string | null
+}
 
 export type StaffRole = 'floor' | 'kitchen' | 'staff' | 'manager' | 'owner'
 

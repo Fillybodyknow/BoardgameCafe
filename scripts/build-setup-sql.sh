@@ -127,3 +127,6 @@ make_patch supabase/patch-visit-qr.sql "patch QR ต่อรอบ (พิม�
 
 make_patch supabase/patch-claim-pass.sql "patch ลูกค้ารับชื่อที่พนักงานสร้างไว้ตอนเปิดโต๊ะ" \
   supabase/migrations/20260930001900_claim_pass.sql
+
+make_patch supabase/patch-shop-profile.sql "patch ชื่อร้านและโลโก้" \
+  supabase/migrations/20260930002000_shop_profile.sql

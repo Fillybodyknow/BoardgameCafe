@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { adminDb, menuImageUrl } from '../data'
 import { formatBytes, resizeToJpeg } from '../lib/image'
 import StaffTab from './StaffTab'
+import BrandTab from './BrandTab'
 import { SNAPSHOT_KEY } from '../hooks/useData'
 import { formatBaht } from '../domain/pricing'
 import type { MenuCategory, ShopHours, TaxConfig } from '../domain/types'
@@ -16,7 +17,7 @@ const CATEGORY_LABEL: Record<MenuCategory, string> = {
 
 const WEEKDAY = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์']
 
-type Tab = 'menu' | 'tables' | 'rates' | 'hours' | 'staff'
+type Tab = 'menu' | 'tables' | 'rates' | 'hours' | 'staff' | 'brand'
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'menu', label: 'เมนู' },
@@ -24,6 +25,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'rates', label: 'เรตราคา' },
   { key: 'hours', label: 'เวลาทำการ' },
   { key: 'staff', label: 'พนักงาน' },
+  { key: 'brand', label: 'ชื่อร้าน & โลโก้' },
 ]
 
 export default function Owner() {
@@ -63,6 +65,8 @@ export default function Owner() {
           options={TABS
             // จัดการบัญชีเป็นสิทธิ์แยกจากการตั้งค่าร้าน
             .filter((t) => t.key !== 'staff' || caps.data?.includes('accounts'))
+            // ชื่อและโลโก้เฉพาะเจ้าของร้าน ผู้จัดการไม่เห็นแท็บนี้
+            .filter((t) => t.key !== 'brand' || caps.data?.includes('branding'))
             .map((t) => ({ value: t.key, label: t.label }))}
           className="min-w-full sm:min-w-0"
         />
@@ -73,6 +77,7 @@ export default function Owner() {
       {tab === 'tables' && <TablesTab />}
       {tab === 'rates' && <RatesTab />}
       {tab === 'hours' && <HoursTab />}
+      {tab === 'brand' && caps.data?.includes('branding') && <BrandTab />}
       {tab === 'staff' && caps.data?.includes('accounts') && (
         <StaffTab myRole={role.data ?? 'staff'} />
       )}

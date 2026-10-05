@@ -45,11 +45,11 @@ function loadImage(file: File): Promise<HTMLImageElement> {
   })
 }
 
-function toBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
+function toBlob(canvas: HTMLCanvasElement, quality: number, mime = IMAGE_MIME): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
       (blob) => (blob ? resolve(blob) : reject(new Error('แปลงรูปไม่สำเร็จ'))),
-      IMAGE_MIME,
+      mime,
       quality,
     )
   })
@@ -89,6 +89,37 @@ export async function resizeToJpeg(
 
   const blob = await toBlob(canvas, quality)
   return { blob, dataUrl: canvas.toDataURL(IMAGE_MIME, quality), width, height }
+}
+
+/** โลโก้ร้านเล็กกว่ารูปเมนูมาก — แสดงไม่เกิน ~100px แม้บนจอความละเอียดสูง */
+export const LOGO_MAX_EDGE = 512
+
+/**
+ * ย่อโลโก้เป็น PNG — ต่างจากรูปเมนูตรงที่ต้องเก็บพื้นโปร่งใสไว้
+ * โลโก้ส่วนใหญ่เป็น PNG พื้นใส ถ้าแปลงเป็น JPEG จะได้กรอบสี่เหลี่ยมสีขาวรอบโลโก้
+ */
+export async function resizeToPng(file: File, maxEdge = LOGO_MAX_EDGE): Promise<ResizedImage> {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('ไฟล์นี้ไม่ใช่รูปภาพ')
+  }
+
+  const img = await loadImage(file)
+  const scale = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight))
+  const width = Math.round(img.naturalWidth * scale)
+  const height = Math.round(img.naturalHeight * scale)
+  if (width === 0 || height === 0) {
+    throw new Error('รูปนี้ไม่มีขนาด ลองไฟล์อื่นครับ')
+  }
+
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('เบราว์เซอร์นี้ย่อรูปไม่ได้')
+  ctx.drawImage(img, 0, 0, width, height)
+
+  const blob = await toBlob(canvas, 1, 'image/png')
+  return { blob, dataUrl: canvas.toDataURL('image/png'), width, height }
 }
 
 export function formatBytes(n: number): string {

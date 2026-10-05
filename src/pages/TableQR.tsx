@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { bookingUrl, toQrDataUrl } from '../lib/qr'
-import { DEFAULT_PRINTER, loadPrinter, printTableSlip, savePrinter } from '../lib/printer'
+import { loadPrinter, printTableSlip, savePrinter } from '../lib/printer'
+import { shopLogoUrl } from '../data'
+import { useShopProfile } from '../hooks/useShop'
 import type { PaperWidth, PrinterSettings } from '../lib/printer'
 import { useSnapshot } from '../hooks/useData'
 import type { Visit } from '../domain/types'
@@ -19,6 +21,7 @@ export default function TableQR() {
   const [copied, setCopied] = useState(false)
   const [printer, setPrinter] = useState<PrinterSettings>(loadPrinter)
   const [reprint, setReprint] = useState<Visit | null>(null)
+  const shop = useShopProfile()
 
   useEffect(() => {
     void toQrDataUrl(bookingUrl()).then(setBookingQR)
@@ -81,15 +84,8 @@ export default function TableQR() {
               />
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="ชื่อร้านบนหัวใบ">
-                <input
-                  value={printer.shopName}
-                  onChange={(e) => update({ shopName: e.target.value })}
-                  placeholder={DEFAULT_PRINTER.shopName}
-                  className={INPUT}
-                />
-              </Field>
+            <div>
+              {/* ชื่อร้านและโลโก้บนหัวใบมาจากหน้าตั้งค่าร้าน — ไม่ให้แก้ซ้ำที่นี่ ชื่อจะได้ไม่ตีกัน */}
               <Field label="ข้อความท้ายใบ">
                 <input
                   value={printer.footer}
@@ -126,6 +122,8 @@ export default function TableQR() {
                       visitCode: 'V-000',
                       openedAt: new Date().toISOString(),
                       url: bookingUrl(),
+                      shopName: shop.name,
+                      logoUrl: shopLogoUrl(shop.logoPath),
                       test: true,
                     },
                     printer,

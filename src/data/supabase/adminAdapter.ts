@@ -4,6 +4,7 @@ import type {
   TaxConfig,
 } from '../../domain/types'
 import { requireClient } from './client'
+import { SHOP_BUCKET } from './shopAdapter'
 
 export const BUCKET = 'menu-images'
 
@@ -236,6 +237,36 @@ export const supabaseAdminAdapter: AdminPort = {
 
   async renameStaff(userId, name) {
     await rpc('rename_staff', { p_user_id: userId, p_name: name })
+  },
+
+  async saveShopProfile(input) {
+    await rpc('update_shop_profile', { p_name: input.name, p_tagline: input.tagline })
+  },
+
+  // ลำดับเดียวกับรูปเมนู: อัปไฟล์ → ผูกกับร้าน → ลบไฟล์เดิม
+  async uploadShopLogo(image) {
+    const sb = requireClient()
+    const path = `logo/${crypto.randomUUID()}.png`
+
+    const { error: upErr } = await sb.storage
+      .from(SHOP_BUCKET)
+      .upload(path, image.blob, { contentType: 'image/png', upsert: false })
+    if (upErr) throw new Error(upErr.message)
+
+    let old: string | null = null
+    try {
+      old = await rpc<string | null>('set_shop_logo', { p_path: path })
+    } catch (e) {
+      // ผูกไม่สำเร็จ — เก็บไฟล์ที่เพิ่งอัปทิ้ง ไม่ให้ค้างเป็นขยะ
+      await sb.storage.from(SHOP_BUCKET).remove([path])
+      throw e
+    }
+    if (old && old !== path) await sb.storage.from(SHOP_BUCKET).remove([old])
+  },
+
+  async removeShopLogo() {
+    const old = await rpc<string | null>('set_shop_logo', { p_path: null })
+    if (old) await requireClient().storage.from(SHOP_BUCKET).remove([old])
   },
 
   async saveTaxConfig(input) {
