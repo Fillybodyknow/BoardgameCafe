@@ -134,6 +134,8 @@ async function sendAll(
 ) {
   let sent = 0
   const expired: string[] = []
+  // เก็บสาเหตุที่ส่งไม่สำเร็จ — ถ้ากลืนทิ้ง อาการจะเหลือแค่ "แจ้งเตือนไม่ขึ้น" ซึ่งไล่หาสาเหตุไม่ได้เลย
+  const failures: { service: string; status?: number; detail: string }[] = []
 
   await Promise.all(
     targets.map(async (t) => {
@@ -162,9 +164,16 @@ async function sendAll(
           expired.push(t.id)
         } else if (res.ok) {
           sent++
+        } else {
+          failures.push({
+            service: new URL(t.endpoint).host,
+            status: res.status,
+            detail: (await res.text().catch(() => '')).slice(0, 200),
+          })
         }
-      } catch {
-        // ปลายทางล่มชั่วคราว ไม่ลบทิ้ง รอรอบหน้า
+      } catch (e) {
+        // ปลายทางล่มชั่วคราว หรือเข้ารหัสไม่ผ่าน — ไม่ลบทิ้ง รอรอบหน้า
+        failures.push({ service: new URL(t.endpoint).host, detail: String(e).slice(0, 200) })
       }
     }),
   )
@@ -179,5 +188,11 @@ async function sendAll(
       .in('id', targets.filter((t) => !expired.includes(t.id)).map((t) => t.id))
   }
 
-  return Response.json({ sent, expired: expired.length, targets: targets.length })
+  return Response.json({
+    sent,
+    expired: expired.length,
+    targets: targets.length,
+    encrypted: payload !== null,
+    ...(failures.length > 0 ? { failures } : {}),
+  })
 }
