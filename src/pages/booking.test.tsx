@@ -367,6 +367,26 @@ describe('จำการจองไว้บนเครื่องนี้'
     expect(screen.queryByText('เล่นกี่ชั่วโมง')).toBeNull()
   })
 
+  // ลูกค้าไม่ได้เลือกชั่วโมงเองแล้ว แต่ยังต้องรู้ว่าโต๊ะกันไว้ถึงกี่โมง
+  it('ใบจองบอกช่วงเวลาแทนแถวระยะเวลา', async () => {
+    const startAt = tomorrowAt('18:00')
+    const t = await freeTable(startAt)
+    const made = await mockBookingAdapter.create({
+      customerName: 'คุณช่วงเวลา', phone: '081-777-0000', partySize: 2,
+      startAt, durationMinutes: 120, tableIds: [t.id],
+    })
+    rememberBooking({ code: made.code, phone: '081-777-0000', startAt: made.startAt })
+
+    window.location.hash = '#/book?m=find'
+    render(<App />)
+    fireEvent.click(await screen.findByText(made.code))
+
+    await screen.findByText('คุณช่วงเวลา')
+    expect(screen.queryByText('ระยะเวลา')).toBeNull()
+    // 18:00 + 2 ชม. = 20:00 ต้องปรากฏเป็นเวลาสิ้นสุด
+    expect(screen.getByText(/18:00–20:00/)).toBeTruthy()
+  })
+
   it('ยังไม่เคยจอง ต้องเห็นฟอร์มกรอกรหัสตามเดิม', async () => {
     window.location.hash = '#/book?m=find'
     render(<App />)
