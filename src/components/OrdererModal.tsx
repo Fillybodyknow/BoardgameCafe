@@ -1,20 +1,23 @@
+import { useState } from 'react'
 import { formatBaht } from '../domain/pricing'
-import { Button, Modal } from './ui'
+import { Button, INPUT, Modal } from './ui'
 
 export interface Orderer {
   id: string
   displayName: string
 }
 
+/** ค่าพิเศษของ dropdown — ไม่ชนกับ id ของใครเพราะ id เป็น uuid */
+const SHARED = 'shared'
+
 /**
  * ถามว่าใครเป็นคนสั่ง ก่อนส่งออเดอร์เข้าครัว
  *
- * แยกออกมาจากหน้าสั่งของ เพราะเดิมเป็น dropdown ลอยอยู่หัวรายการเมนู
- * ซึ่งคนสั่งมักเลื่อนผ่านไปโดยไม่ได้แตะ แล้วออเดอร์ไปลงชื่อคนแรกของกลุ่ม
- * ทั้งที่ไม่ใช่คนสั่ง — ตอนแยกบิลถึงค่อยรู้ว่าผิด ซึ่งสายไปแล้ว
+ * เดิมเป็น dropdown ลอยอยู่หัวรายการเมนู ซึ่งคนสั่งมักเลื่อนผ่านไปโดยไม่ได้แตะ
+ * แล้วออเดอร์ไปลงชื่อคนแรกของกลุ่มทั้งที่ไม่ใช่คนสั่ง — ตอนแยกบิลถึงค่อยรู้
  *
- * ถามตอนกดส่งจึงข้ามไม่ได้ และกดชื่อเดียวจบ ไม่ต้องกดยืนยันซ้ำ เพราะ
- * การกดปุ่มส่งเข้าครัวก่อนหน้านี้คือการยืนยันไปแล้วรอบหนึ่ง
+ * จึงย้ายมาถามตอนกดส่ง และ**ไม่ตั้งค่าเริ่มต้นไว้** ปุ่มยืนยันกดไม่ได้จนกว่า
+ * จะเลือก ถ้าตั้งค่าไว้ให้เลยก็เท่ากับย้ายที่เกิดเหตุ ไม่ได้แก้ปัญหา
  *
  * ต้องถูกวางเป็นพี่น้องกับ Modal ของหน้าสั่งของ ไม่ใช่ซ้อนอยู่ข้างใน
  * เพราะกล่องนั้นมี transform ตอนเปิด ซึ่งทำให้ position: fixed ข้างใน
@@ -37,6 +40,8 @@ export default function OrdererModal({
   onPick: (ordererId: string | null) => void
   onClose: () => void
 }) {
+  const [choice, setChoice] = useState('')
+
   return (
     <Modal
       title="ใครเป็นคนสั่ง"
@@ -44,56 +49,54 @@ export default function OrdererModal({
       onClose={onClose}
       dismissible={!busy}
       footer={
-        <Button className="w-full" onClick={onClose} disabled={busy}>
-          ย้อนกลับไปแก้รายการ
-        </Button>
+        <div className="flex gap-2">
+          <Button className="flex-1" onClick={onClose} disabled={busy}>
+            ย้อนกลับ
+          </Button>
+          <Button
+            className="flex-1"
+            variant="primary"
+            disabled={busy || choice === ''}
+            onClick={() => onPick(choice === SHARED ? null : choice)}
+          >
+            {busy ? 'กำลังส่ง…' : 'ยืนยันส่งเข้าครัว'}
+          </Button>
+        </div>
       }
     >
-      <p className="mb-3 text-xs text-ink-faint">
-        เลือกแล้วส่งเข้าครัวทันที · ลงชื่อไว้เพื่อให้แยกบิลได้ตอนจ่ายเงิน
+      <label className="text-xs font-medium text-ink-soft" htmlFor="orderer">
+        ลงชื่อผู้สั่ง
+      </label>
+      <select
+        id="orderer"
+        value={choice}
+        disabled={busy}
+        onChange={(e) => setChoice(e.target.value)}
+        className={`${INPUT} mt-1`}
+      >
+        {/* ไม่มีค่าเริ่มต้น — บังคับให้เลือกจริง ไม่ใช่กดผ่าน */}
+        <option value="">— เลือกผู้สั่ง —</option>
+        {people.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.displayName}
+          </option>
+        ))}
+        <option value={SHARED}>
+          แชร์ทั้งโต๊ะ{people.length > 0 ? ` (หารเท่ากัน ${people.length} คน)` : ''}
+        </option>
+      </select>
+
+      <p className="mt-2 text-xs text-ink-faint">
+        {choice === SHARED
+          ? 'รายการนี้จะหารเท่ากันในกลุ่มตอนเช็คบิล'
+          : 'ลงชื่อไว้เพื่อให้แยกบิลได้ว่าใครสั่งอะไร'}
       </p>
 
-      <div className="space-y-2">
-        {people.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            disabled={busy}
-            onClick={() => onPick(p.id)}
-            className="pick flex w-full items-center gap-3 px-4 py-3 text-left font-semibold disabled:opacity-50"
-          >
-            <span className="shield h-9 w-7 shrink-0 bg-forest text-sm text-vellum" aria-hidden>
-              {initialOf(p.displayName)}
-            </span>
-            {p.displayName}
-          </button>
-        ))}
-
-        {people.length === 0 && (
-          <p className="rounded-lg bg-parchment-deep/60 p-3 text-sm text-ink-faint">
-            ยังไม่มีใครอยู่ในโต๊ะนี้ สั่งแบบแชร์ทั้งโต๊ะได้อย่างเดียว
-          </p>
-        )}
-
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => onPick(null)}
-          className="pick w-full px-4 py-3 text-left disabled:opacity-50"
-        >
-          <span className="font-semibold">แชร์ทั้งโต๊ะ</span>
-          <span className="mt-0.5 block text-xs text-ink-faint">
-            {people.length > 0 ? `หารเท่ากัน ${people.length} คน` : 'หารกันตอนเช็คบิล'}
-          </span>
-        </button>
-      </div>
-
-      {busy && <p className="mt-3 text-center text-sm text-ink-faint">กำลังส่งเข้าครัว…</p>}
+      {people.length === 0 && (
+        <p className="mt-3 rounded-lg bg-parchment-deep/60 p-3 text-sm text-ink-faint">
+          ยังไม่มีใครอยู่ในโต๊ะนี้ สั่งแบบแชร์ทั้งโต๊ะได้อย่างเดียว
+        </p>
+      )}
     </Modal>
   )
-}
-
-/** อักษรแรกของชื่อสำหรับโล่ — ข้ามสระหน้า (เ แ โ ใ ไ) ไม่งั้น "เมย์" ได้ "เ" */
-function initialOf(name: string) {
-  return [...name].find((ch) => !'เแโใไ'.includes(ch)) ?? name.slice(0, 1)
 }

@@ -10,6 +10,13 @@ import { mockAdapter, mockGuestAdapter } from '../data/mock/mockAdapter'
  * โจทย์หลักไม่ใช่ว่าสั่งของได้ไหม แต่คือ "ถือ QR โต๊ะหนึ่ง แตะโต๊ะอื่นได้ไหม"
  * ฝั่ง SQL ทดสอบไว้แล้วใน supabase/tests/30_guest_test.sql ที่นี่ตรวจฝั่งหน้าจอ
  */
+/** เลือกผู้สั่งในหน้าต่างที่เด้งตอนกดส่ง แล้วกดยืนยัน */
+async function pickOrderer(value: string) {
+  const select = await screen.findByRole('combobox')
+  fireEvent.change(select, { target: { value } })
+  fireEvent.click(screen.getByText('ยืนยันส่งเข้าครัว'))
+}
+
 describe('ลูกค้าสแกน QR', () => {
   beforeEach(() => {
     cleanup()
@@ -30,9 +37,10 @@ describe('ลูกค้าสแกน QR', () => {
     fireEvent.click(await screen.findByText('ส่งเข้าครัว'))
 
     expect(await screen.findByText('ใครเป็นคนสั่ง')).toBeTruthy()
-    expect(screen.getByText('ต้น')).toBeTruthy()
+    const options = screen.getByRole('combobox').textContent ?? ''
+    expect(options).toContain('ต้น')
     // คนที่กลับไปแล้วต้องไม่อยู่ในรายการให้เลือก
-    expect(screen.queryByText('บอส')).toBeNull()
+    expect(options).not.toContain('บอส')
   })
 
   it('ไม่ต้องล็อกอิน — ไม่เจอหน้าเข้าสู่ระบบ', async () => {
@@ -76,7 +84,7 @@ describe('ลูกค้าสแกน QR', () => {
     fireEvent.click(minus[2]!) // เอาเมนู 3 ออกจนเหลือ 0
 
     fireEvent.click(await screen.findByText('ส่งเข้าครัว'))
-    fireEvent.click(await screen.findByText('แชร์ทั้งโต๊ะ'))
+    await pickOrderer('shared')
 
     await waitFor(async () => {
       const snap = await mockAdapter.getSnapshot()
@@ -96,7 +104,7 @@ describe('ลูกค้าสแกน QR', () => {
     const before = (await mockAdapter.getSnapshot()).orders.length
     fireEvent.click(screen.getAllByText('+')[0]!)
     fireEvent.click(await screen.findByText('ส่งเข้าครัว'))
-    fireEvent.click(await screen.findByText('ต้น'))
+    await pickOrderer((await mockGuestAdapter.session('qr-b1')).passes[0]!.id)
 
     await waitFor(async () => {
       const snap = await mockAdapter.getSnapshot()
@@ -121,7 +129,7 @@ describe('ลูกค้าสแกน QR', () => {
 
     fireEvent.click(screen.getAllByText('+')[0]!)
     fireEvent.click(await screen.findByText('ส่งเข้าครัว'))
-    fireEvent.click(await screen.findByText(second.displayName))
+    await pickOrderer(second.id)
 
     await waitFor(async () => {
       const snap = await mockAdapter.getSnapshot()

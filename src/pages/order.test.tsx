@@ -34,6 +34,13 @@ describe('รับออเดอร์ (พนักงาน)', () => {
     return all[all.length - 1]!
   }
 
+  /** เลือกผู้สั่งแล้วกดยืนยัน */
+  async function choose(value: string) {
+    const panel = await picker()
+    fireEvent.change(within(panel).getByRole('combobox'), { target: { value } })
+    fireEvent.click(within(panel).getByText('ยืนยันส่งเข้าครัว'))
+  }
+
   it('กดส่งเข้าครัวแล้วถามก่อนว่าใครสั่ง ยังไม่ส่งทันที', async () => {
     const before = (await mockAdapter.getSnapshot()).orders.length
     const dialog = await openOrderDialog()
@@ -41,6 +48,24 @@ describe('รับออเดอร์ (พนักงาน)', () => {
     fireEvent.click(within(dialog).getByText('ส่งเข้าครัว'))
 
     expect(await screen.findByText('ใครเป็นคนสั่ง')).toBeTruthy()
+    expect((await mockAdapter.getSnapshot()).orders.length).toBe(before)
+  })
+
+  // ★ เหตุผลทั้งหมดของการย้ายมาถามตอนกดส่ง คือกันไม่ให้ข้าม
+  // ถ้า dropdown มีค่าตั้งไว้ให้แล้วกดยืนยันผ่านได้เลย ก็เท่ากับย้ายที่เกิดเหตุ
+  it('ยังไม่เลือกผู้สั่ง กดยืนยันไม่ได้', async () => {
+    const before = (await mockAdapter.getSnapshot()).orders.length
+    const dialog = await openOrderDialog()
+    fireEvent.click(within(dialog).getByText('ส่งเข้าครัว'))
+
+    const panel = await picker()
+    const select = within(panel).getByRole('combobox') as HTMLSelectElement
+    expect(select.value).toBe('')
+
+    const confirm = within(panel).getByText('ยืนยันส่งเข้าครัว') as HTMLButtonElement
+    expect(confirm.disabled).toBe(true)
+
+    fireEvent.click(confirm)
     expect((await mockAdapter.getSnapshot()).orders.length).toBe(before)
   })
 
@@ -53,7 +78,7 @@ describe('รับออเดอร์ (พนักงาน)', () => {
 
     const dialog = await openOrderDialog()
     fireEvent.click(within(dialog).getByText('ส่งเข้าครัว'))
-    fireEvent.click(within(await picker()).getByText(pick.displayName))
+    await choose(pick.id)
 
     await waitFor(async () => {
       const after = await mockAdapter.getSnapshot()
@@ -67,7 +92,7 @@ describe('รับออเดอร์ (พนักงาน)', () => {
   it('เลือกแชร์ทั้งโต๊ะแล้วไม่ผูกกับใคร', async () => {
     const dialog = await openOrderDialog()
     fireEvent.click(within(dialog).getByText('ส่งเข้าครัว'))
-    fireEvent.click(within(await picker()).getByText('แชร์ทั้งโต๊ะ'))
+    await choose('shared')
 
     await waitFor(async () => {
       const after = await mockAdapter.getSnapshot()
@@ -88,7 +113,8 @@ describe('รับออเดอร์ (พนักงาน)', () => {
     const dialog = await openOrderDialog()
     fireEvent.click(within(dialog).getByText('ส่งเข้าครัว'))
 
-    expect(within(await picker()).queryByText(gone!.displayName)).toBeNull()
+    const options = within(await picker()).getByRole('combobox').textContent ?? ''
+    expect(options).not.toContain(gone!.displayName)
   })
 
   // ★ หน้าต่างซ้อนกันสองชั้น — Escape ต้องปิดแค่ใบบนสุด ไม่ใช่ปิดรวดเดียวหมด
@@ -107,7 +133,7 @@ describe('รับออเดอร์ (พนักงาน)', () => {
     const dialog = await openOrderDialog()
     fireEvent.click(within(dialog).getByText('ส่งเข้าครัว'))
 
-    fireEvent.click(await screen.findByText('ย้อนกลับไปแก้รายการ'))
+    fireEvent.click(within(await picker()).getByText('ย้อนกลับ'))
 
     await waitFor(() => expect(screen.queryByText('ใครเป็นคนสั่ง')).toBeNull())
     expect(within(dialog).getByText('1 รายการ')).toBeTruthy()
