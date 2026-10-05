@@ -45,7 +45,7 @@
 | Router | HashRouter (GH Pages ไม่มี rewrite rule) |
 | Auth | Supabase Auth (ล็อกอินพนักงาน) |
 | Backend | Supabase — Postgres + Realtime + RLS + RPC |
-| Edge Function | `create-staff` — จุดเดียวที่ต้องใช้ service_role key |
+| Edge Function | `create-staff` (สร้างบัญชี), `notify-kitchen` (ส่ง Web Push) |
 | Test | Vitest (client) + Postgres ใน Docker (SQL) |
 
 ---
@@ -143,7 +143,8 @@ token ใช้สั่งของได้เฉพาะตอนที่�
 - [x] **Phase 2.7** — รูปประกอบเมนู (ย่อฝั่ง client + Supabase Storage)
 - [x] **Phase 2.8** — จัดการบัญชีพนักงานในแอป + ล็อกอินด้วยชื่อผู้ใช้
 - [x] **Phase 2.9** — ระดับพนักงานแบบแยกสิทธิ์ (หน้าร้าน / ครัว / ตั้งค่า / บัญชี)
-- [ ] **Phase 3** — ยืม-คืนเกม + PWA/ใช้งานตอนเน็ตหลุด
+- [x] **Phase 2.95** — แจ้งเตือนออเดอร์เข้าครัว (เสียง + ป้ายแท็บ + Web Push)
+- [ ] **Phase 3** — ยืม-คืนเกม + ใช้งานตอนเน็ตหลุด
 - [ ] **Phase 3** — ยืม-คืนเกม + ค่าปรับชิ้นส่วนหาย, รวมบิลข้ามกลุ่ม, offline queue
 - [ ] **Phase 4** — สมาชิก/แต้ม, โปรโมชัน, รายงาน, สต็อก
 

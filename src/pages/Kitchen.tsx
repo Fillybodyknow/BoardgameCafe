@@ -11,6 +11,7 @@ import {
   soundEnabled,
   soundSupported,
 } from '../lib/alert'
+import { PUSH_HINT, disablePush, enablePush, pushState, type PushState } from '../lib/push'
 
 /** SLA — เกินแล้วการ์ดเปลี่ยนสี ให้ครัวเห็นแต่ไกล */
 const SLA_MINUTES = 12
@@ -61,6 +62,25 @@ export default function Kitchen() {
   const [sound, setSound] = useState(soundEnabled)
   const [soundError, setSoundError] = useState(false)
 
+  // แจ้งเตือนขึ้นมือถือ — ทำงานแม้ปิดแอป ต่างจากเสียงที่ต้องเปิดหน้านี้ค้างไว้
+  const [push, setPush] = useState<PushState | null>(null)
+  const [pushBusy, setPushBusy] = useState(false)
+  useEffect(() => {
+    void pushState().then(setPush).catch(() => setPush('unsupported'))
+  }, [])
+
+  async function togglePush() {
+    setPushBusy(true)
+    try {
+      setPush(push === 'on' ? await disablePush() : await enablePush())
+    } catch (e) {
+      console.error(e)
+      setPush('off')
+    } finally {
+      setPushBusy(false)
+    }
+  }
+
   async function toggleSound() {
     if (sound) {
       disableSound()
@@ -97,6 +117,16 @@ export default function Kitchen() {
         actions={
           <div className="flex items-center gap-2">
             {late > 0 && <Badge tone="crimson">เลยเวลา {late} ใบ</Badge>}
+            {push && push !== 'unsupported' && push !== 'not-configured' && (
+              <Button
+                variant={push === 'on' ? 'primary' : 'ghost'}
+                disabled={pushBusy || push === 'ios-needs-install' || push === 'denied'}
+                onClick={togglePush}
+                title={PUSH_HINT[push]}
+              >
+                {push === 'on' ? '📲 เตือนมือถือเปิด' : '📵 เตือนมือถือปิด'}
+              </Button>
+            )}
             {soundSupported() && (
               <Button
                 variant={sound ? 'primary' : 'ghost'}
@@ -126,6 +156,12 @@ export default function Kitchen() {
       {soundError && (
         <p className="mb-3 rounded-lg border border-crimson/40 bg-crimson/10 p-3 text-sm text-crimson">
           เบราว์เซอร์ไม่ยอมเปิดเสียง ลองกดปุ่มอีกครั้ง หรือตรวจการตั้งค่าเสียงของเว็บนี้
+        </p>
+      )}
+
+      {push && push !== 'on' && push !== 'off' && push !== 'unsupported' && (
+        <p className="mb-3 rounded-lg border border-lapis/40 bg-lapis/10 p-3 text-sm text-lapis">
+          {PUSH_HINT[push]}
         </p>
       )}
 

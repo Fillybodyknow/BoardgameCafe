@@ -56,6 +56,7 @@ run supabase/tests/50_owner_test.sql
 run supabase/tests/60_menu_image_test.sql
 run supabase/tests/70_staff_test.sql
 run supabase/tests/80_capability_test.sql
+run supabase/tests/90_push_test.sql
 
 echo
 echo "เทสต์ SQL ผ่านทั้งหมด"
