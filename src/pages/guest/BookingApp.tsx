@@ -184,7 +184,8 @@ function BookForm() {
   /** เวลาทำการของวันที่เลือก */
   const today = useMemo(() => hoursOf(date), [hours.data, date])
 
-  const slots = useMemo(() => {
+  /** ทุกรอบในเวลาทำการของวันที่เลือก */
+  const allSlots = useMemo(() => {
     if (!today || today.closed) return []
     const step = cfg.data?.slotMinutes ?? 30
     const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5))
@@ -195,6 +196,14 @@ function BookForm() {
     }
     return out
   }, [cfg.data, duration, today])
+
+  // ตัดรอบที่ใกล้เกินกว่าจะจองได้ทิ้ง — เดิมลูกค้าที่เปิดตอนค่ำยังเห็นรอบเช้าของวันนี้
+  // กดเลือกได้ แล้วไปโดนเซิร์ฟเวอร์ปฏิเสธตอนส่ง
+  const leadMinutes = cfg.data?.minAdvanceMinutes ?? 30
+  const slots = useMemo(() => {
+    const earliest = Date.now() + leadMinutes * 60_000
+    return allSlots.filter((s) => new Date(bangkokToISO(date, s)).getTime() >= earliest)
+  }, [allSlots, date, leadMinutes])
 
   // เปลี่ยนวันแล้วเวลาที่เลือกไว้อาจอยู่นอกเวลาทำการของวันใหม่
   useEffect(() => {
@@ -338,7 +347,13 @@ function BookForm() {
           </Card>
         )}
 
-        {!today?.closed && slots.length === 0 && (
+        {!today?.closed && allSlots.length > 0 && slots.length === 0 && (
+          <Card className="mt-3 !border-ember/40 !bg-ember/5 text-sm text-ember-deep">
+            วันนี้เลยเวลารับจองแล้ว (ต้องจองล่วงหน้าอย่างน้อย {leadMinutes} นาที) ลองเลือกวันพรุ่งนี้ดูครับ
+          </Card>
+        )}
+
+        {!today?.closed && allSlots.length === 0 && (
           <Card className="mt-3 !border-ember/40 !bg-ember/5 text-sm text-ember-deep">
             เวลาทำการของวันนี้ ({today?.openTime}–{today?.closeTime}) สั้นกว่ารอบเล่น{' '}
             {duration / 60} ชม. จึงยังไม่มีรอบให้จอง ลองเลือกวันอื่นดู

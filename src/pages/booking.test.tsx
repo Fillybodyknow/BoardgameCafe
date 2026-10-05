@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import App from '../App'
 import { mockAdapter, mockBookingAdapter } from '../data/mock/mockAdapter'
@@ -360,6 +360,10 @@ describe('จำการจองไว้บนเครื่องนี้'
     window.location.hash = ''
   })
 
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('หน้าจองไม่มีช่องเลือกจำนวนชั่วโมงแล้ว', async () => {
     window.location.hash = '#/book'
     render(<App />)
@@ -399,9 +403,29 @@ describe('จำการจองไว้บนเครื่องนี้'
     expect(screen.queryByText('การจองที่ทำจากเครื่องนี้')).toBeNull()
   })
 
+  // เคยเป็นบั๊ก: เปิดหน้าจองตอนค่ำ ยังเห็นรอบเช้าของวันนี้ให้กด แล้วโดนปฏิเสธตอนส่ง
+  it('เปิดตอนดึก ไม่มีรอบที่เลยเวลาของวันนี้ให้เลือก และบอกให้เลือกวันอื่น', async () => {
+    const today = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10)
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(`${today}T22:00:00+07:00`))
+
+    window.location.hash = '#/book'
+    render(<App />)
+
+    expect(await screen.findByText(/วันนี้เลยเวลารับจองแล้ว/)).toBeTruthy()
+    expect(screen.queryByText('11:00')).toBeNull()
+    expect(((await screen.findByText('ส่งคำขอจอง')) as HTMLButtonElement).disabled).toBe(true)
+  })
+
   // ★ ต้องจองผ่านหน้าจอจริง ไม่ใช่เรียก rememberBooking เอง ไม่งั้นเทสต์จะ
   // ผ่านแม้หน้าจองลืมเรียกมัน
   it('จองผ่านหน้าจอแล้วถูกจำไว้เอง', async () => {
+    // ฟอร์มเริ่มที่วันนี้ ถ้ารันตอนค่ำรอบของวันนี้หมดแล้วจะจองไม่ได้ — เคยทำ CI แดง
+    // ตรึงเวลาเป็น 10:00 น. (เฉพาะ Date ตัวจับเวลาของ React Query ยังเป็นของจริง)
+    const today = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10)
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(`${today}T10:00:00+07:00`))
+
     window.location.hash = '#/book'
     render(<App />)
 
