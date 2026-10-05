@@ -3715,3 +3715,34 @@ insert into game_titles (name, min_players, max_players, play_minutes, weight, c
   ('Everdell',           1, 4,  80, 4, 1),
   ('The Crew',           3, 5,  20, 2, 2)
 on conflict do nothing;
+
+-- ติดตั้งใหม่ = ถือว่าผ่านทุก patch แล้ว กันคนเผลอรัน patch เก่าทับทีหลัง
+create table if not exists schema_patches (
+  name       text primary key,
+  seq        bigint not null,
+  applied_at timestamptz not null default now()
+);
+insert into schema_patches (name, seq) values ('migration-20260930000100', 20260930000100)
+  on conflict (name) do nothing;
+insert into schema_patches (name, seq) values ('migration-20260930000200', 20260930000200)
+  on conflict (name) do nothing;
+insert into schema_patches (name, seq) values ('migration-20260930000300', 20260930000300)
+  on conflict (name) do nothing;
+insert into schema_patches (name, seq) values ('migration-20260930000400', 20260930000400)
+  on conflict (name) do nothing;
+insert into schema_patches (name, seq) values ('migration-20260930000500', 20260930000500)
+  on conflict (name) do nothing;
+insert into schema_patches (name, seq) values ('migration-20260930000600', 20260930000600)
+  on conflict (name) do nothing;
+insert into schema_patches (name, seq) values ('migration-20260930000700', 20260930000700)
+  on conflict (name) do nothing;
+insert into schema_patches (name, seq) values ('migration-20260930000800', 20260930000800)
+  on conflict (name) do nothing;
+insert into schema_patches (name, seq) values ('migration-20260930000900', 20260930000900)
+  on conflict (name) do nothing;
+insert into schema_patches (name, seq) values ('migration-20260930001000', 20260930001000)
+  on conflict (name) do nothing;
+insert into schema_patches (name, seq) values ('migration-20260930001100', 20260930001100)
+  on conflict (name) do nothing;
+insert into schema_patches (name, seq) values ('migration-20260930001200', 20260930001200)
+  on conflict (name) do nothing;

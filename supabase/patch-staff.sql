@@ -3,7 +3,30 @@
 --
 -- สำหรับฐานข้อมูลที่ติดตั้งเวอร์ชันก่อนหน้าไปแล้ว
 -- ถ้าเป็นการติดตั้งใหม่ ใช้ setup-all.sql แทน (รวมไฟล์นี้ไว้แล้ว)
+--
+-- รันซ้ำได้ แต่รันย้อนลำดับไม่ได้ — ถ้ามี patch ที่ใหม่กว่าติดตั้งไปแล้ว
+-- ไฟล์นี้จะหยุดทันทีพร้อมบอกเหตุผล แทนที่จะทับของใหม่ด้วยของเก่าเงียบ ๆ
 -- ============================================================================
+
+create table if not exists schema_patches (
+  name       text primary key,
+  seq        bigint not null,
+  applied_at timestamptz not null default now()
+);
+
+do $$
+declare v_newer text;
+begin
+  select string_agg(name, ', ' order by seq) into v_newer
+    from schema_patches where seq > 20260930001100;
+
+  if v_newer is not null then
+    raise exception
+      'ฐานข้อมูลนี้ติดตั้ง % ซึ่งใหม่กว่า patch-staff ไปแล้ว การรันไฟล์นี้จะทับของใหม่ด้วยของเก่า — ไม่ต้องรัน', v_newer
+      using errcode = '55000';
+  end if;
+end;
+$$;
 
 -- ###### supabase/migrations/20260930001100_staff_management.sql
 
@@ -346,3 +369,7 @@ grant execute on function rename_staff(uuid, text)        to authenticated;
 
 -- register_staff ไม่เปิดให้เรียกจากเบราว์เซอร์เลย — Edge Function เรียกด้วย
 -- service_role ซึ่งข้ามการตรวจสิทธิ์ของ Postgres อยู่แล้ว
+
+-- จดว่า patch นี้ติดตั้งแล้ว
+insert into schema_patches (name, seq) values ('patch-staff', 20260930001100)
+  on conflict (name) do update set applied_at = now();

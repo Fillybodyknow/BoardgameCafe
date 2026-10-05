@@ -47,10 +47,18 @@ run supabase/patch-roles.sql
 
 # ผู้ใช้วาง SQL ทีละไฟล์ในหน้าเว็บ ถ้าล้มกลางไฟล์จะค้างครึ่ง ๆ แล้วต้องรันใหม่
 # patch ที่ยังต้องใช้จึงต้องรันซ้ำได้โดยไม่พัง — พิสูจน์ด้วยการรันซ้ำจริง
+# รันซ้ำเฉพาะตัวล่าสุดได้ ส่วนตัวเก่ากว่าจะโดนการ์ดบล็อก (ทดสอบด้านล่าง)
 echo "--- รัน patch ล่าสุดซ้ำอีกรอบ ต้องไม่พัง ---"
-run supabase/patch-menu-images.sql
-run supabase/patch-staff.sql
 run supabase/patch-roles.sql
+
+# patch หลายไฟล์ประกาศฟังก์ชันชื่อเดียวกัน ถ้ารันไฟล์เก่าทีหลังไฟล์ใหม่
+# ของเก่าจะทับของใหม่เงียบ ๆ แล้วฟีเจอร์หายโดยไม่มีอะไรบอก — เคยเกิดจริง
+echo "--- รัน patch ย้อนลำดับ ต้องถูกปฏิเสธ ---"
+if docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d bgcafe -q      < supabase/patch-staff.sql 2>/dev/null; then
+  echo "FAIL  รัน patch เก่าทับของใหม่ได้ ทั้งที่ไม่ควร"
+  exit 1
+fi
+echo "PASS  รัน patch-staff หลัง patch-roles ถูกปฏิเสธ"
 
 echo "--- เทสต์ชุดเดียวกับการติดตั้งใหม่ ---"
 run supabase/tests/05_test_grants.sql

@@ -3,7 +3,30 @@
 --
 -- สำหรับฐานข้อมูลที่ติดตั้งเวอร์ชันก่อนหน้าไปแล้ว
 -- ถ้าเป็นการติดตั้งใหม่ ใช้ setup-all.sql แทน (รวมไฟล์นี้ไว้แล้ว)
+--
+-- รันซ้ำได้ แต่รันย้อนลำดับไม่ได้ — ถ้ามี patch ที่ใหม่กว่าติดตั้งไปแล้ว
+-- ไฟล์นี้จะหยุดทันทีพร้อมบอกเหตุผล แทนที่จะทับของใหม่ด้วยของเก่าเงียบ ๆ
 -- ============================================================================
+
+create table if not exists schema_patches (
+  name       text primary key,
+  seq        bigint not null,
+  applied_at timestamptz not null default now()
+);
+
+do $$
+declare v_newer text;
+begin
+  select string_agg(name, ', ' order by seq) into v_newer
+    from schema_patches where seq > 20260930001200;
+
+  if v_newer is not null then
+    raise exception
+      'ฐานข้อมูลนี้ติดตั้ง % ซึ่งใหม่กว่า patch-roles ไปแล้ว การรันไฟล์นี้จะทับของใหม่ด้วยของเก่า — ไม่ต้องรัน', v_newer
+      using errcode = '55000';
+  end if;
+end;
+$$;
 
 -- ###### supabase/migrations/20260930001200_role_capabilities.sql
 
@@ -370,3 +393,7 @@ create policy staff_read_capabilities on role_capabilities
 -- ของเดิมผูกกับชื่อ role 'owner' ตรง ๆ ถูกแทนด้วย assert_admin_remains แล้ว
 -- ลบทิ้งไม่ให้มีด่านสองชุดที่อาจเพี้ยนจากกัน
 drop function if exists assert_owner_remains(uuid);
+
+-- จดว่า patch นี้ติดตั้งแล้ว
+insert into schema_patches (name, seq) values ('patch-roles', 20260930001200)
+  on conflict (name) do update set applied_at = now();

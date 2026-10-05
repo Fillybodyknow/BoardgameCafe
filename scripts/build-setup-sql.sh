@@ -21,20 +21,80 @@ HDR
     echo "-- ####################################################################"; echo ""
     cat "$f"
   done
+  echo
+  echo "-- ติดตั้งใหม่ = ถือว่าผ่านทุก patch แล้ว กันคนเผลอรัน patch เก่าทับทีหลัง"
+  cat <<'LEDGER'
+create table if not exists schema_patches (
+  name       text primary key,
+  seq        bigint not null,
+  applied_at timestamptz not null default now()
+);
+LEDGER
+  for f in supabase/migrations/*.sql; do
+    seq=$(basename "$f" | cut -d_ -f1)
+    echo "insert into schema_patches (name, seq) values ('migration-$seq', $seq)"
+    echo "  on conflict (name) do nothing;"
+  done
 } > supabase/setup-all.sql
 echo "เขียน supabase/setup-all.sql แล้ว ($(wc -l < supabase/setup-all.sql) บรรทัด)"
 
 # patch รายเฟส สำหรับฐานข้อมูลที่ติดตั้งไปแล้ว
+# ตารางบันทึกว่า patch ไหนถูก apply ไปแล้ว
+#
+# จำเป็นเพราะ patch หลายไฟล์ประกาศฟังก์ชันชื่อเดียวกัน (create or replace)
+# ถ้ารันไฟล์เก่าทีหลังไฟล์ใหม่ ฟังก์ชันเวอร์ชันเก่าจะทับเวอร์ชันใหม่เงียบ ๆ
+# แล้วฟีเจอร์ที่เพิ่งเพิ่มจะหายไปโดยไม่มีอะไรบอก — เกิดขึ้นจริงมาแล้ว
+ledger() {
+  cat <<'LEDGER'
+create table if not exists schema_patches (
+  name       text primary key,
+  seq        bigint not null,
+  applied_at timestamptz not null default now()
+);
+LEDGER
+}
+
 make_patch() {
   local out="$1" title="$2"; shift 2
+  # ลำดับของ patch = เลขเวลาของ migration ตัวท้ายสุดในไฟล์
+  local seq
+  seq=$(basename "${!#}" | cut -d_ -f1)
+  local name
+  name=$(basename "$out" .sql)
+
   {
     echo "-- ============================================================================"
     echo "-- Boardgame Cafe — $title"
     echo "--"
     echo "-- สำหรับฐานข้อมูลที่ติดตั้งเวอร์ชันก่อนหน้าไปแล้ว"
     echo "-- ถ้าเป็นการติดตั้งใหม่ ใช้ setup-all.sql แทน (รวมไฟล์นี้ไว้แล้ว)"
+    echo "--"
+    echo "-- รันซ้ำได้ แต่รันย้อนลำดับไม่ได้ — ถ้ามี patch ที่ใหม่กว่าติดตั้งไปแล้ว"
+    echo "-- ไฟล์นี้จะหยุดทันทีพร้อมบอกเหตุผล แทนที่จะทับของใหม่ด้วยของเก่าเงียบ ๆ"
     echo "-- ============================================================================"
+    echo
+    ledger
+    cat <<GUARD
+
+do \$\$
+declare v_newer text;
+begin
+  select string_agg(name, ', ' order by seq) into v_newer
+    from schema_patches where seq > $seq;
+
+  if v_newer is not null then
+    raise exception
+      'ฐานข้อมูลนี้ติดตั้ง % ซึ่งใหม่กว่า $name ไปแล้ว การรันไฟล์นี้จะทับของใหม่ด้วยของเก่า — ไม่ต้องรัน', v_newer
+      using errcode = '55000';
+  end if;
+end;
+\$\$;
+GUARD
     for f in "$@"; do echo; echo "-- ###### $f"; echo; cat "$f"; done
+    echo
+    echo "-- จดว่า patch นี้ติดตั้งแล้ว"
+    echo "insert into schema_patches (name, seq) values ('$name', $seq)"
+    echo "  on conflict (name) do update set applied_at = now();"
   } > "$out"
   echo "เขียน $out แล้ว ($(wc -l < "$out") บรรทัด)"
 }
