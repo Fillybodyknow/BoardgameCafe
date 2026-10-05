@@ -94,6 +94,51 @@ function useSave<T>(keys: string[], fn: (v: T) => Promise<void>) {
   })
 }
 
+/**
+ * ช่องกรอกเวลาที่บันทึกตอนออกจากช่อง ไม่ใช่ทุกครั้งที่ค่าเปลี่ยน
+ *
+ * <input type="time"> คืนค่าว่างระหว่างที่ยังกรอกไม่ครบ ถ้าบันทึกทุกครั้งที่
+ * ค่าเปลี่ยน ตัวเลขที่พิมพ์ค้างไว้จะถูกเขียนทับด้วยค่าที่โหลดกลับมาจาก
+ * เซิร์ฟเวอร์ แล้วกรอกให้ครบไม่ได้เลย — เกิดกับช่องเวลาปิดครัวซึ่งเว้นว่างได้
+ * จึงวนเป็นค่าว่างตลอด
+ */
+function TimeField({
+  value,
+  onCommit,
+  className = '',
+  'aria-label': label,
+}: {
+  value: string | null
+  /** null = เว้นว่าง */
+  onCommit: (v: string | null) => void
+  className?: string
+  'aria-label'?: string
+}) {
+  const [draft, setDraft] = useState(value ?? '')
+  const [editing, setEditing] = useState(false)
+
+  // ค่าจากเซิร์ฟเวอร์เปลี่ยนตอนที่ไม่ได้แก้อยู่ → ตามค่านั้น
+  useEffect(() => {
+    if (!editing) setDraft(value ?? '')
+  }, [value, editing])
+
+  return (
+    <input
+      type="time"
+      aria-label={label}
+      value={draft}
+      onFocus={() => setEditing(true)}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        setEditing(false)
+        const next = draft || null
+        if (next !== (value ?? null)) onCommit(next)
+      }}
+      className={className}
+    />
+  )
+}
+
 function Err({ error }: { error: unknown }) {
   if (!error) return null
   return (
@@ -740,17 +785,17 @@ function HoursTab() {
 
             {!h.closed && (
               <div className="flex items-center gap-2">
-                <input
-                  type="time"
+                <TimeField
+                  aria-label={`เวลาเปิด ${WEEKDAY[h.weekday]}`}
                   value={h.openTime}
-                  onChange={(e) => saveHours.mutate({ ...h, openTime: e.target.value })}
+                  onCommit={(v) => v && saveHours.mutate({ ...h, openTime: v })}
                   className={`${INPUT} !w-auto !py-1`}
                 />
                 <span className="text-ink-faint">–</span>
-                <input
-                  type="time"
+                <TimeField
+                  aria-label={`เวลาปิด ${WEEKDAY[h.weekday]}`}
                   value={h.closeTime}
-                  onChange={(e) => saveHours.mutate({ ...h, closeTime: e.target.value })}
+                  onCommit={(v) => v && saveHours.mutate({ ...h, closeTime: v })}
                   className={`${INPUT} !w-auto !py-1`}
                 />
               </div>
@@ -759,12 +804,10 @@ function HoursTab() {
             {!h.closed && (
               <label className="flex items-center gap-2 text-sm text-ink-soft">
                 ครัวปิด
-                <input
-                  type="time"
-                  value={h.kitchenCloseTime ?? ''}
-                  onChange={(e) =>
-                    saveHours.mutate({ ...h, kitchenCloseTime: e.target.value || null })
-                  }
+                <TimeField
+                  aria-label={`เวลาปิดครัว ${WEEKDAY[h.weekday]}`}
+                  value={h.kitchenCloseTime}
+                  onCommit={(v) => saveHours.mutate({ ...h, kitchenCloseTime: v })}
                   className={`${INPUT} !w-auto !py-1`}
                 />
                 {h.kitchenCloseTime === null && (

@@ -238,4 +238,63 @@ describe('หน้าตั้งค่าร้าน', () => {
       expect(await screen.findByText(d)).toBeTruthy()
     }
   })
+
+  /*
+    ★ เกิดขึ้นจริง: ตั้งเวลาปิดครัวไม่ได้เลย
+
+    ของเดิมบันทึกทุกครั้งที่ค่าในช่องเปลี่ยน แต่ <input type="time"> คืนค่าว่าง
+    ระหว่างที่ยังกรอกไม่ครบ พอบันทึกค่าว่างแล้วโหลดกลับมา ตัวเลขที่พิมพ์ค้างไว้
+    ก็ถูกเขียนทับ วนแบบนี้จนกรอกให้ครบไม่ได้
+
+    เทสต์จำลองการพิมพ์ที่ผ่านค่าว่างระหว่างทาง แล้วตรวจว่าไม่มีการบันทึก
+    จนกว่าจะออกจากช่อง
+  */
+  it('ตั้งเวลาปิดครัวได้ แม้ระหว่างพิมพ์จะผ่านค่าว่าง', async () => {
+    window.location.hash = '#/owner'
+    render(<App />)
+    fireEvent.click(await screen.findByText('เวลาทำการ'))
+
+    const field = (await screen.findByLabelText('เวลาปิดครัว จันทร์')) as HTMLInputElement
+    fireEvent.focus(field)
+    fireEvent.change(field, { target: { value: '' } })
+    fireEvent.change(field, { target: { value: '22:00' } })
+
+    // เปิดโอกาสให้ mutation ได้ทำงานก่อน ไม่งั้นจะผ่านเพราะยังไม่ทันบันทึก
+    // ไม่ใช่เพราะไม่บันทึก
+    await new Promise((r) => setTimeout(r, 60))
+
+    // ยังไม่ออกจากช่อง → ต้องยังไม่บันทึก และค่าที่พิมพ์ต้องไม่ถูกล้าง
+    expect(field.value).toBe('22:00')
+    expect((await mockAdminAdapter.shopHours()).find((h) => h.weekday === 1)!.kitchenCloseTime)
+      .toBeNull()
+
+    fireEvent.blur(field)
+
+    await waitFor(async () => {
+      const hours = await mockAdminAdapter.shopHours()
+      expect(hours.find((h) => h.weekday === 1)!.kitchenCloseTime).toBe('22:00')
+    })
+  })
+
+  it('ล้างช่องเวลาปิดครัวแล้วกลับไปปิดพร้อมร้าน', async () => {
+    await mockAdminAdapter.saveShopHours({
+      weekday: 1, openTime: '11:00', closeTime: '23:00', closed: false, kitchenCloseTime: '22:00',
+    })
+
+    window.location.hash = '#/owner'
+    render(<App />)
+    fireEvent.click(await screen.findByText('เวลาทำการ'))
+
+    const field = (await screen.findByLabelText('เวลาปิดครัว จันทร์')) as HTMLInputElement
+    await waitFor(() => expect(field.value).toBe('22:00'))
+
+    fireEvent.focus(field)
+    fireEvent.change(field, { target: { value: '' } })
+    fireEvent.blur(field)
+
+    await waitFor(async () => {
+      const hours = await mockAdminAdapter.shopHours()
+      expect(hours.find((h) => h.weekday === 1)!.kitchenCloseTime).toBeNull()
+    })
+  })
 })
