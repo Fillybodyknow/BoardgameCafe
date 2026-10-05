@@ -17,67 +17,22 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { encryptPayload } from './webpush.ts'
+import { importVapidKeys, vapidAuth, type VapidKeys } from './vapid.ts'
 
 const VAPID_PUBLIC = Deno.env.get('VAPID_PUBLIC_KEY') ?? ''
 const VAPID_PRIVATE = Deno.env.get('VAPID_PRIVATE_KEY') ?? ''
 const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:owner@boardgamecafe.local'
 const NOTIFY_SECRET = Deno.env.get('NOTIFY_SECRET') ?? ''
 
-// ---------------------------------------------------------------- base64url ----
+/** นำเข้ากุญแจครั้งเดียวแล้วใช้ซ้ำ แต่ถ้าพังต้องไม่จำความพังไว้ */
+let keysPromise: Promise<VapidKeys> | null = null
 
-function b64urlToBytes(s: string): Uint8Array {
-  const b64 = s.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(s.length / 4) * 4, '=')
-  const bin = atob(b64)
-  return Uint8Array.from(bin, (c) => c.charCodeAt(0))
-}
-
-function bytesToB64url(bytes: ArrayBuffer | Uint8Array): string {
-  const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes)
-  let bin = ''
-  for (const b of arr) bin += String.fromCharCode(b)
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-
-// ------------------------------------------------------------------ VAPID ----
-
-let signingKey: CryptoKey | null = null
-
-async function getSigningKey(): Promise<CryptoKey> {
-  signingKey ??= await crypto.subtle.importKey(
-    'pkcs8',
-    b64urlToBytes(VAPID_PRIVATE),
-    { name: 'ECDSA', namedCurve: 'P-256' },
-    false,
-    ['sign'],
-  )
-  return signingKey
-}
-
-/**
- * JWT ที่บริการ push ใช้ยืนยันว่าเราเป็นเจ้าของกุญแจจริง
- * aud ต้องเป็น origin ของ endpoint ปลายทาง ไม่ใช่ URL เต็ม
- */
-async function vapidAuth(endpoint: string): Promise<string> {
-  const aud = new URL(endpoint).origin
-  const header = bytesToB64url(new TextEncoder().encode(JSON.stringify({ typ: 'JWT', alg: 'ES256' })))
-  const payload = bytesToB64url(
-    new TextEncoder().encode(
-      JSON.stringify({
-        aud,
-        exp: Math.floor(Date.now() / 1000) + 12 * 3600,
-        sub: VAPID_SUBJECT,
-      }),
-    ),
-  )
-
-  const data = new TextEncoder().encode(`${header}.${payload}`)
-  const sig = await crypto.subtle.sign(
-    { name: 'ECDSA', hash: 'SHA-256' },
-    await getSigningKey(),
-    data,
-  )
-
-  return `vapid t=${header}.${payload}.${bytesToB64url(sig)}, k=${VAPID_PUBLIC}`
+function getVapidKeys(): Promise<VapidKeys> {
+  keysPromise ??= importVapidKeys(VAPID_PRIVATE, VAPID_PUBLIC).catch((e) => {
+    keysPromise = null
+    throw e
+  })
+  return keysPromise
 }
 
 // ------------------------------------------------------------------- main ----
@@ -91,6 +46,14 @@ Deno.serve(async (req) => {
   }
   if (req.headers.get('x-notify-secret') !== NOTIFY_SECRET) {
     return Response.json({ error: 'unauthorized' }, { status: 401 })
+  }
+
+  // ตรวจกุญแจก่อนทำอย่างอื่น ถ้าตั้งค่าผิดจะได้รู้สาเหตุทันที ไม่ใช่เห็นแค่ sent:0
+  let keys: VapidKeys
+  try {
+    keys = await getVapidKeys()
+  } catch (e) {
+    return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 })
   }
 
   const admin = createClient(
@@ -117,7 +80,7 @@ Deno.serve(async (req) => {
     payload = null
   }
 
-  return await sendAll(admin, (targets ?? []) as Target[], payload)
+  return await sendAll(admin, (targets ?? []) as Target[], payload, keys)
 })
 
 interface Target {
@@ -131,6 +94,7 @@ async function sendAll(
   admin: ReturnType<typeof createClient>,
   targets: Target[],
   payload: string | null,
+  keys: VapidKeys,
 ) {
   let sent = 0
   const expired: string[] = []
@@ -141,7 +105,7 @@ async function sendAll(
     targets.map(async (t) => {
       try {
         const headers: Record<string, string> = {
-          Authorization: await vapidAuth(t.endpoint),
+          Authorization: await vapidAuth(t.endpoint, VAPID_SUBJECT, keys),
           TTL: '120',
           Urgency: 'high',
         }
