@@ -107,6 +107,12 @@ describe('กุญแจ VAPID', () => {
     )
   })
 
+  // ★ เกิดขึ้นจริงตอนตั้ง Secret — วางกุญแจสาธารณะลงช่องกุญแจส่วนตัว
+  it('วางกุญแจสลับช่องกันต้องบอกว่าสลับ', async () => {
+    const kp = await makeKeypair()
+    await expect(importVapidKeys(kp.publicKey, kp.publicKey)).rejects.toThrow(/สลับค่า/)
+  })
+
   it('กุญแจส่วนตัวผิดรูปแบบต้องฟ้องว่าผิดตรงไหน', async () => {
     const kp = await makeKeypair()
     await expect(importVapidKeys(bytesToB64url(new Uint8Array(10)), kp.publicKey)).rejects.toThrow(

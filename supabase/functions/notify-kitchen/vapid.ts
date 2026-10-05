@@ -67,6 +67,9 @@ export async function importVapidKeys(
     }
   } else if (priv[0] === 0x30) {
     signingKey = await crypto.subtle.importKey('pkcs8', priv, ALG, false, ['sign'])
+  } else if (priv.length === 65 && priv[0] === 0x04) {
+    // เคสที่เกิดจริง: วางกุญแจสาธารณะลงในช่องกุญแจส่วนตัว
+    throw new Error('VAPID_PRIVATE_KEY เป็นกุญแจสาธารณะ — สลับค่ากับ VAPID_PUBLIC_KEY อยู่')
   } else {
     throw new Error(
       `VAPID_PRIVATE_KEY อ่านไม่ออก — ต้องเป็น raw 32 ไบต์ หรือ PKCS#8 แต่ได้ ${priv.length} ไบต์ ขึ้นต้นด้วย 0x${priv[0]?.toString(16)}`,
