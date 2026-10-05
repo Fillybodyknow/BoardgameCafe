@@ -103,7 +103,11 @@ $$;
 -- ความสัมพันธ์เอง — push_subscriptions.user_id อ้าง auth.users ไม่ใช่ staff
 -- จึง join ข้ามไปหา role_capabilities ผ่าน PostgREST ตรง ๆ ไม่ได้
 -- ---------------------------------------------------------------------------
-create or replace function kitchen_push_endpoints()
+-- drop ก่อนเสมอ เพราะไฟล์ถัดไปเปลี่ยนคอลัมน์ที่คืนกลับ ถ้าใช้ create or replace
+-- แล้วรันไฟล์นี้ซ้ำทีหลัง Postgres จะปฏิเสธว่าเปลี่ยนชนิดที่คืนไม่ได้
+drop function if exists kitchen_push_endpoints();
+
+create function kitchen_push_endpoints()
 returns table (id uuid, endpoint text)
 language sql stable security definer set search_path = public, pg_temp as $$
   select distinct ps.id, ps.endpoint

@@ -4,9 +4,10 @@
  * ถูกเรียกจาก trigger ของตาราง orders ผ่าน pg_net ไม่ได้ถูกเรียกจากเบราว์เซอร์
  * จึงยืนยันตัวด้วยรหัสลับที่แชร์กับฐานข้อมูล ไม่ใช่ JWT ของผู้ใช้
  *
- * ส่ง push แบบไม่มีเนื้อหา (payload-less) โดยตั้งใจ — Web Push ที่มี payload
- * ต้องเข้ารหัส aes128gcm ซึ่งซับซ้อนและพังง่าย ส่วนข้อความแจ้งเตือนเขียนไว้ใน
- * service worker อยู่แล้ว กดแล้วเปิดจอครัวเห็นรายละเอียดครบ
+ * ส่งข้อความไปด้วย โดยเข้ารหัสตาม RFC 8291 (ดู webpush.ts) บริการ push เป็น
+ * คนกลางที่อ่านเนื้อหาไม่ได้ ถ้าเข้ารหัสผิดจะถูกปฏิเสธหรือเบราว์เซอร์ถอดไม่ออก
+ * ถ้าประกอบข้อความไม่สำเร็จจะถอยไปส่งแบบไม่มีเนื้อหา — service worker มีข้อความ
+ * สำรองรออยู่ ดีกว่าไม่แจ้งเตือนเลย
  *
  * ⚠️ ต้องปิด Verify JWT ของฟังก์ชันนี้ เพราะ pg_net ไม่ได้ส่ง JWT มา
  *    (Dashboard → Edge Functions → notify-kitchen → Details → Verify JWT = off)
@@ -15,6 +16,7 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { encryptPayload } from './webpush.ts'
 
 const VAPID_PUBLIC = Deno.env.get('VAPID_PUBLIC_KEY') ?? ''
 const VAPID_PRIVATE = Deno.env.get('VAPID_PRIVATE_KEY') ?? ''
@@ -103,12 +105,32 @@ Deno.serve(async (req) => {
     return Response.json({ error: error.message }, { status: 500 })
   }
 
-  return await sendAll(admin, (targets ?? []) as { id: string; endpoint: string }[])
+  // ข้อความประกอบจากฐานข้อมูล ถ้าดึงไม่ได้ก็ยังส่งแจ้งเตือน แค่ไม่มีรายละเอียด
+  let payload: string | null = null
+  try {
+    const { orderId } = (await req.json()) as { orderId?: string }
+    if (orderId) {
+      const { data } = await admin.rpc('order_push_summary', { p_order_id: orderId })
+      if (data) payload = JSON.stringify(data)
+    }
+  } catch {
+    payload = null
+  }
+
+  return await sendAll(admin, (targets ?? []) as Target[], payload)
 })
+
+interface Target {
+  id: string
+  endpoint: string
+  p256dh?: string
+  auth?: string
+}
 
 async function sendAll(
   admin: ReturnType<typeof createClient>,
-  targets: { id: string; endpoint: string }[],
+  targets: Target[],
+  payload: string | null,
 ) {
   let sent = 0
   const expired: string[] = []
@@ -116,15 +138,24 @@ async function sendAll(
   await Promise.all(
     targets.map(async (t) => {
       try {
-        const res = await fetch(t.endpoint, {
-          method: 'POST',
-          headers: {
-            Authorization: await vapidAuth(t.endpoint),
-            TTL: '120',
-            Urgency: 'high',
-            'Content-Length': '0',
-          },
-        })
+        const headers: Record<string, string> = {
+          Authorization: await vapidAuth(t.endpoint),
+          TTL: '120',
+          Urgency: 'high',
+        }
+        let body: BodyInit | undefined
+
+        // เข้ารหัสด้วยกุญแจของอุปกรณ์เครื่องนั้นโดยเฉพาะ จึงต้องทำทีละเครื่อง
+        if (payload && t.p256dh && t.auth) {
+          const encrypted = await encryptPayload(payload, { p256dh: t.p256dh, auth: t.auth })
+          headers['Content-Encoding'] = 'aes128gcm'
+          headers['Content-Type'] = 'application/octet-stream'
+          body = encrypted as unknown as BodyInit
+        } else {
+          headers['Content-Length'] = '0'
+        }
+
+        const res = await fetch(t.endpoint, { method: 'POST', headers, body })
 
         if (res.status === 404 || res.status === 410) {
           // อุปกรณ์ถอนการติดตั้งหรือล้างข้อมูลไปแล้ว เก็บกวาดทิ้ง

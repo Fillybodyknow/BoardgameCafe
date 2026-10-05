@@ -203,3 +203,72 @@ reset role;
 set "test.user_id" = '99999999-0000-4000-8000-000000000001';
 
 select '=== แจ้งเตือนออเดอร์เข้าครัวผ่านทั้งหมด ===' as result;
+
+-- ===================== ข้อความในแจ้งเตือน =====================
+
+do $$
+declare
+  v_plan  uuid;
+  v_table cafe_tables;
+  v_visit visits;
+  v_pass  guest_passes;
+  v_order orders;
+  v_sum   jsonb;
+  v_menu  uuid[];
+begin
+  update push_config set function_url = null;  -- ไม่ต้องยิงออกนอกตอนทดสอบ
+
+  select id into v_plan from rate_plans where active limit 1;
+  select * into v_table from cafe_tables where status = 'free' and not allow_share limit 1;
+  select array_agg(id) into v_menu from (select id from menu_items where available limit 6) m;
+
+  v_visit := open_visit(array[v_table.id], jsonb_build_array(
+    jsonb_build_object('name', 'ลูกค้า', 'ratePlanId', v_plan)));
+  select * into v_pass from guest_passes where visit_id = v_visit.id;
+
+  v_order := place_order('payload-1', v_visit.id, v_pass.id, 'owner', 'staff',
+    jsonb_build_array(
+      jsonb_build_object('menuItemId', v_menu[1], 'qty', 2),
+      jsonb_build_object('menuItemId', v_menu[2], 'qty', 1)));
+
+  v_sum := order_push_summary(v_order.id);
+
+  perform assert_eq('หัวข้อบอกเลขโต๊ะ', v_sum ->> 'title', 'ออเดอร์ใหม่ · โต๊ะ ' || v_table.code);
+  perform assert_eq('เนื้อหาบอกจำนวนต่อรายการ', (v_sum ->> 'body') like '%×2%', true);
+  perform assert_eq('มีทั้งสองรายการ',
+    array_length(string_to_array(v_sum ->> 'body', ', '), 1), 2);
+  perform assert_eq('ส่ง orderId กลับไปด้วย', v_sum ->> 'orderId', v_order.id::text);
+
+  -- ★ รายการเยอะต้องตัดให้สั้น ไม่งั้นข้อความถูกตัดกลางคันบนหน้าจอล็อก
+  v_order := place_order('payload-2', v_visit.id, v_pass.id, 'owner', 'staff',
+    (select jsonb_agg(jsonb_build_object('menuItemId', m, 'qty', 1))
+       from unnest(v_menu[1:6]) m));
+
+  v_sum := order_push_summary(v_order.id);
+  perform assert_eq('รายการเกิน 4 ถูกย่อ', (v_sum ->> 'body') like '%และอีก 2 รายการ%', true);
+
+  -- ออเดอร์ที่ไม่มีอยู่ต้องไม่ล้ม แต่คืนข้อความสำรอง
+  v_sum := order_push_summary('00000000-0000-0000-0000-000000000000');
+  perform assert_eq('ออเดอร์ที่ไม่มีอยู่ได้ข้อความสำรอง',
+    v_sum ->> 'title', 'มีออเดอร์ใหม่เข้าครัว');
+
+  perform close_visit(v_visit.id);
+end;
+$$;
+
+-- กุญแจของอุปกรณ์ต้องส่งกลับมาด้วย ไม่งั้น Edge Function เข้ารหัสไม่ได้
+do $$
+declare v_row record;
+begin
+  perform set_config('test.user_id', '99999999-0000-4000-8000-000000000021', false);
+  perform save_push_subscription('https://push.example.com/cook-b', 'pub-key', 'auth-key', null);
+
+  select * into v_row from kitchen_push_endpoints()
+   where endpoint = 'https://push.example.com/cook-b';
+
+  perform assert_eq('คืนกุญแจสาธารณะของอุปกรณ์', v_row.p256dh, 'pub-key');
+  perform assert_eq('คืนความลับร่วมของอุปกรณ์', v_row.auth, 'auth-key');
+end;
+$$;
+
+select '=== ข้อความในแจ้งเตือนผ่านทั้งหมด ===' as result;
