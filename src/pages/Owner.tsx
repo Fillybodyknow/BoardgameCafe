@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { adminDb, menuImageUrl } from '../data'
+import { adminDb, menuImageUrl, tableImageUrl } from '../data'
 import { formatBytes, resizeToJpeg } from '../lib/image'
 import StaffTab from './StaffTab'
 import BrandTab from './BrandTab'
@@ -8,11 +8,23 @@ import { SNAPSHOT_KEY } from '../hooks/useData'
 import { formatBaht } from '../domain/pricing'
 import type { MenuCategory, ShopHours, TaxConfig } from '../domain/types'
 import {
-  Badge, Button, Card, Empty, Field, INPUT, Modal, PageHeader, SectionTitle, Segmented,
+  Badge,
+  Button,
+  Card,
+  Empty,
+  Field,
+  INPUT,
+  Modal,
+  PageHeader,
+  SectionTitle,
+  Segmented,
 } from '../components/ui'
 
 const CATEGORY_LABEL: Record<MenuCategory, string> = {
-  drink: 'เครื่องดื่ม', snack: 'ของกินเล่น', food: 'อาหารจานหลัก', dessert: 'ของหวาน',
+  drink: 'เครื่องดื่ม',
+  snack: 'ของกินเล่น',
+  food: 'อาหารจานหลัก',
+  dessert: 'ของหวาน',
 }
 
 const WEEKDAY = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์']
@@ -43,9 +55,7 @@ export default function Owner() {
       <Empty>
         หน้านี้เปิดให้เฉพาะผู้จัดการและเจ้าของร้าน
         <br />
-        <span className="text-xs">
-          (ต่อให้เปิดหน้านี้ได้ ฐานข้อมูลก็ยังปฏิเสธการแก้ค่าอยู่ดี)
-        </span>
+        <span className="text-xs">(ต่อให้เปิดหน้านี้ได้ ฐานข้อมูลก็ยังปฏิเสธการแก้ค่าอยู่ดี)</span>
       </Empty>
     )
   }
@@ -73,14 +83,14 @@ export default function Owner() {
       </div>
 
       <div key={tab} className="animate-page">
-      {tab === 'menu' && <MenuTab />}
-      {tab === 'tables' && <TablesTab />}
-      {tab === 'rates' && <RatesTab />}
-      {tab === 'hours' && <HoursTab />}
-      {tab === 'brand' && caps.data?.includes('branding') && <BrandTab />}
-      {tab === 'staff' && caps.data?.includes('accounts') && (
-        <StaffTab myRole={role.data ?? 'staff'} />
-      )}
+        {tab === 'menu' && <MenuTab />}
+        {tab === 'tables' && <TablesTab />}
+        {tab === 'rates' && <RatesTab />}
+        {tab === 'hours' && <HoursTab />}
+        {tab === 'brand' && caps.data?.includes('branding') && <BrandTab />}
+        {tab === 'staff' && caps.data?.includes('accounts') && (
+          <StaffTab myRole={role.data ?? 'staff'} />
+        )}
       </div>
     </div>
   )
@@ -187,7 +197,10 @@ function MenuTab() {
 
   return (
     <div className="space-y-3">
-      <Button variant="primary" onClick={() => setDraft({ ...BLANK_MENU, sortOrder: active.length + 1 })}>
+      <Button
+        variant="primary"
+        onClick={() => setDraft({ ...BLANK_MENU, sortOrder: active.length + 1 })}
+      >
         + เพิ่มเมนู
       </Button>
 
@@ -196,45 +209,52 @@ function MenuTab() {
       </p>
 
       <div className="grid gap-3 lg:grid-cols-2">
-      {active.map((m) => (
-        <Card key={m.id} className="lift flex flex-wrap items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-3">
-            <Thumb path={m.imagePath} alt={m.name} />
-            <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold">{m.name}</span>
-              <Badge tone="neutral">{m.sku}</Badge>
-              {!m.available && <Badge tone="crimson">ของหมด</Badge>}
+        {active.map((m) => (
+          <Card key={m.id} className="lift flex flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-3">
+              <Thumb path={m.imagePath} alt={m.name} />
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold">{m.name}</span>
+                  <Badge tone="neutral">{m.sku}</Badge>
+                  {!m.available && <Badge tone="crimson">ของหมด</Badge>}
+                </div>
+                <div className="tabular mt-0.5 text-sm text-ink-soft">
+                  {CATEGORY_LABEL[m.category]} · ฿{formatBaht(m.price)}
+                </div>
+              </div>
             </div>
-            <div className="tabular mt-0.5 text-sm text-ink-soft">
-              {CATEGORY_LABEL[m.category]} · ฿{formatBaht(m.price)}
-            </div>
-            </div>
-          </div>
-          <div className="flex gap-1">
-            <Button
-              onClick={() =>
-                setDraft({
-                  id: m.id, sku: m.sku, name: m.name, category: m.category,
-                  price: m.price, available: m.available, sortOrder: m.sortOrder ?? 0,
-                })
-              }
-            >
-              แก้ไข
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => {
-                if (confirm(`เก็บ "${m.name}" เข้ากรุ? จะไม่แสดงในเมนูอีก แต่ใบเสร็จเก่ายังอ่านได้`)) {
-                  archive.mutate({ id: m.id, archived: true })
+            <div className="flex gap-1">
+              <Button
+                onClick={() =>
+                  setDraft({
+                    id: m.id,
+                    sku: m.sku,
+                    name: m.name,
+                    category: m.category,
+                    price: m.price,
+                    available: m.available,
+                    sortOrder: m.sortOrder ?? 0,
+                  })
                 }
-              }}
-            >
-              เก็บเข้ากรุ
-            </Button>
-          </div>
-        </Card>
-      ))}
+              >
+                แก้ไข
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  if (
+                    confirm(`เก็บ "${m.name}" เข้ากรุ? จะไม่แสดงในเมนูอีก แต่ใบเสร็จเก่ายังอ่านได้`)
+                  ) {
+                    archive.mutate({ id: m.id, archived: true })
+                  }
+                }}
+              >
+                เก็บเข้ากรุ
+              </Button>
+            </div>
+          </Card>
+        ))}
       </div>
 
       <Err error={archive.error} />
@@ -275,7 +295,9 @@ function MenuTab() {
                 className={input}
               >
                 {(Object.keys(CATEGORY_LABEL) as MenuCategory[]).map((c) => (
-                  <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>
+                  <option key={c} value={c}>
+                    {CATEGORY_LABEL[c]}
+                  </option>
                 ))}
               </select>
             </Field>
@@ -318,8 +340,14 @@ function MenuTab() {
 
           {draft.id ? (
             <ImageField
-              itemId={draft.id}
-              path={(items.data ?? []).find((m) => m.id === draft.id)?.imagePath ?? null}
+              url={menuImageUrl(
+                (items.data ?? []).find((m) => m.id === draft.id)?.imagePath ?? null,
+              )}
+              icon="🍽"
+              hint="ย่อให้เหลือกว้างสุด 800px อัตโนมัติ — ถ่ายจากมือถือได้เลย"
+              queryKey="menu"
+              onPick={(img) => adminDb.uploadMenuImage(draft.id!, img)}
+              onRemove={() => adminDb.removeMenuImage(draft.id!)}
             />
           ) : (
             <p className="mt-3 rounded-lg bg-parchment-deep/70 p-2 text-xs text-ink-soft">
@@ -360,12 +388,27 @@ function Thumb({ path, alt }: { path?: string | null; alt: string }) {
 }
 
 /**
- * อัปโหลดรูปเมนู
+ * อัปโหลดรูปประกอบ — ใช้ร่วมกันทั้งรูปเมนูและรูปโต๊ะ
  *
  * ย่อรูปในเบราว์เซอร์ก่อนส่งเสมอ รูปจากมือถือใบละหลายเมกะไบต์ ถ้าส่งดิบ ๆ
- * ลูกค้าที่เปิดเมนูจะโหลดหนักและกินโควตา egress เร็วมาก
+ * ลูกค้าที่เปิดดูจะโหลดหนักและกินโควตา egress เร็วมาก
  */
-function ImageField({ itemId, path }: { itemId: string; path: string | null }) {
+function ImageField({
+  url,
+  icon,
+  hint,
+  queryKey,
+  onPick,
+  onRemove,
+}: {
+  url: string | null
+  icon: string
+  hint: string
+  /** คีย์ของข้อมูลฝั่งตั้งค่าที่ต้องโหลดใหม่หลังเปลี่ยนรูป */
+  queryKey: string
+  onPick: (image: { blob: Blob; dataUrl: string }) => Promise<void>
+  onRemove: () => Promise<void>
+}) {
   const qc = useQueryClient()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -378,9 +421,9 @@ function ImageField({ itemId, path }: { itemId: string; path: string | null }) {
     setInfo(null)
     try {
       const resized = await resizeToJpeg(file)
-      await adminDb.uploadMenuImage(itemId, resized)
+      await onPick(resized)
       setInfo(`ย่อจาก ${formatBytes(file.size)} เหลือ ${formatBytes(resized.blob.size)}`)
-      void qc.invalidateQueries({ queryKey: ['admin', 'menu'] })
+      void qc.invalidateQueries({ queryKey: ['admin', queryKey] })
       void qc.invalidateQueries({ queryKey: SNAPSHOT_KEY })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'อัปโหลดไม่สำเร็จ')
@@ -393,8 +436,8 @@ function ImageField({ itemId, path }: { itemId: string; path: string | null }) {
     setBusy(true)
     setError(null)
     try {
-      await adminDb.removeMenuImage(itemId)
-      void qc.invalidateQueries({ queryKey: ['admin', 'menu'] })
+      await onRemove()
+      void qc.invalidateQueries({ queryKey: ['admin', queryKey] })
       void qc.invalidateQueries({ queryKey: SNAPSHOT_KEY })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'ลบรูปไม่สำเร็จ')
@@ -402,8 +445,6 @@ function ImageField({ itemId, path }: { itemId: string; path: string | null }) {
       setBusy(false)
     }
   }
-
-  const url = menuImageUrl(path)
 
   return (
     <div className="mt-3 rounded-lg border border-dashed border-line-strong bg-parchment/50 p-3">
@@ -413,7 +454,7 @@ function ImageField({ itemId, path }: { itemId: string; path: string | null }) {
           <img src={url} alt="" className="h-20 w-20 rounded-lg object-cover" />
         ) : (
           <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-parchment-deep text-2xl text-ink-faint">
-            🍽
+            {icon}
           </div>
         )}
         <div className="min-w-0 flex-1 space-y-1">
@@ -434,9 +475,7 @@ function ImageField({ itemId, path }: { itemId: string; path: string | null }) {
       {busy && <p className="mt-2 text-xs text-ink-faint">กำลังย่อและอัปโหลด…</p>}
       {info && <p className="mt-2 text-xs text-forest-deep">✓ {info}</p>}
       {error && <p className="mt-2 animate-shake text-sm text-crimson">{error}</p>}
-      <p className="mt-2 text-xs text-ink-faint">
-        ย่อให้เหลือกว้างสุด 800px อัตโนมัติ — ถ่ายจากมือถือได้เลย
-      </p>
+      <p className="mt-2 text-xs text-ink-faint">{hint}</p>
     </div>
   )
 }
@@ -473,49 +512,56 @@ function TablesTab() {
 
   return (
     <div className="space-y-3">
-      <Button variant="primary" onClick={() => setDraft({ ...BLANK_TABLE, sortOrder: active.length + 1 })}>
+      <Button
+        variant="primary"
+        onClick={() => setDraft({ ...BLANK_TABLE, sortOrder: active.length + 1 })}
+      >
         + เพิ่มโต๊ะ
       </Button>
 
       <div className="grid gap-3 lg:grid-cols-2">
-      {active.map((t) => (
-        <Card key={t.id} className="lift flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-lg tracking-wide font-bold">{t.code}</span>
-              <Badge tone="neutral">{t.zone}</Badge>
-              {t.allowShare && <Badge tone="royal">นั่งร่วมได้</Badge>}
-              {t.status === 'occupied' && <Badge tone="forest">มีลูกค้า</Badge>}
+        {active.map((t) => (
+          <Card key={t.id} className="lift flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg tracking-wide font-bold">{t.code}</span>
+                <Badge tone="neutral">{t.zone}</Badge>
+                {t.allowShare && <Badge tone="royal">นั่งร่วมได้</Badge>}
+                {t.status === 'occupied' && <Badge tone="forest">มีลูกค้า</Badge>}
+              </div>
+              <div className="mt-0.5 text-sm text-ink-soft">
+                {t.seatMin}–{t.seatMax} ที่นั่ง
+              </div>
             </div>
-            <div className="mt-0.5 text-sm text-ink-soft">
-              {t.seatMin}–{t.seatMax} ที่นั่ง
-            </div>
-          </div>
-          <div className="flex gap-1">
-            <Button
-              onClick={() =>
-                setDraft({
-                  id: t.id, code: t.code, zone: t.zone,
-                  seatMin: t.seatMin, seatMax: t.seatMax,
-                  allowShare: t.allowShare, sortOrder: t.sortOrder ?? 0,
-                })
-              }
-            >
-              แก้ไข
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => {
-                if (confirm(`เก็บโต๊ะ ${t.code} เข้ากรุ?`)) {
-                  archive.mutate({ id: t.id, archived: true })
+            <div className="flex gap-1">
+              <Button
+                onClick={() =>
+                  setDraft({
+                    id: t.id,
+                    code: t.code,
+                    zone: t.zone,
+                    seatMin: t.seatMin,
+                    seatMax: t.seatMax,
+                    allowShare: t.allowShare,
+                    sortOrder: t.sortOrder ?? 0,
+                  })
                 }
-              }}
-            >
-              เก็บเข้ากรุ
-            </Button>
-          </div>
-        </Card>
-      ))}
+              >
+                แก้ไข
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  if (confirm(`เก็บโต๊ะ ${t.code} เข้ากรุ?`)) {
+                    archive.mutate({ id: t.id, archived: true })
+                  }
+                }}
+              >
+                เก็บเข้ากรุ
+              </Button>
+            </div>
+          </Card>
+        ))}
       </div>
 
       <Err error={archive.error} />
@@ -528,7 +574,9 @@ function TablesTab() {
           <div className="mt-2 space-y-1">
             {archived.map((t) => (
               <div key={t.id} className="flex items-center justify-between gap-2 text-sm">
-                <span className="text-ink-faint">{t.code} · {t.zone}</span>
+                <span className="text-ink-faint">
+                  {t.code} · {t.zone}
+                </span>
                 <Button onClick={() => archive.mutate({ id: t.id, archived: false })}>
                   เอากลับมา
                 </Button>
@@ -539,7 +587,10 @@ function TablesTab() {
       )}
 
       {draft && (
-        <Dialog title={draft.id ? `แก้ไขโต๊ะ ${draft.code}` : 'เพิ่มโต๊ะ'} onClose={() => setDraft(null)}>
+        <Dialog
+          title={draft.id ? `แก้ไขโต๊ะ ${draft.code}` : 'เพิ่มโต๊ะ'}
+          onClose={() => setDraft(null)}
+        >
           <div className="grid grid-cols-2 gap-2">
             <Field label="รหัสโต๊ะ">
               <input
@@ -596,6 +647,23 @@ function TablesTab() {
             ให้คนละกลุ่มนั่งร่วมกันได้ (โต๊ะยาว / เคาน์เตอร์)
           </label>
 
+          {draft.id ? (
+            <ImageField
+              url={tableImageUrl(
+                (tables.data ?? []).find((t) => t.id === draft.id)?.imagePath ?? null,
+              )}
+              icon="🪑"
+              hint="ลูกค้าเห็นรูปนี้ตอนเลือกโต๊ะในหน้าจอง ถ่ายให้เห็นบรรยากาศรอบโต๊ะด้วย"
+              queryKey="tables"
+              onPick={(img) => adminDb.uploadTableImage(draft.id!, img)}
+              onRemove={() => adminDb.removeTableImage(draft.id!)}
+            />
+          ) : (
+            <p className="mt-3 rounded-lg bg-parchment-deep/70 p-2 text-xs text-ink-soft">
+              บันทึกโต๊ะก่อน แล้วเปิดกลับมาแก้เพื่อใส่รูป
+            </p>
+          )}
+
           <Err error={save.error} />
           <DialogActions
             busy={save.isPending}
@@ -643,8 +711,8 @@ function RatesTab() {
       </Button>
 
       <Card className="!border-lapis/30 !bg-lapis/5 text-xs text-lapis-deep">
-        ขึ้นราคาแล้ว <b className="text-ink">ไม่กระทบลูกค้าที่กำลังนั่งอยู่</b> —
-        แต่ละคนถือเรต ณ เวลาที่เช็คอินติดตัวไว้แล้ว ราคาใหม่ใช้กับคนที่เช็คอินหลังจากนี้เท่านั้น
+        ขึ้นราคาแล้ว <b className="text-ink">ไม่กระทบลูกค้าที่กำลังนั่งอยู่</b> — แต่ละคนถือเรต ณ
+        เวลาที่เช็คอินติดตัวไว้แล้ว ราคาใหม่ใช้กับคนที่เช็คอินหลังจากนี้เท่านั้น
       </Card>
 
       {(plans.data ?? []).map((p) => (
@@ -663,9 +731,13 @@ function RatesTab() {
           <Button
             onClick={() =>
               setDraft({
-                id: p.id, name: p.name, pricePerHour: p.pricePerHour,
-                roundToMinutes: p.roundToMinutes, minimumMinutes: p.minimumMinutes,
-                dayPassCap: p.dayPassCap, active: p.active ?? true,
+                id: p.id,
+                name: p.name,
+                pricePerHour: p.pricePerHour,
+                roundToMinutes: p.roundToMinutes,
+                minimumMinutes: p.minimumMinutes,
+                dayPassCap: p.dayPassCap,
+                active: p.active ?? true,
                 sortOrder: p.sortOrder ?? 0,
               })
             }
@@ -702,7 +774,9 @@ function RatesTab() {
                 className={input}
               >
                 {[10, 15, 30, 60].map((n) => (
-                  <option key={n} value={n}>{n} นาที</option>
+                  <option key={n} value={n}>
+                    {n} นาที
+                  </option>
                 ))}
               </select>
             </Field>
@@ -775,7 +849,10 @@ function HoursTab() {
     <div className="space-y-4">
       <div className="space-y-2">
         {(hours.data ?? []).map((h) => (
-          <Card key={h.weekday} className={`flex flex-wrap items-center gap-3 !py-3 ${h.closed ? 'opacity-60' : ''}`}>
+          <Card
+            key={h.weekday}
+            className={`flex flex-wrap items-center gap-3 !py-3 ${h.closed ? 'opacity-60' : ''}`}
+          >
             <span className="w-24 shrink-0 font-display font-semibold">{WEEKDAY[h.weekday]}</span>
 
             <label className="flex items-center gap-2 text-sm">

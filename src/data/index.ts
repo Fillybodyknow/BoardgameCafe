@@ -49,6 +49,14 @@ export function menuImageUrl(path?: string | null): string | null {
   return base ? `${base}/storage/v1/object/public/menu-images/${path}` : null
 }
 
+/** URL ของรูปโต๊ะ — กติกาเดียวกับ menuImageUrl แต่คนละ bucket */
+export function tableImageUrl(path?: string | null): string | null {
+  if (!path) return null
+  if (path.startsWith('data:')) return path
+  const base = import.meta.env.VITE_SUPABASE_URL as string | undefined
+  return base ? `${base}/storage/v1/object/public/table-images/${path}` : null
+}
+
 /** URL ของโลโก้ร้าน — กติกาเดียวกับ menuImageUrl แต่คนละ bucket */
 export function shopLogoUrl(path?: string | null): string | null {
   if (!path) return null

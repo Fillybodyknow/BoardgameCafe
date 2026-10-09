@@ -148,6 +148,9 @@ export interface AdminPort {
   /** อัปโหลดรูปที่ย่อแล้ว และเก็บกวาดไฟล์เดิมให้ด้วย */
   uploadMenuImage(id: ID, image: { blob: Blob; dataUrl: string }): Promise<void>
   removeMenuImage(id: ID): Promise<void>
+  /** รูปบรรยากาศโต๊ะ — ลูกค้าใช้ตัดสินใจตอนจอง */
+  uploadTableImage(id: ID, image: { blob: Blob; dataUrl: string }): Promise<void>
+  removeTableImage(id: ID): Promise<void>
 
   saveTable(input: {
     id: ID | null

@@ -504,6 +504,7 @@ class MockAdapter implements DataPort {
         seatMin: t.seatMin,
         seatMax: t.seatMax,
         allowShare: t.allowShare,
+        imagePath: t.imagePath,
         available,
       }
     })
@@ -799,6 +800,13 @@ class MockAdapter implements DataPort {
     this.commit()
   }
 
+  setTableImage(id: ID, path: string | null) {
+    const table = this.state.tables.find((t) => t.id === id)
+    if (!table) throw new Error('ไม่พบโต๊ะ')
+    table.imagePath = path
+    this.commit()
+  }
+
   archiveMenuItem(id: ID, archived: boolean) {
     const item = this.state.menu.find((m) => m.id === id)
     if (!item) throw new Error('ไม่พบเมนู')
@@ -846,6 +854,7 @@ class MockAdapter implements DataPort {
         allowShare: input.allowShare,
         status: 'free',
         sortOrder: input.sortOrder,
+        imagePath: null,
         archived: false,
         qrToken: newId('qr'),
       })

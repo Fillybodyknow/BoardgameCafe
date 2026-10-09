@@ -24,14 +24,14 @@ export function seed(): Snapshot {
 
     tables: [
       // v-1 ย้ายออกจาก A1 ไป B1 แล้ว โต๊ะนี้จึงว่าง (สถานะโต๊ะต้องตรงกับ occupancy เสมอ)
-      { id: 't-a1', code: 'A1', zone: 'โซนเงียบ', seatMin: 2, seatMax: 4, allowShare: false, status: 'free' , qrToken: 'qr-a1' },
-      { id: 't-a2', code: 'A2', zone: 'โซนเงียบ', seatMin: 2, seatMax: 4, allowShare: false, status: 'occupied' , qrToken: 'qr-a2' },
-      { id: 't-a3', code: 'A3', zone: 'โซนเงียบ', seatMin: 2, seatMax: 4, allowShare: false, status: 'free' , qrToken: 'qr-a3' },
-      { id: 't-b1', code: 'B1', zone: 'โซนกลาง', seatMin: 4, seatMax: 6, allowShare: false, status: 'occupied' , qrToken: 'qr-b1' },
-      { id: 't-b2', code: 'B2', zone: 'โซนกลาง', seatMin: 4, seatMax: 6, allowShare: false, status: 'free' , qrToken: 'qr-b2' },
-      { id: 't-b3', code: 'B3', zone: 'โซนกลาง', seatMin: 4, seatMax: 6, allowShare: false, status: 'free' , qrToken: 'qr-b3' },
-      { id: 't-c1', code: 'C1', zone: 'โต๊ะยาว', seatMin: 6, seatMax: 10, allowShare: true, status: 'free' , qrToken: 'qr-c1' },
-      { id: 't-bar', code: 'BAR', zone: 'เคาน์เตอร์', seatMin: 1, seatMax: 6, allowShare: true, status: 'occupied' , qrToken: 'qr-bar' },
+      { id: 't-a1', code: 'A1', zone: 'โซนเงียบ', seatMin: 2, seatMax: 4, allowShare: false, status: 'free' , qrToken: 'qr-a1', imagePath: null },
+      { id: 't-a2', code: 'A2', zone: 'โซนเงียบ', seatMin: 2, seatMax: 4, allowShare: false, status: 'occupied' , qrToken: 'qr-a2', imagePath: null },
+      { id: 't-a3', code: 'A3', zone: 'โซนเงียบ', seatMin: 2, seatMax: 4, allowShare: false, status: 'free' , qrToken: 'qr-a3', imagePath: null },
+      { id: 't-b1', code: 'B1', zone: 'โซนกลาง', seatMin: 4, seatMax: 6, allowShare: false, status: 'occupied' , qrToken: 'qr-b1', imagePath: null },
+      { id: 't-b2', code: 'B2', zone: 'โซนกลาง', seatMin: 4, seatMax: 6, allowShare: false, status: 'free' , qrToken: 'qr-b2', imagePath: null },
+      { id: 't-b3', code: 'B3', zone: 'โซนกลาง', seatMin: 4, seatMax: 6, allowShare: false, status: 'free' , qrToken: 'qr-b3', imagePath: null },
+      { id: 't-c1', code: 'C1', zone: 'โต๊ะยาว', seatMin: 6, seatMax: 10, allowShare: true, status: 'free' , qrToken: 'qr-c1', imagePath: null },
+      { id: 't-bar', code: 'BAR', zone: 'เคาน์เตอร์', seatMin: 1, seatMax: 6, allowShare: true, status: 'occupied' , qrToken: 'qr-bar', imagePath: null },
     ],
 
     visits: [

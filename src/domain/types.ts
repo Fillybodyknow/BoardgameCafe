@@ -32,6 +32,13 @@ export interface CafeTable {
    * เก็บไว้ให้สติกเกอร์ที่ยังติดอยู่บอกลูกค้าว่าต้องขอ QR จากพนักงาน
    */
   qrToken?: string
+  /**
+   * รูปบรรยากาศโต๊ะ ใช้ช่วยลูกค้าตัดสินใจตอนจอง
+   *
+   * ตั้งเป็นฟิลด์บังคับ (ไม่ใช่ optional) เพื่อให้คอมไพเลอร์ฟ้องถ้ามี adapter
+   * ไหนลืมแปลงฟิลด์นี้ — เคยพลาดแบบนี้มาแล้วกับเวลาปิดครัว
+   */
+  imagePath: string | null
 }
 
 // ---------- Visit = กลุ่มที่มาด้วยกัน ----------
@@ -238,6 +245,7 @@ export interface AvailableTable {
   seatMax: number
   allowShare: boolean
   available: boolean
+  imagePath?: string | null
 }
 
 export interface ShopHours {

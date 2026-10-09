@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
-import { bookingDb } from '../../data'
+import { bookingDb, tableImageUrl } from '../../data'
 import type { AvailableTable, BookingLookup, BookingReceipt, ShopHours } from '../../domain/types'
 import { Badge, Button, Card, Empty, Field, INPUT, Segmented } from '../../components/ui'
 import type { Tone } from '../../components/ui'
@@ -244,8 +244,7 @@ function BookForm() {
     }
   }
 
-  const ready =
-    picked !== null && name.trim() && phone.trim() && seats >= party && slots.length > 0
+  const ready = picked !== null && name.trim() && phone.trim() && seats >= party && slots.length > 0
 
   return (
     <div className="space-y-8">
@@ -353,7 +352,8 @@ function BookForm() {
 
         {!today?.closed && allSlots.length > 0 && slots.length === 0 && (
           <Card className="mt-3 !border-ember/40 !bg-ember/5 text-sm text-ember-deep">
-            วันนี้เลยเวลารับจองแล้ว (ต้องจองล่วงหน้าอย่างน้อย {leadMinutes} นาที) ลองเลือกวันพรุ่งนี้ดูครับ
+            วันนี้เลยเวลารับจองแล้ว (ต้องจองล่วงหน้าอย่างน้อย {leadMinutes} นาที)
+            ลองเลือกวันพรุ่งนี้ดูครับ
           </Card>
         )}
 
@@ -490,13 +490,29 @@ function TablePicker({
                   aria-pressed={on}
                   disabled={!t.available}
                   onClick={() => onToggle(t.id)}
-                  className="pick relative p-3 text-left"
+                  className="pick relative overflow-hidden p-0 text-left"
                 >
-                  <div className="text-lg tracking-wide font-bold">{t.code}</div>
-                  <div className="text-xs text-ink-faint">
-                    {t.seatMin}–{t.seatMax} ที่
+                  {/* รูปบรรยากาศช่วยตัดสินใจ — โต๊ะริมหน้าต่างกับกลางร้าน
+                      นั่งได้เท่ากันแต่คนละเรื่อง */}
+                  {tableImageUrl(t.imagePath) ? (
+                    <img
+                      src={tableImageUrl(t.imagePath)!}
+                      alt=""
+                      loading="lazy"
+                      className={`h-20 w-full object-cover ${t.available ? '' : 'grayscale'}`}
+                    />
+                  ) : (
+                    <div className="grid h-20 w-full place-items-center bg-parchment-deep text-2xl text-ink-faint">
+                      🪑
+                    </div>
+                  )}
+                  <div className="p-2.5">
+                    <div className="text-lg tracking-wide font-bold">{t.code}</div>
+                    <div className="text-xs text-ink-faint">
+                      {t.seatMin}–{t.seatMax} ที่
+                    </div>
+                    {!t.available && <div className="text-xs text-crimson">ไม่ว่าง</div>}
                   </div>
-                  {!t.available && <div className="text-xs text-crimson">ไม่ว่าง</div>}
                   {on && (
                     <span
                       className="wax-seal seal-stamp absolute top-2 right-2 h-5 w-5 text-[0.55rem]"

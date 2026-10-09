@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import App from '../App'
+import App, { qc } from '../App'
 import { mockAdapter, mockBookingAdapter } from '../data/mock/mockAdapter'
 import { mockAdminAdapter } from '../data/mock/adminAdapter'
 import { forgetBooking, myBookings, rememberBooking } from '../lib/myBookings'
@@ -585,5 +585,77 @@ describe('จองได้ครั้งละโต๊ะเดียว', (
     const open = after.occupancies.filter((o) => o.visitId === visit.id && o.toAt === null)
     expect(open).toHaveLength(1)
     expect(open[0]!.tableId).toBe(free[1]!.id)
+  })
+})
+
+/**
+ * รูปประกอบโต๊ะ
+ *
+ * จุดประสงค์ของฟีเจอร์คือช่วยลูกค้าตัดสินใจตอนจอง ถ้ารูปไปไม่ถึงหน้าจอง
+ * ก็เท่ากับไม่ได้ทำ เทสต์จึงไล่ตั้งแต่อัปโหลดจนถึงสิ่งที่ลูกค้าเห็น
+ */
+describe('รูปประกอบโต๊ะ', () => {
+  beforeEach(() => {
+    cleanup()
+    localStorage.clear()
+    mockAdapter.reset()
+    // ล้างแคชของ react-query ไม่งั้นรายการโต๊ะที่เคสก่อนโหลดไว้ (ยังไม่มีรูป)
+    // จะค้างมาถึงเคสนี้
+    qc.clear()
+    window.location.hash = ''
+  })
+
+  it('อัปโหลดแล้วรูปไปถึงหน้าจอง', async () => {
+    const tables = await mockAdminAdapter.allTables()
+    const t = tables.find((x) => !x.archived)!
+    expect(t.imagePath).toBeNull()
+
+    await mockAdminAdapter.uploadTableImage(t.id, {
+      blob: new Blob(['x']),
+      dataUrl: 'data:image/jpeg;base64,AAAA',
+    })
+
+    const booking = await mockBookingAdapter.availableTables(tomorrowAt('18:00'), 120)
+    expect(booking.find((x) => x.id === t.id)!.imagePath).toBe('data:image/jpeg;base64,AAAA')
+  })
+
+  it('ลบรูปแล้วกลับไปไม่มีรูป', async () => {
+    const t = (await mockAdminAdapter.allTables())[0]!
+    await mockAdminAdapter.uploadTableImage(t.id, {
+      blob: new Blob(['x']),
+      dataUrl: 'data:image/jpeg;base64,BBBB',
+    })
+    await mockAdminAdapter.removeTableImage(t.id)
+
+    const after = await mockAdminAdapter.allTables()
+    expect(after.find((x) => x.id === t.id)!.imagePath).toBeNull()
+  })
+
+  // ★ สิ่งที่ลูกค้าเห็นจริง ไม่ใช่แค่ข้อมูลที่ส่งไปถึง
+  it('หน้าจองแสดงรูปของโต๊ะที่มีรูป', async () => {
+    const tables = await mockAdminAdapter.allTables()
+    const a1 = tables.find((t) => t.code === 'A1')!
+    await mockAdminAdapter.uploadTableImage(a1.id, {
+      blob: new Blob(['x']),
+      dataUrl: 'data:image/jpeg;base64,CCCC',
+    })
+
+    window.location.hash = '#/book'
+    render(<App />)
+    await screen.findByText('A1')
+
+    await waitFor(() => {
+      const imgs = [...document.querySelectorAll('img')].map((i) => i.getAttribute('src'))
+      expect(imgs).toContain('data:image/jpeg;base64,CCCC')
+    })
+  })
+
+  it('โต๊ะที่ยังไม่มีรูปก็ยังเลือกได้ ไม่พัง', async () => {
+    window.location.hash = '#/book'
+    render(<App />)
+
+    const a1 = await screen.findByText('A1')
+    fireEvent.click(a1)
+    expect(a1.closest('button')!.getAttribute('aria-pressed')).toBe('true')
   })
 })

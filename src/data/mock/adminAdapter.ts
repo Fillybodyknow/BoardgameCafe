@@ -56,6 +56,14 @@ export const mockAdminAdapter: AdminPort = {
     mockAdapter.setMenuImage(id, null)
   },
 
+  async uploadTableImage(id, image) {
+    mockAdapter.setTableImage(id, image.dataUrl)
+  },
+
+  async removeTableImage(id) {
+    mockAdapter.setTableImage(id, null)
+  },
+
   async saveTable(input) {
     if (!input.code.trim()) throw new Error('ต้องใส่รหัสโต๊ะ')
     if (input.seatMin < 1 || input.seatMax < input.seatMin) {

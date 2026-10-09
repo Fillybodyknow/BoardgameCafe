@@ -133,3 +133,6 @@ make_patch supabase/patch-shop-profile.sql "patch ชื่อร้านแล
 
 make_patch supabase/patch-single-table.sql "patch หนึ่งกลุ่มหนึ่งโต๊ะ" \
   supabase/migrations/20260930002100_single_table.sql
+
+make_patch supabase/patch-table-images.sql "patch รูปประกอบโต๊ะ" \
+  supabase/migrations/20260930002200_table_images.sql

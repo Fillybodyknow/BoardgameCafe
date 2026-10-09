@@ -7,6 +7,7 @@ import { requireClient } from './client'
 import { SHOP_BUCKET } from './shopAdapter'
 
 export const BUCKET = 'menu-images'
+export const TABLE_BUCKET = 'table-images'
 
 /**
  * ตั้งค่าร้าน — ทุกการเขียนผ่าน RPC ที่เรียก assert_manager() ฝั่งฐานข้อมูล
@@ -51,6 +52,7 @@ export const supabaseAdminAdapter: AdminPort = {
       seatMin: r.seat_min, seatMax: r.seat_max,
       allowShare: r.allow_share, status: r.status,
       sortOrder: r.sort_order, archived: r.archived, qrToken: r.qr_token,
+      imagePath: r.image_path ?? null,
     }))
   },
 
@@ -140,6 +142,34 @@ export const supabaseAdminAdapter: AdminPort = {
   async removeMenuImage(id) {
     const old = await rpc<string | null>('set_menu_image', { p_id: id, p_path: null })
     if (old) await requireClient().storage.from(BUCKET).remove([old])
+  },
+
+  async uploadTableImage(id, image) {
+    const sb = requireClient()
+    const path = `table/${crypto.randomUUID()}.jpg`
+
+    const { error: upErr } = await sb.storage
+      .from(TABLE_BUCKET)
+      .upload(path, image.blob, { contentType: 'image/jpeg', upsert: false })
+    if (upErr) throw new Error(upErr.message)
+
+    let old: string | null = null
+    try {
+      old = await rpc<string | null>('set_table_image', { p_id: id, p_path: path })
+    } catch (e) {
+      // ผูกไม่สำเร็จ — เก็บไฟล์ที่เพิ่งอัปทิ้ง ไม่ให้ค้างเป็นขยะ
+      await sb.storage.from(TABLE_BUCKET).remove([path])
+      throw e
+    }
+
+    if (old && old !== path) {
+      await sb.storage.from(TABLE_BUCKET).remove([old])
+    }
+  },
+
+  async removeTableImage(id) {
+    const old = await rpc<string | null>('set_table_image', { p_id: id, p_path: null })
+    if (old) await requireClient().storage.from(TABLE_BUCKET).remove([old])
   },
 
   async saveTable(input) {

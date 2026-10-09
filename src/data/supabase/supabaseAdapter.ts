@@ -252,7 +252,7 @@ function toTable(r: Record<string, any>): CafeTable {
     seatMin: r.seat_min, seatMax: r.seat_max,
     allowShare: r.allow_share, status: r.status,
     sortOrder: r.sort_order, archived: r.archived ?? false,
-    qrToken: r.qr_token,
+    qrToken: r.qr_token, imagePath: r.image_path ?? null,
   }
 }
 
