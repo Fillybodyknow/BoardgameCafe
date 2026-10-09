@@ -2,7 +2,10 @@ import type { AdminPort } from '../port'
 import type { Capability, StaffMember, StaffRole } from '../../domain/types'
 import { loadStaff, saveStaff } from './shopStore'
 import { mockAdapter } from './mockAdapter'
-import { loadHours, loadShopProfile, loadTax, saveHours, saveShopProfile, saveTax } from './shopStore'
+import {
+  loadBooking, loadHours, loadShopProfile, loadTax,
+  saveBooking, saveHours, saveShopProfile, saveTax,
+} from './shopStore'
 
 /**
  * โหมดเดโม — ตรวจกติกาเดียวกับ RPC ฝั่ง SQL
@@ -85,6 +88,16 @@ export const mockAdminAdapter: AdminPort = {
       throw new Error('เพดานเหมาวันติดลบไม่ได้')
     }
     mockAdapter.saveRatePlan(input)
+  },
+
+  async bookingConfig() {
+    return loadBooking()
+  },
+
+  async saveMaxAdvanceDays(days) {
+    // กติกาเดียวกับ set_max_advance_days() ฝั่ง SQL
+    if (days < 1 || days > 365) throw new Error('จองล่วงหน้าได้ระหว่าง 1 ถึง 365 วัน')
+    saveBooking({ ...loadBooking(), maxAdvanceDays: days })
   },
 
   async saveShopHours(input) {

@@ -1,7 +1,7 @@
 import type { AdminPort } from '../port'
 import type {
-  CafeTable, Capability, MenuItem, RatePlan, ShopHours, StaffMember, StaffRole,
-  TaxConfig,
+  BookingConfig, CafeTable, Capability, MenuItem, RatePlan, ShopHours,
+  StaffMember, StaffRole, TaxConfig,
 } from '../../domain/types'
 import { requireClient } from './client'
 import { SHOP_BUCKET } from './shopAdapter'
@@ -199,6 +199,24 @@ export const supabaseAdminAdapter: AdminPort = {
       p_active: input.active,
       p_sort_order: input.sortOrder,
     })
+  },
+
+  async bookingConfig(): Promise<BookingConfig> {
+    const { data, error } = await requireClient()
+      .from('reservation_config').select('*').eq('id', 1).single()
+    if (error) throw new Error(error.message)
+    return {
+      slotMinutes: data.slot_minutes,
+      defaultDurationMinutes: data.default_duration_minutes,
+      minDurationMinutes: data.min_duration_minutes,
+      maxDurationMinutes: data.max_duration_minutes,
+      maxAdvanceDays: data.max_advance_days,
+      minAdvanceMinutes: data.min_advance_minutes,
+    }
+  },
+
+  async saveMaxAdvanceDays(days) {
+    await rpc('set_max_advance_days', { p_days: days })
   },
 
   async saveShopHours(input) {

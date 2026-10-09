@@ -7,7 +7,7 @@ import type {
 import { computeBill, settlementFor } from '../../domain/pricing'
 import { cartNeedsKitchen, kitchenWindow } from '../../domain/kitchen'
 import { seed, businessDateOf } from './seed'
-import { bangkokParts, loadHours, loadTax, toMinutes } from './shopStore'
+import { bangkokParts, loadBooking, loadHours, loadTax, toMinutes } from './shopStore'
 
 /**
  * หนึ่งกลุ่มนั่งได้ครั้งละโต๊ะเดียว — ตรงกับ trigger occupancies_one_table
@@ -512,7 +512,8 @@ class MockAdapter implements DataPort {
 
   /** ตรงกับ assert_bookable() ฝั่ง SQL */
   private assertBookable(startAt: string, duration: number) {
-    const cfg = MOCK_BOOKING
+    // ค่าที่เจ้าของร้านตั้งได้มาจากที่เก็บ ส่วนที่ยังไม่มีหน้าจอใช้ค่าตั้งต้น
+    const cfg = { ...MOCK_BOOKING, ...loadBooking() }
     if (duration < cfg.minDurationMinutes || duration > cfg.maxDurationMinutes) {
       throw new Error(`จองได้ครั้งละ ${cfg.minDurationMinutes}–${cfg.maxDurationMinutes} นาที`)
     }
@@ -1019,14 +1020,7 @@ export const mockBookingAdapter: BookingPort = {
     return loadHours()
   },
   async config() {
-    return {
-      slotMinutes: MOCK_BOOKING.slotMinutes,
-      defaultDurationMinutes: MOCK_BOOKING.defaultDurationMinutes,
-      minDurationMinutes: MOCK_BOOKING.minDurationMinutes,
-      maxDurationMinutes: MOCK_BOOKING.maxDurationMinutes,
-      maxAdvanceDays: MOCK_BOOKING.maxAdvanceDays,
-      minAdvanceMinutes: MOCK_BOOKING.minAdvanceMinutes,
-    }
+    return loadBooking()
   },
   async availableTables(startAt, durationMinutes) {
     return mockAdapter.bookingTables(startAt, durationMinutes)

@@ -136,3 +136,6 @@ make_patch supabase/patch-single-table.sql "patch หนึ่งกลุ่ม
 
 make_patch supabase/patch-table-images.sql "patch รูปประกอบโต๊ะ" \
   supabase/migrations/20260930002200_table_images.sql
+
+make_patch supabase/patch-max-advance.sql "patch ตั้งจำนวนวันจองล่วงหน้า" \
+  supabase/migrations/20260930002300_max_advance_days.sql

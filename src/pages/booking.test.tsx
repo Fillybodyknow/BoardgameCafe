@@ -659,3 +659,50 @@ describe('รูปประกอบโต๊ะ', () => {
     expect(a1.closest('button')!.getAttribute('aria-pressed')).toBe('true')
   })
 })
+
+/**
+ * เพดานวันจองล่วงหน้า — ต้องบังคับจริง ไม่ใช่แค่จำกัดปฏิทินบนหน้าจอ
+ *
+ * โหมดจำลองต้องปฏิเสธเหมือน assert_bookable() ฝั่ง SQL ไม่งั้นบั๊กจะไม่โผล่
+ * จนกว่าจะขึ้นฐานข้อมูลจริง
+ */
+describe('เพดานวันจองล่วงหน้าถูกบังคับ', () => {
+  beforeEach(() => {
+    cleanup()
+    localStorage.clear()
+    mockAdapter.reset()
+    qc.clear()
+  })
+
+  function daysAhead(n: number): string {
+    const d = new Date(Date.now() + (n * 24 + 7) * 3600_000)
+    return new Date(`${d.toISOString().slice(0, 10)}T18:00:00+07:00`).toISOString()
+  }
+
+  it('จองไกลกว่าที่ตั้งไว้ถูกปฏิเสธ', async () => {
+    await mockAdminAdapter.saveMaxAdvanceDays(3)
+
+    const startAt = daysAhead(10)
+    const t = await freeTable(startAt)
+
+    await expect(
+      mockBookingAdapter.create({
+        customerName: 'คุณจองไกล', phone: '081-444-0000', partySize: 2,
+        startAt, durationMinutes: 120, tableIds: [t.id],
+      }),
+    ).rejects.toThrow(/ล่วงหน้า/)
+  })
+
+  it('ขยายเพดานแล้วจองวันเดิมได้', async () => {
+    await mockAdminAdapter.saveMaxAdvanceDays(30)
+
+    const startAt = daysAhead(10)
+    const t = await freeTable(startAt)
+
+    const r = await mockBookingAdapter.create({
+      customerName: 'คุณจองไกล', phone: '081-444-0001', partySize: 2,
+      startAt, durationMinutes: 120, tableIds: [t.id],
+    })
+    expect(r.status).toBe('pending')
+  })
+})

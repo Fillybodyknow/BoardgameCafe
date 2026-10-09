@@ -183,6 +183,9 @@ export interface AdminPort {
     kitchenCloseTime: string | null
   }): Promise<void>
   saveTaxConfig(input: TaxConfig): Promise<void>
+  /** กติกาการจองที่ลูกค้าเห็น — ตอนนี้แก้ได้เฉพาะเพดานวันจองล่วงหน้า */
+  bookingConfig(): Promise<BookingConfig>
+  saveMaxAdvanceDays(days: number): Promise<void>
 
   // --- บัญชีพนักงาน ---
   listStaff(): Promise<StaffMember[]>

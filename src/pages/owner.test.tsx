@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import App from '../App'
+import App, { qc } from '../App'
 import { mockAdapter } from '../data/mock/mockAdapter'
 import { mockAdminAdapter } from '../data/mock/adminAdapter'
 import { computeBill } from '../domain/pricing'
@@ -335,5 +335,62 @@ describe('หน้าตั้งค่าร้าน', () => {
       const hours = await mockAdminAdapter.shopHours()
       expect(hours.find((h) => h.weekday === 1)!.kitchenCloseTime).toBeNull()
     })
+  })
+})
+
+/**
+ * จำนวนวันที่จองล่วงหน้าได้
+ *
+ * ค่านี้มีในฐานข้อมูลและถูกใช้จริงมาตั้งแต่แรก แต่ไม่มีทางแก้จากหน้าจอ
+ * ต้องเข้าไปแก้ในฐานข้อมูลเอง ซึ่งเจ้าของร้านทำไม่ได้
+ */
+describe('ตั้งจำนวนวันจองล่วงหน้า', () => {
+  beforeEach(() => {
+    cleanup()
+    localStorage.clear()
+    mockAdapter.reset()
+    qc.clear()
+    window.location.hash = ''
+  })
+
+  it('แก้จากหน้าจอแล้วบันทึกจริง', async () => {
+    window.location.hash = '#/owner'
+    render(<App />)
+    fireEvent.click(await screen.findByText('เวลาทำการ'))
+
+    const field = (await screen.findByLabelText(
+      'จำนวนวันที่จองล่วงหน้าได้',
+    )) as HTMLInputElement
+    await waitFor(() => expect(field.value).toBe('30'))
+
+    fireEvent.focus(field)
+    fireEvent.change(field, { target: { value: '7' } })
+    fireEvent.blur(field)
+
+    await waitFor(async () => {
+      expect((await mockAdminAdapter.bookingConfig()).maxAdvanceDays).toBe(7)
+    })
+  })
+
+  // ★ ถ้าแก้แล้วหน้าจองไม่เปลี่ยนตาม ก็เท่ากับไม่ได้ทำ
+  it('หน้าจองจำกัดวันที่เลือกได้ตามค่าที่ตั้งไว้', async () => {
+    await mockAdminAdapter.saveMaxAdvanceDays(2)
+
+    window.location.hash = '#/book'
+    render(<App />)
+    await screen.findByText('⚜ จองโต๊ะ')
+
+    // คิดแบบเดียวกับหน้าจอง: วันนี้ + จำนวนวันที่ตั้งไว้ (เผื่อ 7 ชม. ให้โซนเวลาไทย)
+    const expected = new Date(Date.now() + (2 * 24 + 7) * 3600_000).toISOString().slice(0, 10)
+
+    await waitFor(() => {
+      const date = document.querySelector('input[type="date"]') as HTMLInputElement
+      expect(date.getAttribute('max')).toBe(expected)
+    })
+  })
+
+  it('ค่าที่เป็นไปไม่ได้ถูกปฏิเสธ', async () => {
+    await expect(mockAdminAdapter.saveMaxAdvanceDays(0)).rejects.toThrow(/1 ถึง 365/)
+    await expect(mockAdminAdapter.saveMaxAdvanceDays(400)).rejects.toThrow(/1 ถึง 365/)
   })
 })

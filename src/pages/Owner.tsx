@@ -110,6 +110,49 @@ function useSave<T>(keys: string[], fn: (v: T) => Promise<void>) {
 }
 
 /**
+ * ช่องกรอกจำนวนวัน บันทึกตอนออกจากช่อง
+ *
+ * เหตุผลเดียวกับ TimeField — ถ้าบันทึกทุกครั้งที่พิมพ์ ตัวเลขที่พิมพ์ค้างไว้
+ * จะถูกเขียนทับด้วยค่าที่โหลดกลับมา แล้วกรอกเลขสองหลักไม่ได้
+ */
+function DaysField({
+  value,
+  disabled,
+  onCommit,
+}: {
+  value: number
+  disabled?: boolean
+  onCommit: (days: number) => void
+}) {
+  const [draft, setDraft] = useState(String(value))
+  const [editing, setEditing] = useState(false)
+
+  useEffect(() => {
+    if (!editing) setDraft(String(value))
+  }, [value, editing])
+
+  return (
+    <input
+      type="number"
+      min={1}
+      max={365}
+      aria-label="จำนวนวันที่จองล่วงหน้าได้"
+      value={draft}
+      disabled={disabled}
+      onFocus={() => setEditing(true)}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        setEditing(false)
+        const next = Number(draft)
+        if (Number.isFinite(next) && next !== value) onCommit(next)
+        else setDraft(String(value))
+      }}
+      className={`${input} !w-24 text-center`}
+    />
+  )
+}
+
+/**
  * ช่องกรอกเวลาที่บันทึกตอนออกจากช่อง ไม่ใช่ทุกครั้งที่ค่าเปลี่ยน
  *
  * <input type="time"> คืนค่าว่างระหว่างที่ยังกรอกไม่ครบ ถ้าบันทึกทุกครั้งที่
@@ -833,6 +876,11 @@ function RatesTab() {
 
 function HoursTab() {
   const hours = useQuery({ queryKey: ['admin', 'hours'], queryFn: () => adminDb.shopHours() })
+  const booking = useQuery({
+    queryKey: ['admin', 'booking'],
+    queryFn: () => adminDb.bookingConfig(),
+  })
+  const saveAdvance = useSave(['booking'], (days: number) => adminDb.saveMaxAdvanceDays(days))
   const tax = useQuery({ queryKey: ['admin', 'tax'], queryFn: () => adminDb.taxConfig() })
 
   const saveHours = useSave(['hours'], (v: ShopHours) => adminDb.saveShopHours(v))
@@ -906,6 +954,24 @@ function HoursTab() {
         </p>
         <p className="text-xs text-ink-faint">
           ยังไม่รองรับร้านที่ปิดหลังเที่ยงคืน เพราะระบบจองยังไม่อนุญาตให้รอบเล่นข้ามวัน
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <SectionTitle>การจองล่วงหน้า</SectionTitle>
+        <Card className="flex flex-wrap items-center gap-3 !py-3">
+          <span className="font-display font-semibold">ให้จองล่วงหน้าได้ไม่เกิน</span>
+          <DaysField
+            value={booking.data?.maxAdvanceDays ?? 30}
+            disabled={booking.isPending || saveAdvance.isPending}
+            onCommit={(d) => saveAdvance.mutate(d)}
+          />
+          <span className="text-ink-soft">วัน</span>
+        </Card>
+        <Err error={saveAdvance.error} />
+        <p className="text-xs text-ink-faint">
+          นับจากวันนี้ · ลูกค้าจะเลือกวันที่ไกลกว่านี้ในหน้าจองไม่ได้ และถ้าส่งค่าข้ามหน้าจอ
+          มาก็ถูกปฏิเสธที่ฐานข้อมูลอยู่ดี · ตั้งได้ 1–365 วัน
         </p>
       </div>
 
