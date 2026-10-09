@@ -145,3 +145,6 @@ make_patch supabase/patch-no-double-booking.sql "patch ห้ามจองซ�
 
 make_patch supabase/patch-release-seated.sql "patch ปิดบิลแล้วเลิกล็อกโต๊ะ" \
   supabase/migrations/20260930002500_release_seated.sql
+
+make_patch supabase/patch-block-whole-day.sql "patch จองแล้วล็อกโต๊ะทั้งวัน" \
+  supabase/migrations/20260930002600_block_whole_day.sql

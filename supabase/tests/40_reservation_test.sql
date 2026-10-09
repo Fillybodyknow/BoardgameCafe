@@ -67,19 +67,30 @@ begin
     raise notice 'PASS  จองคาบเกี่ยวบางส่วนไม่ได้';
   end;
 
-  -- ติด buffer ด้วย (รอบเดิมจบ 16:00 + buffer 15 นาที)
+  -- ★ ตั้งแต่ migration 2600 จองแล้วล็อกทั้งวัน ไม่ใช่แค่ช่วงที่จอง
+  --
+  -- คาเฟ่บอร์ดเกมคนนั่งยาวและมักเลยเวลาที่จองไว้ ถ้าปล่อยให้คนอื่นจอง
+  -- ต่อท้าย สุดท้ายกลายเป็นไล่ลูกค้ากลุ่มแรก
   begin
     perform create_reservation('ชิดเกิน', '084-444-5555', 2,
       v_start + interval '2 hours 5 minutes', 120, array[v_tb.id]);
     raise exception 'FAIL  จองชิดรอบเดิมเกินไปไม่ควรได้';
   exception when sqlstate '22023' then
-    raise notice 'PASS  เว้น buffer เก็บโต๊ะระหว่างรอบ';
+    raise notice 'PASS  จองต่อท้ายรอบเดิมในวันเดียวกันไม่ได้';
   end;
 
-  -- ห่างพอแล้วจองได้
-  perform create_reservation('รอบถัดไป', '085-555-6666', 2,
-    v_start + interval '3 hours', 120, array[v_tb.id]);
-  raise notice 'PASS  เว้นระยะพอแล้วจองรอบถัดไปได้';
+  begin
+    perform create_reservation('ค่ำวันเดียวกัน', '085-555-6666', 2,
+      v_start + interval '6 hours', 120, array[v_tb.id]);
+    raise exception 'FAIL  วันเดียวกันไม่ควรจองซ้ำได้ แม้ห่างกันหลายชั่วโมง';
+  exception when sqlstate '22023' then
+    raise notice 'PASS  วันเดียวกันรับได้กลุ่มเดียว แม้คนละช่วงเวลา';
+  end;
+
+  -- คนละวันยังจองได้ตามปกติ
+  perform create_reservation('วันถัดไป', '085-555-6667', 2,
+    v_start + interval '1 day', 120, array[v_tb.id]);
+  raise notice 'PASS  คนละวันยังจองได้';
 
   -- ★ โต๊ะยาวก็จองซ้อนไม่ได้แล้ว (เปลี่ยนกติกาตั้งแต่ migration 2400)
   --

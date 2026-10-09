@@ -472,20 +472,24 @@ class MockAdapter implements DataPort {
   // ---------- จองออนไลน์ (ฝั่งลูกค้า) ----------
 
   /** ช่วงเวลาชนกันไหม เมื่อขยายหัวท้ายด้วยเวลาเก็บโต๊ะ */
-  private overlaps(r: Reservation, start: number, end: number, bufferMin: number): boolean {
-    const rs = new Date(r.startAt).getTime() - bufferMin * 60_000
-    const re = rs + (r.durationMinutes + bufferMin * 2) * 60_000
-    return rs < end && start < re
+  /**
+   * จองแล้วล็อกทั้งวัน — ตรงกับ table_available() ฝั่ง SQL ตั้งแต่ migration 2600
+   *
+   * เทียบวันตามเวลาไทยเสมอ ไม่ใช่เวลาเครื่อง ไม่งั้นการจองรอบค่ำจะถูกนับ
+   * เป็นวันถัดไปบนเครื่องที่ตั้งโซนเวลาไว้คนละแบบ
+   */
+  private sameDay(a: string, b: string): boolean {
+    return bangkokParts(a).date === bangkokParts(b).date
   }
 
   bookingTables(startAt: string, durationMinutes: number): AvailableTable[] {
+    void durationMinutes // ล็อกทั้งวันแล้ว ความยาวรอบไม่มีผลกับความว่างอีก
     const start = new Date(startAt).getTime()
-    const end = start + durationMinutes * 60_000
     const now = Date.now()
 
     return this.state.tables.map((t) => {
-      // จองซ้อนไม่ได้ ไม่ว่าโต๊ะจะนั่งร่วมกันได้หรือไม่ — ตรงกับ
-      // table_available() ฝั่ง SQL ตั้งแต่ migration 2400
+      // จองแล้วล็อกโต๊ะนั้นทั้งวัน ไม่ว่าโต๊ะจะนั่งร่วมกันได้หรือไม่
+      // ตรงกับ table_available() ฝั่ง SQL
       const clash = this.state.reservations.some(
         (r) =>
           ['pending', 'confirmed', 'seated'].includes(r.status) &&
@@ -494,7 +498,7 @@ class MockAdapter implements DataPort {
           // ถือว่าเลิกล็อก — ตรงกับ table_available() ฝั่ง SQL
           (r.status !== 'seated' ||
             this.state.visits.some((v) => v.id === r.visitId && v.status === 'open')) &&
-          this.overlaps(r, start, end, MOCK_BOOKING.bufferMinutes),
+          this.sameDay(r.startAt, startAt),
       )
       const occupied =
         start < now + MOCK_BOOKING.occupiedHoldMinutes * 60_000 &&

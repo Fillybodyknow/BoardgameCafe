@@ -57,6 +57,11 @@ begin
   perform assert_eq('ปิดบิลแล้วรับจองช่วงเดิมได้',
     table_available(v_table, v_start, v_start + interval '2 hours'), true);
 
+  -- ★ ล็อกทั้งวัน (migration 2600) ปิดบิลแล้วต้องปล่อยทั้งวันเหมือนกัน
+  perform assert_eq('ปิดบิลแล้วช่วงค่ำวันเดียวกันก็ว่างด้วย',
+    table_available(v_table, v_start + interval '5 hours',
+                    v_start + interval '7 hours'), true);
+
   -- และจองจริงได้ ไม่ใช่แค่ขึ้นว่าว่าง
   perform assert_eq('จองซ้ำช่วงเดิมได้จริง',
     create_reservation('คุณมาใหม่', '0855550002', 2, v_start, 120, array[v_table], null)
@@ -81,6 +86,12 @@ begin
   perform create_reservation('คุณรอยืนยัน', '0855550003', 2, v_start, 120, array[v_table], null);
   perform assert_eq('รายการที่รอยืนยันยังล็อกอยู่',
     table_available(v_table, v_start, v_start + interval '2 hours'), false);
+  perform assert_eq('และล็อกข้ามไปทั้งวัน',
+    table_available(v_table, v_start + interval '6 hours',
+                    v_start + interval '8 hours'), false);
+  perform assert_eq('แต่วันถัดไปยังว่าง',
+    table_available(v_table, v_start + interval '1 day',
+                    v_start + interval '1 day 2 hours'), true);
 end $$;
 
 -- ---------------------------------------------------------------------------

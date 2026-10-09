@@ -62,27 +62,28 @@ describe('จองโต๊ะออนไลน์ (ระดับ adapter)',
     ).rejects.toThrow(/ไม่ว่าง/)
   })
 
-  it('เว้นเวลาเก็บโต๊ะระหว่างรอบ (buffer)', async () => {
+  /*
+    ★ ตั้งแต่ migration 2600 จองแล้วล็อกทั้งวัน ไม่ใช่แค่ช่วงที่จอง + buffer
+
+    คาเฟ่บอร์ดเกมคนนั่งยาวและมักเลยเวลาที่จองไว้ ถ้าปล่อยให้คนอื่นจองต่อท้าย
+    สุดท้ายกลายเป็นไล่ลูกค้ากลุ่มแรก
+  */
+  it('จองแล้วล็อกทั้งวัน คนละช่วงเวลาก็จองไม่ได้', async () => {
     const startAt = tomorrowAt('14:00')
     const t = await freeTable(startAt)
     await mockBookingAdapter.create({
       customerName: 'ก', phone: '081-111-2222', partySize: 2,
       startAt, durationMinutes: 120, tableIds: [t.id],
     })
-    // รอบเดิมจบ 16:00 — จอง 16:05 ต้องติด buffer 15 นาที
-    await expect(
-      mockBookingAdapter.create({
-        customerName: 'ข', phone: '082-222-3333', partySize: 2,
-        startAt: tomorrowAt('16:05'), durationMinutes: 120, tableIds: [t.id],
-      }),
-    ).rejects.toThrow()
 
-    // 17:00 ห่างพอแล้ว จองได้
-    const ok = await mockBookingAdapter.create({
-      customerName: 'ค', phone: '083-333-4444', partySize: 2,
-      startAt: tomorrowAt('17:00'), durationMinutes: 120, tableIds: [t.id],
-    })
-    expect(ok.code).toHaveLength(6)
+    for (const hhmm of ['12:00', '16:05', '20:00']) {
+      await expect(
+        mockBookingAdapter.create({
+          customerName: 'ข', phone: '082-222-3333', partySize: 2,
+          startAt: tomorrowAt(hhmm), durationMinutes: 120, tableIds: [t.id],
+        }),
+      ).rejects.toThrow(/ไม่ว่าง/)
+    }
   })
 
   it('จองเกินจำนวนที่นั่งไม่ได้', async () => {
@@ -758,7 +759,7 @@ describe('โต๊ะนั่งร่วมได้ ก็ล็อกเม
     expect(after.find((x) => x.id === t.id)!.available).toBe(false)
   })
 
-  it('คนละช่วงเวลายังจองได้ตามเดิม', async () => {
+  it('คนละวันยังจองได้ตามเดิม', async () => {
     const startAt = tomorrowAt('18:00')
     const t = await sharedTable(startAt)
 
@@ -767,9 +768,10 @@ describe('โต๊ะนั่งร่วมได้ ก็ล็อกเม
       startAt, durationMinutes: 120, tableIds: [t.id],
     })
 
+    const nextDay = new Date(new Date(startAt).getTime() + 24 * 3600_000).toISOString()
     const later = await mockBookingAdapter.create({
       customerName: 'กลุ่มB', phone: '086-000-0005', partySize: 2,
-      startAt: tomorrowAt('21:00'), durationMinutes: 120, tableIds: [t.id],
+      startAt: nextDay, durationMinutes: 120, tableIds: [t.id],
     })
     expect(later.status).toBe('pending')
   })
