@@ -75,6 +75,14 @@ describe('เสียงเตือนออเดอร์เข้าคร�
     state = 'suspended'
     resumeWorks = true
     vi.stubGlobal('AudioContext', FakeAudioContext)
+    // ★ ต้อง stub fetch ไว้เสมอ ไม่งั้นผลเทสต์ขึ้นกับว่ามี dev server รันอยู่ไหม
+    //
+    // happy-dom ตั้ง location เป็น http://localhost:3000 ซึ่งตรงกับพอร์ตของ
+    // dev server พอดี และ dev server ตอบ index.html (200) ให้ทุก path
+    // preloadSound จึงคิดว่าเจอไฟล์เสียงของร้าน แล้วไปเล่น buffer แทนเสียง
+    // สังเคราะห์ — เทสต์ชุดนี้ทดสอบทางเสียงสังเคราะห์ จึงต้องบอกให้ชัดว่า
+    // "ไม่มีไฟล์เสียง"
+    vi.stubGlobal('fetch', async () => new Response(null, { status: 404 }))
   })
 
   it('ตรวจเจอว่าเบราว์เซอร์รองรับเสียง', () => {
