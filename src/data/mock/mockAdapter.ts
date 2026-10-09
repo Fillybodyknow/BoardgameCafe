@@ -9,6 +9,16 @@ import { cartNeedsKitchen, kitchenWindow } from '../../domain/kitchen'
 import { seed, businessDateOf } from './seed'
 import { bangkokParts, loadHours, loadTax, toMinutes } from './shopStore'
 
+/**
+ * หนึ่งกลุ่มนั่งได้ครั้งละโต๊ะเดียว — ตรงกับ trigger occupancies_one_table
+ * ฝั่ง SQL ถ้าโหมดจำลองหลวมกว่า บั๊กจะไม่โผล่จนกว่าจะขึ้นฐานข้อมูลจริง
+ */
+function assertOneTable(tableIds: ID[]) {
+  if (tableIds.length > 1) {
+    throw new Error('หนึ่งกลุ่มนั่งได้ครั้งละ 1 โต๊ะ ถ้าต้องการย้ายให้ใช้ปุ่มย้ายโต๊ะ')
+  }
+}
+
 /** ต้องตรงกับ guest_register_limit() ฝั่ง SQL */
 const GUEST_REGISTER_LIMIT = 20
 
@@ -68,6 +78,7 @@ class MockAdapter implements DataPort {
   // ---------- Visit / Pass ----------
 
   async openVisit(input: { tableIds: ID[]; guests: { name: string; ratePlanId: ID }[] }) {
+    assertOneTable(input.tableIds)
     const nowIso = new Date().toISOString()
     const seq = this.state.visits.length + 14
     const visit: Visit = {
@@ -232,6 +243,7 @@ class MockAdapter implements DataPort {
   }
 
   async moveVisitToTables(visitId: ID, tableIds: ID[]) {
+    assertOneTable(tableIds)
     const nowIso = new Date().toISOString()
     // ปิด occupancy เดิม แล้วเปิดใหม่ — ประวัติยังอยู่ครบ บิลไม่กระทบ
     for (const occ of this.state.occupancies) {
@@ -426,6 +438,7 @@ class MockAdapter implements DataPort {
       throw new Error('รายการนี้เช็คอินไม่ได้แล้ว')
     }
     const tables = tableIds ?? r.tableIds
+    assertOneTable(tables)
 
     // ตรวจให้ตรงกับ seat_reservation() ฝั่ง SQL — โต๊ะที่จองไว้อาจมีกลุ่มก่อนหน้า
     // นั่งเลยเวลาอยู่ ต้องบอกให้ชัดว่าโต๊ะไหนติด
@@ -528,6 +541,8 @@ class MockAdapter implements DataPort {
     if (phone.length < 9) throw new Error('เบอร์โทรไม่ถูกต้อง')
     if (!input.customerName.trim()) throw new Error('กรุณาใส่ชื่อผู้จอง')
     if (input.tableIds.length === 0) throw new Error('กรุณาเลือกโต๊ะ')
+    // ตรงกับ trigger reservations_one_table ฝั่ง SQL
+    if (input.tableIds.length > 1) throw new Error('จองได้ครั้งละ 1 โต๊ะ')
 
     this.assertBookable(input.startAt, input.durationMinutes)
 

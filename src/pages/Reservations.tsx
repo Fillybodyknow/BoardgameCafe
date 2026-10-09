@@ -237,7 +237,8 @@ function SeatDialog({ reservation: r, onClose }: { reservation: Reservation; onC
   const [guests, setGuests] = useState<{ name: string; ratePlanId: string }[]>(() =>
     Array.from({ length: r.partySize }, () => ({ name: '', ratePlanId: '' })),
   )
-  const [tableIds, setTableIds] = useState<string[]>(r.tableIds)
+  // จองได้โต๊ะเดียว ของเก่าที่จองหลายโต๊ะไว้ให้หยิบตัวแรกมาเป็นค่าตั้งต้น
+  const [tableId, setTableId] = useState<string | null>(r.tableIds[0] ?? null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -258,7 +259,7 @@ function SeatDialog({ reservation: r, onClose }: { reservation: Reservation; onC
           name: g.name.trim() || placeholderName(i + 1),
           ratePlanId: g.ratePlanId || defaultPlanId,
         })),
-        tableIds,
+        tableId ? [tableId] : [],
       )
       navigate(`/visit/${visit.id}`, { state: { slip: true } })
     } catch (e) {
@@ -283,7 +284,7 @@ function SeatDialog({ reservation: r, onClose }: { reservation: Reservation; onC
             <Button
               className="flex-1"
               variant="primary"
-              disabled={busy || tableIds.length === 0 || guests.length === 0}
+              disabled={busy || tableId === null || guests.length === 0}
               onClick={submit}
             >
               เปิดโต๊ะ
@@ -295,12 +296,12 @@ function SeatDialog({ reservation: r, onClose }: { reservation: Reservation; onC
       <h4 className="flourish mb-2 text-xs font-semibold">โต๊ะ</h4>
       <div className="grid grid-cols-4 gap-2">
         {selectable.map((t) => {
-          const on = tableIds.includes(t.id)
+          const on = tableId === t.id
           return (
             <button
               key={t.id}
               aria-pressed={on}
-              onClick={() => setTableIds((p) => (on ? p.filter((x) => x !== t.id) : [...p, t.id]))}
+              onClick={() => setTableId(on ? null : t.id)}
               className="pick px-2 py-2 text-sm"
             >
               <div className="tracking-wide font-bold">{t.code}</div>

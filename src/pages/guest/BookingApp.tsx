@@ -141,7 +141,7 @@ function BookForm() {
   const [date, setDate] = useState(todayBangkok)
   const [time, setTime] = useState('18:00')
   const [party, setParty] = useState(2)
-  const [picked, setPicked] = useState<string[]>([])
+  const [picked, setPicked] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [note, setNote] = useState('')
@@ -162,7 +162,7 @@ function BookForm() {
 
   // เปลี่ยนเวลาแล้วโต๊ะที่เลือกไว้อาจไม่ว่างแล้ว — ล้างทิ้งกันเลือกค้าง
   useEffect(() => {
-    setPicked([])
+    setPicked(null)
   }, [startAt, duration])
 
   const maxDate = useMemo(() => {
@@ -215,7 +215,7 @@ function BookForm() {
   }, [slots, time])
 
   const seats = (tables.data ?? [])
-    .filter((t) => picked.includes(t.id))
+    .filter((t) => t.id === picked)
     .reduce((n, t) => n + t.seatMax, 0)
 
   if (receipt) return <Receipt receipt={receipt} />
@@ -230,7 +230,7 @@ function BookForm() {
         partySize: party,
         startAt,
         durationMinutes: duration,
-        tableIds: picked,
+        tableIds: picked ? [picked] : [],
         note: note || undefined,
       })
       // จำไว้บนเครื่องนี้ จะได้ไม่ต้องกรอกรหัสตอนกลับมาดู
@@ -245,7 +245,7 @@ function BookForm() {
   }
 
   const ready =
-    picked.length > 0 && name.trim() && phone.trim() && seats >= party && slots.length > 0
+    picked !== null && name.trim() && phone.trim() && seats >= party && slots.length > 0
 
   return (
     <div className="space-y-8">
@@ -369,9 +369,9 @@ function BookForm() {
         n="II"
         title="เลือกโต๊ะ"
         aside={
-          picked.length > 0 && (
+          picked !== null && (
             <span className={`text-xs ${seats >= party ? 'text-forest-deep' : 'text-crimson'}`}>
-              {picked.length} โต๊ะ · นั่งได้ {seats} คน
+              นั่งได้ {seats} คน
             </span>
           )
         }
@@ -382,9 +382,7 @@ function BookForm() {
           <TablePicker
             tables={tables.data ?? []}
             picked={picked}
-            onToggle={(id) =>
-              setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
-            }
+            onToggle={(id) => setPicked((p) => (p === id ? null : id))}
           />
         )}
       </Step>
@@ -459,7 +457,8 @@ function TablePicker({
   onToggle,
 }: {
   tables: AvailableTable[]
-  picked: string[]
+  /** null = ยังไม่ได้เลือก — จองได้ครั้งละโต๊ะเดียว */
+  picked: string | null
   onToggle: (id: string) => void
 }) {
   const zones = useMemo(() => {
@@ -483,7 +482,7 @@ function TablePicker({
           <h3 className="mb-1.5 font-sans text-xs font-medium text-ink-faint">{zone}</h3>
           <div className="grid grid-cols-3 gap-2">
             {list.map((t) => {
-              const on = picked.includes(t.id)
+              const on = picked === t.id
               return (
                 <button
                   key={t.id}

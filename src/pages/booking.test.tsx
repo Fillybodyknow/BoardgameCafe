@@ -510,3 +510,80 @@ describe('จำการจองไว้บนเครื่องนี้'
     }
   })
 })
+
+/**
+ * หนึ่งกลุ่ม = หนึ่งโต๊ะ
+ *
+ * ร้านเลิกรองรับกลุ่มเดียวนั่งหลายโต๊ะ ทั้งตอนจอง ตอนเปิดโต๊ะ และตอนย้ายโต๊ะ
+ * โหมดจำลองต้องปฏิเสธเหมือนฝั่ง SQL ไม่งั้นบั๊กจะโผล่ตอนขึ้นฐานข้อมูลจริง
+ */
+describe('จองได้ครั้งละโต๊ะเดียว', () => {
+  beforeEach(() => {
+    cleanup()
+    localStorage.clear()
+    mockAdapter.reset()
+    window.location.hash = ''
+  })
+
+  it('ส่งไปสองโต๊ะต้องถูกปฏิเสธ', async () => {
+    const startAt = tomorrowAt('18:00')
+    const a = await freeTable(startAt)
+    const b = (await mockBookingAdapter.availableTables(startAt, 120)).find(
+      (t) => t.available && !t.allowShare && t.id !== a.id,
+    )!
+
+    await expect(
+      mockBookingAdapter.create({
+        customerName: 'คุณสองโต๊ะ', phone: '081-333-0000', partySize: 8,
+        startAt, durationMinutes: 120, tableIds: [a.id, b.id],
+      }),
+    ).rejects.toThrow(/1 โต๊ะ/)
+  })
+
+  it('เลือกโต๊ะที่สองในหน้าจอ เป็นการเปลี่ยนใจ ไม่ใช่เพิ่มโต๊ะ', async () => {
+    window.location.hash = '#/book'
+    render(<App />)
+
+    const a1 = await screen.findByText('A1')
+    fireEvent.click(a1)
+    expect(a1.closest('button')!.getAttribute('aria-pressed')).toBe('true')
+
+    // A2 มีลูกค้านั่งอยู่ในข้อมูลเดโม จึงใช้ A3 ซึ่งว่าง
+    const a3 = await screen.findByText('A3')
+    fireEvent.click(a3)
+
+    await waitFor(() => {
+      expect(a3.closest('button')!.getAttribute('aria-pressed')).toBe('true')
+      expect(a1.closest('button')!.getAttribute('aria-pressed')).toBe('false')
+    })
+  })
+
+  it('เปิดโต๊ะและย้ายโต๊ะก็ได้ครั้งละโต๊ะเดียว', async () => {
+    const snap = await mockAdapter.getSnapshot()
+    const free = snap.tables.filter((t) => t.status === 'free' && !t.allowShare)
+    const plan = snap.ratePlans[0]!
+
+    await expect(
+      mockAdapter.openVisit({
+        tableIds: [free[0]!.id, free[1]!.id],
+        guests: [{ name: 'กลุ่มใหญ่', ratePlanId: plan.id }],
+      }),
+    ).rejects.toThrow(/1 โต๊ะ/)
+
+    const visit = await mockAdapter.openVisit({
+      tableIds: [free[0]!.id],
+      guests: [{ name: 'กลุ่มเล็ก', ratePlanId: plan.id }],
+    })
+
+    await expect(
+      mockAdapter.moveVisitToTables(visit.id, [free[1]!.id, free[2]!.id]),
+    ).rejects.toThrow(/1 โต๊ะ/)
+
+    // ย้ายโต๊ะเดียวต้องยังทำได้ ไม่งั้นกติกาใหม่ทำฟีเจอร์เดิมพัง
+    await mockAdapter.moveVisitToTables(visit.id, [free[1]!.id])
+    const after = await mockAdapter.getSnapshot()
+    const open = after.occupancies.filter((o) => o.visitId === visit.id && o.toAt === null)
+    expect(open).toHaveLength(1)
+    expect(open[0]!.tableId).toBe(free[1]!.id)
+  })
+})

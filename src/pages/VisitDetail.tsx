@@ -172,7 +172,7 @@ export default function VisitDetail() {
             พิมพ์ QR ให้ลูกค้า
           </Button>
           <Button onClick={() => setShowMove(true)} disabled={!isOpen}>
-            ย้าย / เพิ่มโต๊ะ
+            ย้ายโต๊ะ
           </Button>
           <Button
             variant="forest"
@@ -570,22 +570,24 @@ function AddPassDialog({ visitId, onClose }: { visitId: string; onClose: () => v
 
 function MoveTableDialog({ visitId, onClose }: { visitId: string; onClose: () => void }) {
   const { data } = useSnapshot()
-  const [picked, setPicked] = useState<string[]>([])
+  const [picked, setPicked] = useState<string | null>(null)
 
   const available = (data?.tables ?? []).filter((t) => t.status === 'free' || t.allowShare)
+  const pickedCode = available.find((t) => t.id === picked)?.code
 
   return (
     <Modal
-      title="ย้าย / เพิ่มโต๊ะ"
-      hint="เลือกได้หลายโต๊ะ (กลุ่มใหญ่รวมโต๊ะ) — ประวัติโต๊ะเดิมถูกเก็บไว้ บิลไม่กระทบ"
+      title="ย้ายโต๊ะ"
+      hint="เลือกได้ครั้งละ 1 โต๊ะ — ประวัติโต๊ะเดิมถูกเก็บไว้ บิลไม่กระทบ"
       onClose={onClose}
       footer={
         <Actions
           onCancel={onClose}
-          disabled={picked.length === 0}
-          okLabel={`ย้ายไป ${picked.length} โต๊ะ`}
+          disabled={picked === null}
+          okLabel={pickedCode ? `ย้ายไปโต๊ะ ${pickedCode}` : 'ย้ายโต๊ะ'}
           onOk={async () => {
-            await db.moveVisitToTables(visitId, picked)
+            if (!picked) return
+            await db.moveVisitToTables(visitId, [picked])
             onClose()
           }}
         />
@@ -593,14 +595,12 @@ function MoveTableDialog({ visitId, onClose }: { visitId: string; onClose: () =>
     >
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
         {available.map((table) => {
-          const on = picked.includes(table.id)
+          const on = picked === table.id
           return (
             <button
               key={table.id}
               aria-pressed={on}
-              onClick={() =>
-                setPicked((p) => (on ? p.filter((id) => id !== table.id) : [...p, table.id]))
-              }
+              onClick={() => setPicked(on ? null : table.id)}
               className="pick px-2 py-3 text-sm"
             >
               <div className="text-lg tracking-wide font-bold">{table.code}</div>
