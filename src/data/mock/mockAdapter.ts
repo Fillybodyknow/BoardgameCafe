@@ -490,6 +490,10 @@ class MockAdapter implements DataPort {
         (r) =>
           ['pending', 'confirmed', 'seated'].includes(r.status) &&
           r.tableIds.includes(t.id) &&
+          // รายการที่เช็คอินแล้วล็อกต่อเฉพาะตอนที่ยังนั่งอยู่จริง ปิดบิลแล้ว
+          // ถือว่าเลิกล็อก — ตรงกับ table_available() ฝั่ง SQL
+          (r.status !== 'seated' ||
+            this.state.visits.some((v) => v.id === r.visitId && v.status === 'open')) &&
           this.overlaps(r, start, end, MOCK_BOOKING.bufferMinutes),
       )
       const occupied =

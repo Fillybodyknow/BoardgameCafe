@@ -91,9 +91,10 @@ run supabase/patch-single-table.sql
 run supabase/patch-table-images.sql
 run supabase/patch-max-advance.sql
 run supabase/patch-no-double-booking.sql
+run supabase/patch-release-seated.sql
 
 echo "--- รัน patch ล่าสุดซ้ำอีกรอบ ต้องไม่พัง ---"
-run supabase/patch-no-double-booking.sql
+run supabase/patch-release-seated.sql
 
 # patch หลายไฟล์ประกาศฟังก์ชันชื่อเดียวกัน ถ้ารันไฟล์เก่าทีหลังไฟล์ใหม่
 # ของเก่าจะทับของใหม่เงียบ ๆ แล้วฟีเจอร์หายโดยไม่มีอะไรบอก — เคยเกิดจริง

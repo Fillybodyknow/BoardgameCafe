@@ -774,3 +774,64 @@ describe('โต๊ะนั่งร่วมได้ ก็ล็อกเม
     expect(later.status).toBe('pending')
   })
 })
+
+/**
+ * ปิดบิลแล้วการจองต้องเลิกล็อกโต๊ะ
+ *
+ * อาการที่เจอหน้างาน: เช็คอินลูกค้าที่จองไว้ → ปิดบิล → โต๊ะว่างแล้ว
+ * แต่หน้าจองยังขึ้นว่าไม่ว่างไปจนจบช่วงเวลาที่จองไว้ เพราะการจองค้าง
+ * สถานะ 'seated' ตลอดไป
+ */
+describe('ปิดบิลแล้วโต๊ะกลับมารับจองได้', () => {
+  beforeEach(() => {
+    cleanup()
+    localStorage.clear()
+    mockAdapter.reset()
+    qc.clear()
+  })
+
+  it('ระหว่างนั่งอยู่ยังล็อก ปิดบิลแล้วปล่อย', async () => {
+    const startAt = tomorrowAt('18:00')
+    const t = await freeTable(startAt)
+    const plan = (await mockAdapter.getSnapshot()).ratePlans[0]!
+
+    const made = await mockBookingAdapter.create({
+      customerName: 'คุณจองไว้', phone: '085-555-0001', partySize: 2,
+      startAt, durationMinutes: 120, tableIds: [t.id],
+    })
+    const r = (await mockAdapter.getSnapshot()).reservations.find((x) => x.code === made.code)!
+
+    await mockAdapter.confirmReservation(r.id)
+    const seatedTables = await mockBookingAdapter.availableTables(startAt, 120)
+    expect(seatedTables.find((x) => x.id === t.id)!.available).toBe(false)
+
+    const visit = await mockAdapter.seatReservation(
+      r.id,
+      [{ name: 'คุณจองไว้', ratePlanId: plan.id }],
+      [t.id],
+    )
+
+    // ยังนั่งอยู่ → ต้องยังล็อก
+    const during = await mockBookingAdapter.availableTables(startAt, 120)
+    expect(during.find((x) => x.id === t.id)!.available).toBe(false)
+
+    await mockAdapter.closeVisit(visit.id, [])
+
+    // ★ ปิดบิลแล้วต้องปล่อย
+    const after = await mockBookingAdapter.availableTables(startAt, 120)
+    expect(after.find((x) => x.id === t.id)!.available).toBe(true)
+  })
+
+  it('รายการที่ยังไม่ได้เช็คอินยังล็อกตามเดิม', async () => {
+    const startAt = tomorrowAt('19:00')
+    const t = await freeTable(startAt)
+
+    await mockBookingAdapter.create({
+      customerName: 'คุณรอยืนยัน', phone: '085-555-0002', partySize: 2,
+      startAt, durationMinutes: 120, tableIds: [t.id],
+    })
+
+    const after = await mockBookingAdapter.availableTables(startAt, 120)
+    expect(after.find((x) => x.id === t.id)!.available).toBe(false)
+  })
+})

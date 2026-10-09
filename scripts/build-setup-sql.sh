@@ -142,3 +142,6 @@ make_patch supabase/patch-max-advance.sql "patch ตั้งจำนวนว�
 
 make_patch supabase/patch-no-double-booking.sql "patch ห้ามจองซ้อนทุกกรณี" \
   supabase/migrations/20260930002400_no_double_booking.sql
+
+make_patch supabase/patch-release-seated.sql "patch ปิดบิลแล้วเลิกล็อกโต๊ะ" \
+  supabase/migrations/20260930002500_release_seated.sql
