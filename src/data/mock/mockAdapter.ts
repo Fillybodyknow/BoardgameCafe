@@ -484,19 +484,19 @@ class MockAdapter implements DataPort {
     const now = Date.now()
 
     return this.state.tables.map((t) => {
-      let available = true
-      if (!t.allowShare) {
-        const clash = this.state.reservations.some(
-          (r) =>
-            ['pending', 'confirmed', 'seated'].includes(r.status) &&
-            r.tableIds.includes(t.id) &&
-            this.overlaps(r, start, end, MOCK_BOOKING.bufferMinutes),
-        )
-        const occupied =
-          start < now + MOCK_BOOKING.occupiedHoldMinutes * 60_000 &&
-          this.state.occupancies.some((o) => o.tableId === t.id && o.toAt === null)
-        available = !clash && !occupied
-      }
+      // จองซ้อนไม่ได้ ไม่ว่าโต๊ะจะนั่งร่วมกันได้หรือไม่ — ตรงกับ
+      // table_available() ฝั่ง SQL ตั้งแต่ migration 2400
+      const clash = this.state.reservations.some(
+        (r) =>
+          ['pending', 'confirmed', 'seated'].includes(r.status) &&
+          r.tableIds.includes(t.id) &&
+          this.overlaps(r, start, end, MOCK_BOOKING.bufferMinutes),
+      )
+      const occupied =
+        start < now + MOCK_BOOKING.occupiedHoldMinutes * 60_000 &&
+        this.state.occupancies.some((o) => o.tableId === t.id && o.toAt === null)
+      const available = !clash && !occupied
+
       return {
         id: t.id,
         code: t.code,

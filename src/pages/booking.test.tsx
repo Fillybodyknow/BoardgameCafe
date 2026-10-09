@@ -706,3 +706,71 @@ describe('เพดานวันจองล่วงหน้าถูกบ�
     expect(r.status).toBe('pending')
   })
 })
+
+/**
+ * โต๊ะที่นั่งร่วมได้ ก็จองซ้อนไม่ได้
+ *
+ * เจอหน้างาน: ร้านติ๊ก "ให้คนละกลุ่มนั่งร่วมกันได้" ไว้ทุกโต๊ะ ของเดิมจึง
+ * รับจองเวลาเดียวกันได้ไม่จำกัด และหน้าจองไม่เคยขึ้นป้ายว่าไม่ว่าง
+ * ตั้งแต่ migration 2400 allow_share เหลือผลกับลูกค้าที่เดินเข้ามานั่งเท่านั้น
+ */
+describe('โต๊ะนั่งร่วมได้ ก็ล็อกเมื่อมีคนจอง', () => {
+  beforeEach(() => {
+    cleanup()
+    localStorage.clear()
+    mockAdapter.reset()
+    qc.clear()
+    window.location.hash = ''
+  })
+
+  async function sharedTable(startAt: string) {
+    const tables = await mockBookingAdapter.availableTables(startAt, 120)
+    return tables.find((t) => t.allowShare && t.available)!
+  }
+
+  it('จองโต๊ะนั่งร่วมซ้ำเวลาเดิมไม่ได้', async () => {
+    const startAt = tomorrowAt('18:00')
+    const t = await sharedTable(startAt)
+
+    await mockBookingAdapter.create({
+      customerName: 'กลุ่มA', phone: '086-000-0001', partySize: 2,
+      startAt, durationMinutes: 120, tableIds: [t.id],
+    })
+
+    await expect(
+      mockBookingAdapter.create({
+        customerName: 'กลุ่มB', phone: '086-000-0002', partySize: 2,
+        startAt, durationMinutes: 120, tableIds: [t.id],
+      }),
+    ).rejects.toThrow(/ไม่ว่าง/)
+  })
+
+  it('และขึ้นว่าไม่ว่างบนหน้าจอง', async () => {
+    const startAt = tomorrowAt('18:00')
+    const t = await sharedTable(startAt)
+
+    await mockBookingAdapter.create({
+      customerName: 'กลุ่มA', phone: '086-000-0003', partySize: 2,
+      startAt, durationMinutes: 120, tableIds: [t.id],
+    })
+
+    const after = await mockBookingAdapter.availableTables(startAt, 120)
+    expect(after.find((x) => x.id === t.id)!.available).toBe(false)
+  })
+
+  it('คนละช่วงเวลายังจองได้ตามเดิม', async () => {
+    const startAt = tomorrowAt('18:00')
+    const t = await sharedTable(startAt)
+
+    await mockBookingAdapter.create({
+      customerName: 'กลุ่มA', phone: '086-000-0004', partySize: 2,
+      startAt, durationMinutes: 120, tableIds: [t.id],
+    })
+
+    const later = await mockBookingAdapter.create({
+      customerName: 'กลุ่มB', phone: '086-000-0005', partySize: 2,
+      startAt: tomorrowAt('21:00'), durationMinutes: 120, tableIds: [t.id],
+    })
+    expect(later.status).toBe('pending')
+  })
+})

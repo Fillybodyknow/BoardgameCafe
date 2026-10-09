@@ -81,10 +81,25 @@ begin
     v_start + interval '3 hours', 120, array[v_tb.id]);
   raise notice 'PASS  เว้นระยะพอแล้วจองรอบถัดไปได้';
 
-  -- โต๊ะยาวนั่งร่วมได้ จองซ้อนได้
+  -- ★ โต๊ะยาวก็จองซ้อนไม่ได้แล้ว (เปลี่ยนกติกาตั้งแต่ migration 2400)
+  --
+  -- ของเดิมยกเว้นให้โต๊ะที่นั่งร่วมได้ แต่หน้างานกลายเป็นว่าร้านติ๊กช่องนี้
+  -- ไว้ทุกโต๊ะ ผลคือรับจองเวลาเดียวกันได้ไม่จำกัด และลูกค้าไม่เห็นว่าไม่ว่าง
+  -- allow_share จึงเหลือผลกับลูกค้าที่เดินเข้ามานั่งเท่านั้น
   perform create_reservation('กลุ่มA', '086-000-0001', 4, v_start, 120, array[v_share.id]);
-  perform create_reservation('กลุ่มB', '086-000-0002', 4, v_start, 120, array[v_share.id]);
-  raise notice 'PASS  โต๊ะยาวรับจองซ้อนได้';
+  begin
+    perform create_reservation('กลุ่มB', '086-000-0002', 4, v_start, 120, array[v_share.id]);
+    raise exception 'FAIL  โต๊ะยาวก็ไม่ควรรับจองซ้อน';
+  exception when sqlstate '22023' then
+    raise notice 'PASS  โต๊ะยาวรับจองซ้อนไม่ได้แล้ว';
+  end;
+
+  -- ตรงนี้สวมบท anon อยู่ จึงถามผ่าน available_tables เหมือนที่หน้าจองถาม
+  perform assert_eq('โต๊ะยาวที่ถูกจองแล้ว ขึ้นว่าไม่ว่างบนหน้าจอง',
+    (select (l ->> 'available')::boolean
+       from jsonb_array_elements(available_tables(v_start, 120)) l
+      where (l ->> 'id')::uuid = v_share.id),
+    false);
 
   -- ------------------------------ กติกาเวลา ------------------------------
 

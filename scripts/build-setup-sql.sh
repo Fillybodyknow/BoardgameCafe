@@ -139,3 +139,6 @@ make_patch supabase/patch-table-images.sql "patch รูปประกอบโ
 
 make_patch supabase/patch-max-advance.sql "patch ตั้งจำนวนวันจองล่วงหน้า" \
   supabase/migrations/20260930002300_max_advance_days.sql
+
+make_patch supabase/patch-no-double-booking.sql "patch ห้ามจองซ้อนทุกกรณี" \
+  supabase/migrations/20260930002400_no_double_booking.sql
